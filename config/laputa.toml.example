@@ -1,0 +1,23 @@
+[heat]
+enabled = true
+hot_threshold = 8000
+warm_threshold = 5000
+cold_threshold = 2000
+decay_rate = 0.1
+update_interval_hours = 1
+
+[archive]
+enabled = false
+archive_threshold = 2000
+check_interval_days = 1
+
+[storage]
+db_path = "./laputa.db"
+vector_dim = 384
+usearch_path = "./laputa.usearch"
+
+[wakeup]
+max_tokens = 1200
+include_identity = true
+include_recent_events = true
+include_resonance = true
