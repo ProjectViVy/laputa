@@ -113,6 +113,21 @@ pub fn default_hall_keywords() -> HashMap<String, Vec<String>> {
     m
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct ArchiveState {
+    pub last_export_path: PathBuf,
+    pub last_exported_at: i64,
+    pub last_exported_count: usize,
+    pub last_source_db_path: PathBuf,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct FullExportState {
+    pub last_export_path: PathBuf,
+    pub last_exported_at: i64,
+    pub last_exported_memory_count: usize,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MempalaceConfig {
     #[serde(skip)]
@@ -127,6 +142,10 @@ pub struct MempalaceConfig {
     /// When present, entries are merged on top of the built-in emotion codes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub emotions_path: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub archive_state: Option<ArchiveState>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub full_export_state: Option<FullExportState>,
 }
 
 impl Default for MempalaceConfig {
@@ -142,6 +161,8 @@ impl Default for MempalaceConfig {
             hall_keywords: default_hall_keywords(),
             people_map: HashMap::new(),
             emotions_path: None,
+            archive_state: None,
+            full_export_state: None,
         };
 
         config.load_from_file();
@@ -163,6 +184,8 @@ impl MempalaceConfig {
             hall_keywords: default_hall_keywords(),
             people_map: HashMap::new(),
             emotions_path: None,
+            archive_state: None,
+            full_export_state: None,
         };
 
         config.load_from_file();
@@ -214,6 +237,77 @@ impl MempalaceConfig {
                     if let Some(e_path) = file_config.get("emotions_path").and_then(|v| v.as_str())
                     {
                         self.emotions_path = Some(PathBuf::from(e_path));
+                    }
+                    if let Some(archive_state) = file_config
+                        .get("archive_state")
+                        .and_then(|value| value.as_object())
+                    {
+                        let last_export_path = archive_state
+                            .get("last_export_path")
+                            .and_then(|value| value.as_str())
+                            .map(PathBuf::from);
+                        let last_exported_at = archive_state
+                            .get("last_exported_at")
+                            .and_then(|value| value.as_i64());
+                        let last_exported_count = archive_state
+                            .get("last_exported_count")
+                            .and_then(|value| value.as_u64())
+                            .map(|value| value as usize);
+                        let last_source_db_path = archive_state
+                            .get("last_source_db_path")
+                            .and_then(|value| value.as_str())
+                            .map(PathBuf::from);
+
+                        if let (
+                            Some(last_export_path),
+                            Some(last_exported_at),
+                            Some(last_exported_count),
+                            Some(last_source_db_path),
+                        ) = (
+                            last_export_path,
+                            last_exported_at,
+                            last_exported_count,
+                            last_source_db_path,
+                        ) {
+                            self.archive_state = Some(ArchiveState {
+                                last_export_path,
+                                last_exported_at,
+                                last_exported_count,
+                                last_source_db_path,
+                            });
+                        }
+                    }
+                    if let Some(full_export_state) = file_config
+                        .get("full_export_state")
+                        .and_then(|value| value.as_object())
+                    {
+                        let last_export_path = full_export_state
+                            .get("last_export_path")
+                            .and_then(|value| value.as_str())
+                            .map(PathBuf::from);
+                        let last_exported_at = full_export_state
+                            .get("last_exported_at")
+                            .and_then(|value| value.as_i64());
+                        let last_exported_memory_count = full_export_state
+                            .get("last_exported_memory_count")
+                            .and_then(|value| value.as_u64())
+                            .map(|value| value as usize);
+
+                        if let (
+                            Some(last_export_path),
+                            Some(last_exported_at),
+                            Some(last_exported_memory_count),
+                        ) = (
+                            last_export_path,
+                            last_exported_at,
+                            last_exported_memory_count,
+                        ) {
+                            self.full_export_state = Some(FullExportState {
+                                last_export_path,
+                                last_exported_at,
+                                last_exported_memory_count,
+                            });
+                        }
                     }
                 }
             }
@@ -268,10 +362,33 @@ impl MempalaceConfig {
         fs::create_dir_all(&self.config_dir)?;
         let config_file = self.config_dir.join("config.json");
         if !config_file.exists() {
-            let config_json = serde_json::to_string_pretty(self).unwrap();
-            fs::write(&config_file, config_json)?;
+            self.save()?;
         }
         Ok(config_file)
+    }
+
+    pub fn save(&self) -> Result<PathBuf, std::io::Error> {
+        fs::create_dir_all(&self.config_dir)?;
+        let config_file = self.config_dir.join("config.json");
+        let config_json = serde_json::to_string_pretty(self).unwrap();
+        fs::write(&config_file, config_json)?;
+        Ok(config_file)
+    }
+
+    pub fn save_archive_state(
+        &mut self,
+        archive_state: ArchiveState,
+    ) -> Result<PathBuf, std::io::Error> {
+        self.archive_state = Some(archive_state);
+        self.save()
+    }
+
+    pub fn save_full_export_state(
+        &mut self,
+        full_export_state: FullExportState,
+    ) -> Result<PathBuf, std::io::Error> {
+        self.full_export_state = Some(full_export_state);
+        self.save()
     }
 
     pub fn save_people_map(

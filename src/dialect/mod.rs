@@ -6,6 +6,14 @@ use std::path::Path;
 /// Current AAAK dialect version string emitted in every compressed block.
 pub const AAAK_VERSION: &str = "V:3.2";
 
+pub fn canonical_emotion_code(emotion: &str) -> Option<&'static str> {
+    let normalized = emotion.trim().to_lowercase();
+    if normalized.is_empty() {
+        return None;
+    }
+    EMOTION_CODES.get(normalized.as_str()).copied()
+}
+
 lazy_static::lazy_static! {
     pub static ref EMOTION_CODES: HashMap<&'static str, &'static str> = {
         let mut m = HashMap::new();
@@ -270,7 +278,7 @@ impl Dialect {
                 .custom_emotions
                 .get(e.as_str())
                 .cloned()
-                .or_else(|| EMOTION_CODES.get(e.as_str()).map(|&s| s.to_string()))
+                .or_else(|| canonical_emotion_code(e).map(str::to_string))
                 .unwrap_or_else(|| {
                     if e.len() >= 4 {
                         if e.len() > 4 {

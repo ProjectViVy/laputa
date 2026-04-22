@@ -1,16 +1,26 @@
 use anyhow::{anyhow, Result};
+use chrono::{Datelike, NaiveDate, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use tokio::io::{stdin, stdout, AsyncBufReadExt, AsyncWriteExt, BufReader};
+use uuid::Uuid;
 
+use crate::api::LaputaError;
 use crate::config::MempalaceConfig;
 use crate::dialect::Dialect;
-use crate::diary;
+use crate::diary::{self, Diary, DiaryWriteRequest};
+use crate::identity::IdentityInitializer;
 use crate::knowledge_graph::KnowledgeGraph;
 use crate::palace_graph::PalaceGraph;
-use crate::searcher::Searcher;
-use crate::vector_storage::VectorStorage;
+use crate::searcher::{RecallQuery, Searcher, SemanticSearchOptions};
+use crate::vector_storage::{UserIntervention, VectorStorage};
+
+const MIN_RECALL_LIMIT: usize = 1;
+const MAX_RECALL_LIMIT: usize = 10_000;
+const MIN_ALLOWED_DATE_YEAR: i32 = 1900;
+const MAX_ALLOWED_DATE_YEAR: i32 = 2100;
+const MAX_TIME_RANGE_DAYS: i64 = 365;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct JsonRpcRequest {
@@ -52,13 +62,7 @@ impl McpServer {
         let _ = std::fs::create_dir_all(&config.config_dir);
 
         let searcher = Searcher::new(config.clone());
-        let kg = KnowledgeGraph::new(
-            config
-                .config_dir
-                .join("knowledge.db")
-                .to_str()
-                .unwrap_or("knowledge.db"),
-        )?;
+        let kg = open_knowledge_graph(&config.config_dir.join("knowledge.db"))?;
         let pg = PalaceGraph::new();
         // Phase 4: load external emotion map and inject into dialect
         let custom_emotions = config.load_emotions_map();
@@ -78,7 +82,7 @@ impl McpServer {
         let _ = std::fs::create_dir_all(&config.config_dir);
         let searcher = Searcher::new(config.clone());
         let kg_path = config.config_dir.join("test_knowledge.db");
-        let kg = KnowledgeGraph::new(kg_path.to_str().unwrap_or("test_knowledge.db")).unwrap();
+        let kg = open_knowledge_graph(&kg_path).unwrap();
         let pg = PalaceGraph::new();
         let dialect = Dialect::default();
 
@@ -140,16 +144,19 @@ impl McpServer {
                 error: None,
                 id: req.id,
             },
-            Err(e) => JsonRpcResponse {
-                jsonrpc: "2.0".to_string(),
-                result: None,
-                error: Some(JsonRpcError {
-                    code: -32603,
-                    message: e.to_string(),
-                    data: None,
-                }),
-                id: req.id,
-            },
+            Err(e) => {
+                let (code, message) = map_jsonrpc_error(&e);
+                JsonRpcResponse {
+                    jsonrpc: "2.0".to_string(),
+                    result: None,
+                    error: Some(JsonRpcError {
+                        code,
+                        message,
+                        data: None,
+                    }),
+                    id: req.id,
+                }
+            }
         }
     }
 
@@ -171,6 +178,85 @@ impl McpServer {
     fn handle_tools_list(&self) -> Result<Value> {
         Ok(json!({
             "tools": [
+                {
+                    "name": "laputa_init",
+                    "description": "Initialize Laputa identity and storage in the configured directory.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "user_name": { "type": "string" }
+                        },
+                        "required": ["user_name"]
+                    }
+                },
+                {
+                    "name": "laputa_diary_write",
+                    "description": "Write a diary memory into Laputa storage.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "agent": { "type": "string" },
+                            "content": { "type": "string" },
+                            "tags": {
+                                "type": "array",
+                                "items": { "type": "string" }
+                            },
+                            "emotion": { "type": "string" },
+                            "timestamp": { "type": "string" },
+                            "wing": { "type": "string" },
+                            "room": { "type": "string" }
+                        },
+                        "required": ["agent", "content"]
+                    }
+                },
+                {
+                    "name": "laputa_recall",
+                    "description": "Recall memories by time range with optional wing and room filters.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "time_range": { "type": "string" },
+                            "wing": { "type": "string" },
+                            "room": { "type": "string" },
+                            "limit": { "type": "integer", "default": 100 },
+                            "include_discarded": { "type": "boolean", "default": false }
+                        },
+                        "required": ["time_range"]
+                    }
+                },
+                {
+                    "name": "laputa_wakeup_generate",
+                    "description": "Generate the current wakeup pack from existing memories.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "wing": { "type": "string" }
+                        }
+                    }
+                },
+                {
+                    "name": "laputa_mark_important",
+                    "description": "Mark a numeric memory_id as important using the existing heat intervention flow.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "memory_id": { "type": "integer" },
+                            "reason": { "type": "string", "default": "marked important via MCP" }
+                        },
+                        "required": ["memory_id"]
+                    }
+                },
+                {
+                    "name": "laputa_get_heat_status",
+                    "description": "Return heat status fields for a numeric memory_id.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "memory_id": { "type": "integer" }
+                        },
+                        "required": ["memory_id"]
+                    }
+                },
                 {
                     "name": "mempalace_status",
                     "description": "Returns total drawers, wings, rooms, protocol, and AAAK spec.",
@@ -207,6 +293,22 @@ impl McpServer {
                             "wing": { "type": "string" },
                             "room": { "type": "string" },
                             "n_results": { "type": "integer", "default": 5 }
+                        },
+                        "required": ["query"]
+                    }
+                },
+                {
+                    "name": "laputa_semantic_search",
+                    "description": "Typed semantic search with similarity scores and optional heat reranking.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "query": { "type": "string" },
+                            "wing": { "type": "string" },
+                            "room": { "type": "string" },
+                            "top_k": { "type": "integer", "default": 10 },
+                            "include_discarded": { "type": "boolean", "default": false },
+                            "sort_by_heat": { "type": "boolean", "default": false }
                         },
                         "required": ["query"]
                     }
@@ -376,11 +478,18 @@ impl McpServer {
         let args = &params["arguments"];
 
         let tool_result = match name {
+            "laputa_init" => self.laputa_init(args).await,
+            "laputa_diary_write" => self.laputa_diary_write(args).await,
+            "laputa_recall" => self.laputa_recall(args).await,
+            "laputa_wakeup_generate" => self.laputa_wakeup_generate(args).await,
+            "laputa_mark_important" => self.laputa_mark_important(args).await,
+            "laputa_get_heat_status" => self.laputa_get_heat_status(args).await,
             "mempalace_status" => self.mempalace_status().await,
             "mempalace_list_wings" => self.mempalace_list_wings().await,
             "mempalace_list_rooms" => self.mempalace_list_rooms(args).await,
             "mempalace_get_taxonomy" => self.mempalace_get_taxonomy().await,
             "mempalace_search" => self.mempalace_search(args).await,
+            "laputa_semantic_search" => self.laputa_semantic_search(args).await,
             "mempalace_check_duplicate" => self.mempalace_check_duplicate(args).await,
             "mempalace_get_aaak_spec" => self.mempalace_get_aaak_spec().await,
             "mempalace_traverse_graph" => self.mempalace_traverse_graph(args).await,
@@ -396,7 +505,7 @@ impl McpServer {
             "mempalace_diary_write" => self.mempalace_diary_write(args).await,
             "mempalace_diary_read" => self.mempalace_diary_read(args).await,
             "mempalace_prune" => self.mempalace_prune(args).await,
-            _ => Err(anyhow!("Unknown tool: {}", name)),
+            _ => Err(LaputaError::NotFound(format!("Unknown tool: {name}")).into()),
         }?;
 
         // Wrap in MCP-compliant content format
@@ -406,6 +515,145 @@ impl McpServer {
                 "text": serde_json::to_string(&tool_result)?
             }]
         }))
+    }
+
+    pub(crate) async fn laputa_init(&self, args: &Value) -> Result<Value> {
+        let user_name = required_string(args, "user_name")?.trim();
+        let initializer = IdentityInitializer::new(&self.config.config_dir);
+        let db_path = initializer.initialize(user_name)?;
+
+        Ok(json!({
+            "status": "initialized",
+            "user_name": user_name,
+            "db_path": db_path,
+            "identity_path": initializer.identity_path.display().to_string()
+        }))
+    }
+
+    pub(crate) async fn laputa_diary_write(&self, args: &Value) -> Result<Value> {
+        self.ensure_initialized()?;
+
+        let diary = Diary::new(self.config.config_dir.join("vectors.db"))?;
+        let request = DiaryWriteRequest {
+            agent: required_string(args, "agent")?.to_string(),
+            content: required_string(args, "content")?.to_string(),
+            tags: args["tags"]
+                .as_array()
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter_map(|item| item.as_str().map(ToString::to_string))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default(),
+            emotion: optional_string(args, "emotion"),
+            timestamp: optional_string(args, "timestamp"),
+            wing: optional_string(args, "wing"),
+            room: optional_string(args, "room"),
+        };
+
+        let memory_id = diary.write(request)?;
+        Ok(json!({
+            "status": "success",
+            "memory_id": memory_id
+        }))
+    }
+
+    pub(crate) async fn laputa_recall(&self, args: &Value) -> Result<Value> {
+        self.ensure_initialized()?;
+
+        let time_range = required_string(args, "time_range")?;
+        let (start, end) = parse_time_range(time_range)?;
+        let mut query = RecallQuery::by_time_range(start, end)
+            .with_limit(parse_recall_limit(args, "limit")?)
+            .include_discarded(args["include_discarded"].as_bool().unwrap_or(false));
+
+        if let Some(wing) = optional_string(args, "wing") {
+            query = query.with_wing(wing);
+        }
+        if let Some(room) = optional_string(args, "room") {
+            query = query.with_room(room);
+        }
+
+        let records = self.searcher.recall_by_time_range(query).await?;
+        Ok(json!({
+            "time_range": time_range,
+            "results": records.iter().map(memory_record_json).collect::<Vec<_>>()
+        }))
+    }
+
+    pub(crate) async fn laputa_wakeup_generate(&self, args: &Value) -> Result<Value> {
+        self.ensure_initialized()?;
+
+        let wing = optional_string(args, "wing");
+        let wakepack = self.searcher.wake_up(wing.clone()).await?;
+        Ok(json!({
+            "wing": wing,
+            "wakepack": wakepack
+        }))
+    }
+
+    pub(crate) async fn laputa_mark_important(&self, args: &Value) -> Result<Value> {
+        self.ensure_initialized()?;
+
+        let memory_id = parse_memory_id(args, "memory_id")?;
+        let reason = optional_string(args, "reason")
+            .unwrap_or_else(|| "marked important via MCP".to_string());
+        let storage = self.open_vector_storage()?;
+        let updated = storage.apply_intervention(
+            memory_id,
+            UserIntervention::Important {
+                reason: reason.clone(),
+            },
+        )?;
+
+        Ok(json!({
+            "status": "success",
+            "memory_id": updated.id,
+            "heat_i32": updated.heat_i32,
+            "last_accessed": updated.last_accessed.to_rfc3339(),
+            "access_count": updated.access_count,
+            "is_archive_candidate": updated.is_archive_candidate,
+            "reason": updated.reason
+        }))
+    }
+
+    pub(crate) async fn laputa_get_heat_status(&self, args: &Value) -> Result<Value> {
+        self.ensure_initialized()?;
+
+        let memory_id = parse_memory_id(args, "memory_id")?;
+        let storage = self.open_vector_storage()?;
+        let record = storage.get_memory_by_id(memory_id)?;
+
+        Ok(json!({
+            "memory_id": record.id,
+            "heat_i32": record.heat_i32,
+            "last_accessed": record.last_accessed.to_rfc3339(),
+            "access_count": record.access_count,
+            "is_archive_candidate": record.is_archive_candidate
+        }))
+    }
+
+    fn ensure_initialized(&self) -> Result<()> {
+        let initializer = IdentityInitializer::new(&self.config.config_dir);
+        if initializer.is_initialized() {
+            return Ok(());
+        }
+
+        Err(LaputaError::ConfigError(format!(
+            "Laputa is not initialized in {}. Call laputa_init first.",
+            self.config.config_dir.display()
+        ))
+        .into())
+    }
+
+    fn open_vector_storage(&self) -> Result<VectorStorage> {
+        VectorStorage::new(
+            self.config.config_dir.join("vectors.db"),
+            self.config.config_dir.join("vectors.usearch"),
+        )
+        .map_err(map_anyhow_to_laputa_error)
+        .map_err(Into::into)
     }
 
     pub(crate) async fn mempalace_status(&self) -> Result<Value> {
@@ -472,6 +720,27 @@ impl McpServer {
             .search_memories(query, wing, room, n_results)
             .await?;
         Ok(results)
+    }
+
+    pub(crate) async fn laputa_semantic_search(&self, args: &Value) -> Result<Value> {
+        let query = args["query"]
+            .as_str()
+            .ok_or_else(|| anyhow!("Missing query"))?;
+        let top_k = args["top_k"].as_u64().unwrap_or(10) as usize;
+        let options = SemanticSearchOptions {
+            wing: args["wing"].as_str().map(|value| value.to_string()),
+            room: args["room"].as_str().map(|value| value.to_string()),
+            include_discarded: args["include_discarded"].as_bool().unwrap_or(false),
+            sort_by_heat: args["sort_by_heat"].as_bool().unwrap_or(false),
+        };
+
+        let results = self
+            .searcher
+            .semantic_search(query, top_k, options.clone())
+            .await?;
+        Ok(Searcher::format_semantic_json_results(
+            query, &options, &results,
+        ))
     }
 
     pub(crate) async fn mempalace_check_duplicate(&self, args: &Value) -> Result<Value> {
@@ -646,10 +915,27 @@ impl McpServer {
         let content = args["content"]
             .as_str()
             .ok_or_else(|| anyhow!("Missing content"))?;
-        let diary_path = self.config.config_dir.join("diary.db");
-
-        diary::write_diary_at(&diary_path, agent, content)?;
-        Ok(json!({ "status": "success" }))
+        let diary_path = self.config.config_dir.join("vectors.db");
+        let tags = args["tags"]
+            .as_array()
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| item.as_str().map(ToString::to_string))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let diary = Diary::new(&diary_path)?;
+        let memory_id = diary.write(DiaryWriteRequest {
+            agent: agent.to_string(),
+            content: content.to_string(),
+            tags,
+            emotion: args["emotion"].as_str().map(ToString::to_string),
+            timestamp: args["timestamp"].as_str().map(ToString::to_string),
+            wing: args["wing"].as_str().map(ToString::to_string),
+            room: args["room"].as_str().map(ToString::to_string),
+        })?;
+        Ok(json!({ "status": "success", "memory_id": memory_id }))
     }
 
     pub(crate) async fn mempalace_diary_read(&self, args: &Value) -> Result<Value> {
@@ -657,7 +943,7 @@ impl McpServer {
             .as_str()
             .ok_or_else(|| anyhow!("Missing agent"))?;
         let last_n = args["last_n"].as_u64().unwrap_or(5) as usize;
-        let diary_path = self.config.config_dir.join("diary.db");
+        let diary_path = self.config.config_dir.join("vectors.db");
 
         let entries = diary::read_diary_at(&diary_path, agent, last_n)?;
         Ok(json!({ "entries": entries }))
@@ -669,7 +955,7 @@ impl McpServer {
         let wing = args["wing"].as_str().map(|s| s.to_string());
 
         let storage_path = self.config.config_dir.join("palace.db");
-        let storage = crate::storage::Storage::new(storage_path.to_str().unwrap_or("palace.db"))?;
+        let storage = crate::storage::Storage::new(path_to_str(&storage_path)?)?;
 
         let report = match storage
             .prune_memories(&self.config, threshold, dry_run, wing)
@@ -691,6 +977,247 @@ impl McpServer {
     }
 }
 
+fn required_string<'a>(args: &'a Value, field: &str) -> Result<&'a str> {
+    args[field]
+        .as_str()
+        .ok_or_else(|| LaputaError::ValidationError(format!("Missing or invalid {field}")).into())
+}
+
+fn optional_string(args: &Value, field: &str) -> Option<String> {
+    args[field]
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+}
+
+fn parse_recall_limit(args: &Value, field: &str) -> Result<usize> {
+    if args[field].is_null() {
+        return Ok(100);
+    }
+
+    if let Some(value) = args[field].as_i64() {
+        let limit = if value <= 0 {
+            MIN_RECALL_LIMIT
+        } else {
+            usize::try_from(value)
+                .unwrap_or(MAX_RECALL_LIMIT)
+                .clamp(MIN_RECALL_LIMIT, MAX_RECALL_LIMIT)
+        };
+
+        return Ok(limit);
+    }
+
+    if let Some(value) = args[field].as_u64() {
+        return Ok(usize::try_from(value)
+            .unwrap_or(MAX_RECALL_LIMIT)
+            .clamp(MIN_RECALL_LIMIT, MAX_RECALL_LIMIT));
+    }
+
+    Err(LaputaError::ValidationError(format!("{field} must be an integer")).into())
+}
+
+fn parse_time_range(raw: &str) -> Result<(i64, i64)> {
+    let (start_raw, end_raw) = raw.split_once('~').ok_or_else(|| {
+        LaputaError::ValidationError(format!(
+            "time_range must use `YYYY-MM-DD~YYYY-MM-DD`, got `{raw}`"
+        ))
+    })?;
+
+    let start_date = NaiveDate::parse_from_str(start_raw.trim(), "%Y-%m-%d").map_err(|_| {
+        LaputaError::ValidationError(format!(
+            "invalid start date in time_range `{raw}`; expected YYYY-MM-DD"
+        ))
+    })?;
+    let end_date = NaiveDate::parse_from_str(end_raw.trim(), "%Y-%m-%d").map_err(|_| {
+        LaputaError::ValidationError(format!(
+            "invalid end date in time_range `{raw}`; expected YYYY-MM-DD"
+        ))
+    })?;
+
+    validate_time_range_dates(start_date, end_date, raw)?;
+
+    let start = Utc
+        .from_utc_datetime(
+            &start_date
+                .and_hms_opt(0, 0, 0)
+                .ok_or_else(|| LaputaError::ValidationError("invalid start date".to_string()))?,
+        )
+        .timestamp();
+    let end = Utc
+        .from_utc_datetime(
+            &end_date
+                .and_hms_opt(23, 59, 59)
+                .ok_or_else(|| LaputaError::ValidationError("invalid end date".to_string()))?,
+        )
+        .timestamp();
+
+    if start > end {
+        return Err(LaputaError::ValidationError(format!(
+            "start date must be before or equal to end date in `{raw}`"
+        ))
+        .into());
+    }
+
+    Ok((start, end))
+}
+
+fn parse_memory_id(args: &Value, field: &str) -> Result<i64> {
+    if let Some(id) = args[field].as_i64() {
+        if id > 0 {
+            return Ok(id);
+        }
+        return Err(LaputaError::ValidationError(format!(
+            "invalid {field}; expected positive numeric memory_id"
+        ))
+        .into());
+    }
+
+    if let Some(raw) = args[field].as_str() {
+        let trimmed = raw.trim();
+        if let Ok(id) = trimmed.parse::<i64>() {
+            if id > 0 {
+                return Ok(id);
+            }
+            return Err(LaputaError::ValidationError(format!(
+                "invalid {field}; expected positive numeric memory_id"
+            ))
+            .into());
+        }
+
+        if Uuid::parse_str(trimmed).is_ok() {
+            return Err(LaputaError::ValidationError(
+                "Phase 1 MCP currently accepts numeric memory_id values; UUID support is not wired yet."
+                    .to_string(),
+            )
+            .into());
+        }
+    }
+
+    Err(LaputaError::ValidationError(format!("invalid {field}; expected numeric memory_id")).into())
+}
+
+fn validate_time_range_dates(start_date: NaiveDate, end_date: NaiveDate, raw: &str) -> Result<()> {
+    validate_date_year(start_date, "start", raw)?;
+    validate_date_year(end_date, "end", raw)?;
+
+    let span_days = end_date.signed_duration_since(start_date).num_days();
+    if span_days > MAX_TIME_RANGE_DAYS {
+        return Err(LaputaError::ValidationError(format!(
+            "time_range `{raw}` exceeds the maximum span of {MAX_TIME_RANGE_DAYS} days"
+        ))
+        .into());
+    }
+
+    Ok(())
+}
+
+fn validate_date_year(date: NaiveDate, label: &str, raw: &str) -> Result<()> {
+    if !(MIN_ALLOWED_DATE_YEAR..=MAX_ALLOWED_DATE_YEAR).contains(&date.year()) {
+        return Err(LaputaError::ValidationError(format!(
+            "{label} date in time_range `{raw}` must stay within {MIN_ALLOWED_DATE_YEAR:04}-01-01 and {MAX_ALLOWED_DATE_YEAR:04}-12-31"
+        ))
+        .into());
+    }
+
+    Ok(())
+}
+
+fn path_to_str(path: &std::path::Path) -> Result<&str> {
+    path.to_str().ok_or_else(|| {
+        LaputaError::InvalidPath(format!("path is not valid UTF-8: {}", path.display())).into()
+    })
+}
+
+fn open_knowledge_graph(path: &std::path::Path) -> Result<KnowledgeGraph> {
+    Ok(KnowledgeGraph::new(path_to_str(path)?)?)
+}
+
+fn memory_record_json(record: &crate::vector_storage::MemoryRecord) -> Value {
+    let text = visible_memory_text(&record.text_content);
+    json!({
+        "memory_id": record.id,
+        "text": text,
+        "wing": &record.wing,
+        "room": &record.room,
+        "source_file": &record.source_file,
+        "valid_from": record.valid_from,
+        "valid_to": record.valid_to,
+        "heat_i32": record.heat_i32,
+        "last_accessed": record.last_accessed.to_rfc3339(),
+        "access_count": record.access_count,
+        "is_archive_candidate": record.is_archive_candidate,
+        "discard_candidate": record.discard_candidate,
+        "reason": &record.reason,
+    })
+}
+
+fn visible_memory_text(text: &str) -> &str {
+    const DIARY_META_PREFIX: &str = "DIARY_META:";
+    if text.starts_with(DIARY_META_PREFIX) {
+        if let Some((_, content)) = text.split_once('\n') {
+            return content;
+        }
+    }
+    text
+}
+
+fn map_anyhow_to_laputa_error(error: anyhow::Error) -> LaputaError {
+    if let Some(laputa_error) = error.downcast_ref::<LaputaError>() {
+        return laputa_error.clone();
+    }
+
+    if let Some(io_error) = error.downcast_ref::<std::io::Error>() {
+        return LaputaError::from(std::io::Error::new(io_error.kind(), io_error.to_string()));
+    }
+
+    if let Some(sql_error) = error.downcast_ref::<rusqlite::Error>() {
+        return LaputaError::StorageError(sql_error.to_string());
+    }
+
+    let message = error.to_string();
+    if message.contains("Memory not found") {
+        return LaputaError::NotFound(message);
+    }
+    if message.contains("Cannot open SQLite")
+        || message.contains("Non-UTF8 index path")
+        || message.contains("Vector storage unavailable")
+    {
+        return LaputaError::ConfigError(message);
+    }
+    if message.contains("Invalid RFC3339")
+        || message.contains("Unknown emotion")
+        || message.contains("cannot be empty")
+    {
+        return LaputaError::ValidationError(message);
+    }
+
+    LaputaError::StorageError(message)
+}
+
+fn map_jsonrpc_error(error: &anyhow::Error) -> (i32, String) {
+    if let Some(laputa_error) = error.downcast_ref::<LaputaError>() {
+        let code = match laputa_error {
+            LaputaError::ValidationError(_) => -32602,
+            LaputaError::NotFound(_) => -32004,
+            LaputaError::ConfigError(_) | LaputaError::AlreadyInitialized(_) => -32001,
+            LaputaError::StorageError(_)
+            | LaputaError::HeatThresholdError(_)
+            | LaputaError::ArchiveError(_)
+            | LaputaError::WakepackSizeExceeded(_)
+            | LaputaError::InvalidPath(_) => -32603,
+        };
+        return (code, laputa_error.to_string());
+    }
+
+    let message = error.to_string();
+    if message.contains("Missing ") || message.contains("invalid ") {
+        return (-32602, message);
+    }
+
+    (-32603, message)
+}
+
 pub async fn run_mcp_server() -> Result<()> {
     let config = MempalaceConfig::default();
     let mut server = McpServer::new(config).await?;
@@ -700,6 +1227,10 @@ pub async fn run_mcp_server() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::commands::{
+        Cli, Commands, DiaryCommand, DiarySubcommands, DiaryWriteCommand, InitCommand,
+    };
+    use crate::cli::handlers as cli_handlers;
 
     fn setup_test() -> (MempalaceConfig, tempfile::TempDir) {
         let temp_dir = tempfile::tempdir().unwrap();
@@ -714,6 +1245,12 @@ mod tests {
             params,
             id,
         }
+    }
+
+    fn parse_content_text(result: &Value) -> Value {
+        let content = result["content"].as_array().expect("missing content array");
+        let text = content[0]["text"].as_str().expect("missing text field");
+        serde_json::from_str(text).expect("content text should be valid JSON")
     }
 
     // ── Protocol-level tests ─────────────────────────────────────────
@@ -746,8 +1283,8 @@ mod tests {
         let res = resp.result.unwrap();
         let tools = res["tools"].as_array().unwrap();
         assert!(
-            tools.len() >= 20,
-            "Expected at least 20 tools, got {}",
+            tools.len() >= 26,
+            "Expected at least 26 tools, got {}",
             tools.len()
         );
     }
@@ -879,6 +1416,12 @@ mod tests {
         let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
 
         let expected = [
+            "laputa_init",
+            "laputa_diary_write",
+            "laputa_recall",
+            "laputa_wakeup_generate",
+            "laputa_mark_important",
+            "laputa_get_heat_status",
             "mempalace_status",
             "mempalace_list_wings",
             "mempalace_list_rooms",
@@ -902,6 +1445,35 @@ mod tests {
         ];
         for name in &expected {
             assert!(names.contains(name), "missing tool: {}", name);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_laputa_tools_use_snake_case_schema_fields() {
+        let (config, _td) = setup_test();
+        let server = McpServer::new_test(config);
+        let res = server.handle_tools_list().unwrap();
+        let tools = res["tools"].as_array().unwrap();
+
+        for tool in tools {
+            let name = tool["name"].as_str().unwrap();
+            if !name.starts_with("laputa_") {
+                continue;
+            }
+
+            let properties = tool["inputSchema"]["properties"]
+                .as_object()
+                .expect("properties should be an object");
+
+            for key in properties.keys() {
+                assert!(
+                    key.chars()
+                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
+                    "tool {} has non-snake_case field {}",
+                    name,
+                    key
+                );
+            }
         }
     }
 
@@ -941,6 +1513,497 @@ mod tests {
         let resp = server.handle_request(req).await;
         assert!(resp.error.is_some());
         assert!(resp.error.unwrap().message.contains("Unknown tool"));
+    }
+
+    #[tokio::test]
+    async fn test_tools_call_laputa_init_success() {
+        let (config, _td) = setup_test();
+        let mut server = McpServer::new_test(config);
+        let req = make_request(
+            "tools/call",
+            Some(json!({ "name": "laputa_init", "arguments": { "user_name": "Tester" } })),
+            Some(json!(13)),
+        );
+        let resp = server.handle_request(req).await;
+
+        assert!(resp.error.is_none(), "unexpected error: {:?}", resp.error);
+        let inner = parse_content_text(&resp.result.unwrap());
+        assert_eq!(inner["status"], "initialized");
+        assert_eq!(inner["user_name"], "Tester");
+        assert!(inner["db_path"].as_str().unwrap().ends_with("laputa.db"));
+    }
+
+    #[tokio::test]
+    async fn test_tools_call_laputa_init_trims_user_name() {
+        let (config, _td) = setup_test();
+        let mut server = McpServer::new_test(config.clone());
+        let req = make_request(
+            "tools/call",
+            Some(json!({ "name": "laputa_init", "arguments": { "user_name": "  Tester  " } })),
+            Some(json!(13_1)),
+        );
+        let resp = server.handle_request(req).await;
+
+        assert!(resp.error.is_none(), "unexpected error: {:?}", resp.error);
+        let inner = parse_content_text(&resp.result.unwrap());
+        assert_eq!(inner["user_name"], "Tester");
+
+        let identity = std::fs::read_to_string(config.config_dir.join("identity.md")).unwrap();
+        assert!(identity.contains("user_name: Tester\n"));
+        assert!(!identity.contains("user_name:   Tester  "));
+    }
+
+    #[tokio::test]
+    async fn test_tools_call_laputa_init_rejects_blank_user_name() {
+        let (config, _td) = setup_test();
+        let mut server = McpServer::new_test(config);
+        let req = make_request(
+            "tools/call",
+            Some(json!({ "name": "laputa_init", "arguments": { "user_name": "   " } })),
+            Some(json!(13_2)),
+        );
+        let resp = server.handle_request(req).await;
+
+        let error = resp.error.expect("expected validation error");
+        assert_eq!(error.code, -32602);
+        assert!(error.message.contains("user_name"));
+    }
+
+    #[tokio::test]
+    async fn test_tools_call_laputa_diary_write_requires_init() {
+        let (config, _td) = setup_test();
+        let mut server = McpServer::new_test(config);
+        let req = make_request(
+            "tools/call",
+            Some(json!({
+                "name": "laputa_diary_write",
+                "arguments": { "agent": "tester", "content": "hello" }
+            })),
+            Some(json!(14)),
+        );
+        let resp = server.handle_request(req).await;
+
+        let error = resp.error.expect("expected initialization error");
+        assert_eq!(error.code, -32001);
+        assert!(error.message.contains("laputa_init"));
+    }
+
+    #[tokio::test]
+    async fn test_tools_call_laputa_diary_write_and_recall_success() {
+        let (config, _td) = setup_test();
+        let mut server = McpServer::new_test(config);
+
+        let init_resp = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({ "name": "laputa_init", "arguments": { "user_name": "Tester" } })),
+                Some(json!(15)),
+            ))
+            .await;
+        assert!(init_resp.error.is_none());
+
+        let write_resp = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({
+                    "name": "laputa_diary_write",
+                    "arguments": {
+                        "agent": "tester",
+                        "content": "remember this entry",
+                        "timestamp": "2026-04-14T08:30:00Z",
+                        "tags": ["focus"]
+                    }
+                })),
+                Some(json!(16)),
+            ))
+            .await;
+        assert!(
+            write_resp.error.is_none(),
+            "write error: {:?}",
+            write_resp.error
+        );
+
+        let recall_resp = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({
+                    "name": "laputa_recall",
+                    "arguments": {
+                        "time_range": "2026-04-14~2026-04-14",
+                        "limit": 10
+                    }
+                })),
+                Some(json!(17)),
+            ))
+            .await;
+
+        assert!(
+            recall_resp.error.is_none(),
+            "recall error: {:?}",
+            recall_resp.error
+        );
+        let inner = parse_content_text(&recall_resp.result.unwrap());
+        let results = inner["results"].as_array().unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0]["text"], "remember this entry");
+        assert_eq!(results[0]["memory_id"], 1);
+    }
+
+    #[tokio::test]
+    async fn test_tools_call_laputa_recall_rejects_bad_time_range() {
+        let (config, _td) = setup_test();
+        let mut server = McpServer::new_test(config);
+        let _ = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({ "name": "laputa_init", "arguments": { "user_name": "Tester" } })),
+                Some(json!(18)),
+            ))
+            .await;
+
+        let resp = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({
+                    "name": "laputa_recall",
+                    "arguments": { "time_range": "2026/04/14" }
+                })),
+                Some(json!(19)),
+            ))
+            .await;
+
+        let error = resp.error.expect("expected validation error");
+        assert_eq!(error.code, -32602);
+        assert!(error.message.contains("time_range"));
+    }
+
+    #[tokio::test]
+    async fn test_tools_call_laputa_recall_rejects_extreme_dates() {
+        let (config, _td) = setup_test();
+        let mut server = McpServer::new_test(config);
+        let _ = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({ "name": "laputa_init", "arguments": { "user_name": "Tester" } })),
+                Some(json!(19_1)),
+            ))
+            .await;
+
+        let resp = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({
+                    "name": "laputa_recall",
+                    "arguments": { "time_range": "0001-01-01~2026-04-14" }
+                })),
+                Some(json!(19_2)),
+            ))
+            .await;
+
+        let error = resp.error.expect("expected validation error");
+        assert_eq!(error.code, -32602);
+        assert!(error.message.contains("must stay within"));
+    }
+
+    #[tokio::test]
+    async fn test_tools_call_laputa_recall_rejects_ranges_over_365_days() {
+        let (config, _td) = setup_test();
+        let mut server = McpServer::new_test(config);
+        let _ = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({ "name": "laputa_init", "arguments": { "user_name": "Tester" } })),
+                Some(json!(19_3)),
+            ))
+            .await;
+
+        let resp = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({
+                    "name": "laputa_recall",
+                    "arguments": { "time_range": "2025-01-01~2026-04-02" }
+                })),
+                Some(json!(19_4)),
+            ))
+            .await;
+
+        let error = resp.error.expect("expected validation error");
+        assert_eq!(error.code, -32602);
+        assert!(error.message.contains("maximum span"));
+    }
+
+    #[tokio::test]
+    async fn test_tools_call_laputa_mark_important_and_heat_status_success() {
+        let (config, _td) = setup_test();
+        let mut server = McpServer::new_test(config);
+
+        let _ = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({ "name": "laputa_init", "arguments": { "user_name": "Tester" } })),
+                Some(json!(20)),
+            ))
+            .await;
+
+        let write_resp = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({
+                    "name": "laputa_diary_write",
+                    "arguments": {
+                        "agent": "tester",
+                        "content": "important memory",
+                        "timestamp": "2026-04-14T09:00:00Z"
+                    }
+                })),
+                Some(json!(21)),
+            ))
+            .await;
+        assert!(write_resp.error.is_none());
+        let memory_id = parse_content_text(&write_resp.result.unwrap())["memory_id"]
+            .as_i64()
+            .unwrap();
+
+        let mark_resp = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({
+                    "name": "laputa_mark_important",
+                    "arguments": {
+                        "memory_id": memory_id,
+                        "reason": "pin for wakeup"
+                    }
+                })),
+                Some(json!(22)),
+            ))
+            .await;
+        assert!(
+            mark_resp.error.is_none(),
+            "mark error: {:?}",
+            mark_resp.error
+        );
+        let mark_inner = parse_content_text(&mark_resp.result.unwrap());
+        assert_eq!(mark_inner["heat_i32"], 9000);
+        assert_eq!(mark_inner["is_archive_candidate"], false);
+
+        let heat_resp = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({
+                    "name": "laputa_get_heat_status",
+                    "arguments": { "memory_id": memory_id }
+                })),
+                Some(json!(23)),
+            ))
+            .await;
+        assert!(
+            heat_resp.error.is_none(),
+            "heat error: {:?}",
+            heat_resp.error
+        );
+        let heat_inner = parse_content_text(&heat_resp.result.unwrap());
+        assert_eq!(heat_inner["memory_id"], memory_id);
+        assert_eq!(heat_inner["heat_i32"], 9000);
+        assert_eq!(heat_inner["is_archive_candidate"], false);
+    }
+
+    #[tokio::test]
+    async fn test_tools_call_laputa_mark_important_rejects_uuid_memory_id() {
+        let (config, _td) = setup_test();
+        let mut server = McpServer::new_test(config);
+        let _ = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({ "name": "laputa_init", "arguments": { "user_name": "Tester" } })),
+                Some(json!(24)),
+            ))
+            .await;
+
+        let resp = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({
+                    "name": "laputa_mark_important",
+                    "arguments": {
+                        "memory_id": "550e8400-e29b-41d4-a716-446655440000"
+                    }
+                })),
+                Some(json!(25)),
+            ))
+            .await;
+
+        let error = resp.error.expect("expected validation error");
+        assert_eq!(error.code, -32602);
+        assert!(error.message.contains("numeric memory_id"));
+    }
+
+    #[tokio::test]
+    async fn test_tools_call_laputa_mark_important_rejects_non_positive_memory_id() {
+        let (config, _td) = setup_test();
+        let mut server = McpServer::new_test(config);
+        let _ = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({ "name": "laputa_init", "arguments": { "user_name": "Tester" } })),
+                Some(json!(25_1)),
+            ))
+            .await;
+
+        for memory_id in [json!(0), json!(-1)] {
+            let resp = server
+                .handle_request(make_request(
+                    "tools/call",
+                    Some(json!({
+                        "name": "laputa_mark_important",
+                        "arguments": { "memory_id": memory_id }
+                    })),
+                    Some(json!(25_2)),
+                ))
+                .await;
+
+            let error = resp.error.expect("expected validation error");
+            assert_eq!(error.code, -32602);
+            assert!(error.message.contains("positive numeric memory_id"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_laputa_recall_limit_is_clamped_for_zero_and_large_values() {
+        let (config, _td) = setup_test();
+        let mut server = McpServer::new_test(config.clone());
+
+        assert_eq!(
+            parse_recall_limit(&json!({ "limit": 0 }), "limit").unwrap(),
+            1
+        );
+        assert_eq!(
+            parse_recall_limit(&json!({ "limit": -5 }), "limit").unwrap(),
+            1
+        );
+        assert_eq!(
+            parse_recall_limit(&json!({ "limit": 50_000 }), "limit").unwrap(),
+            10_000
+        );
+        assert_eq!(parse_recall_limit(&json!({}), "limit").unwrap(), 100);
+
+        let _ = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({ "name": "laputa_init", "arguments": { "user_name": "Tester" } })),
+                Some(json!(25_3)),
+            ))
+            .await;
+
+        for i in 0..3 {
+            let response = server
+                .laputa_diary_write(&json!({
+                    "agent": "tester",
+                    "content": format!("important retained journal entry number {i}"),
+                    "timestamp": format!("2026-04-14T08:0{i}:00Z"),
+                }))
+                .await
+                .unwrap();
+            assert!(response["memory_id"].as_i64().unwrap() > 0);
+        }
+
+        let clamped_min = server
+            .laputa_recall(&json!({
+                "time_range": "2026-04-14~2026-04-14",
+                "limit": 0,
+                "include_discarded": true
+            }))
+            .await
+            .unwrap();
+        assert_eq!(clamped_min["results"].as_array().unwrap().len(), 1);
+
+        let clamped_negative = server
+            .laputa_recall(&json!({
+                "time_range": "2026-04-14~2026-04-14",
+                "limit": -5,
+                "include_discarded": true
+            }))
+            .await
+            .unwrap();
+        assert_eq!(clamped_negative["results"].as_array().unwrap().len(), 1);
+
+        let clamped_max = server
+            .laputa_recall(&json!({
+                "time_range": "2026-04-14~2026-04-14",
+                "limit": 50_000,
+                "include_discarded": true
+            }))
+            .await
+            .unwrap();
+        assert!(!clamped_max["results"].as_array().unwrap().is_empty());
+
+        let conn = rusqlite::Connection::open(config.config_dir.join("vectors.db")).unwrap();
+        let stored: i64 = conn
+            .query_row("SELECT COUNT(*) FROM memories", [], |row| row.get(0))
+            .unwrap();
+        assert!(stored >= 1);
+    }
+
+    #[tokio::test]
+    async fn test_laputa_recall_limit_rejects_non_integer_values() {
+        assert!(parse_recall_limit(&json!({ "limit": 50.5 }), "limit").is_err());
+        assert!(parse_recall_limit(&json!({ "limit": "hello" }), "limit").is_err());
+
+        let (config, _td) = setup_test();
+        let mut server = McpServer::new_test(config);
+        let _ = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({ "name": "laputa_init", "arguments": { "user_name": "Tester" } })),
+                Some(json!(25_4)),
+            ))
+            .await;
+
+        let resp = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({
+                    "name": "laputa_recall",
+                    "arguments": {
+                        "time_range": "2026-04-14~2026-04-14",
+                        "limit": "hello"
+                    }
+                })),
+                Some(json!(25_5)),
+            ))
+            .await;
+
+        let error = resp.error.expect("expected validation error");
+        assert_eq!(error.code, -32602);
+        assert!(error.message.contains("limit"));
+    }
+
+    #[tokio::test]
+    async fn test_tools_call_laputa_wakeup_generate_success() {
+        let (config, _td) = setup_test();
+        let mut server = McpServer::new_test(config);
+        let _ = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({ "name": "laputa_init", "arguments": { "user_name": "Tester" } })),
+                Some(json!(26)),
+            ))
+            .await;
+
+        let resp = server
+            .handle_request(make_request(
+                "tools/call",
+                Some(json!({
+                    "name": "laputa_wakeup_generate",
+                    "arguments": {}
+                })),
+                Some(json!(27)),
+            ))
+            .await;
+
+        assert!(resp.error.is_none(), "wakeup error: {:?}", resp.error);
+        let inner = parse_content_text(&resp.result.unwrap());
+        assert!(inner["wakepack"].is_string());
     }
 
     #[tokio::test]
@@ -1193,6 +2256,16 @@ mod tests {
         let args = json!({ "query": "test", "wing": "tech", "room": "code", "n_results": 3 });
         let res = server.mempalace_search(&args).await.unwrap();
         assert!(res["results"].is_array());
+    }
+
+    #[tokio::test]
+    async fn test_laputa_semantic_search_empty_palace() {
+        let (config, _td) = setup_test();
+        let server = McpServer::new_test(config);
+        let args = json!({ "query": "hello world", "top_k": 3, "sort_by_heat": true });
+        let res = server.laputa_semantic_search(&args).await.unwrap();
+        assert!(res["results"].is_array());
+        assert_eq!(res["filters"]["sort_by_heat"], true);
     }
 
     #[tokio::test]
@@ -1471,6 +2544,91 @@ mod tests {
         let entries = res["entries"].as_array().unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0]["content"], "test diary entry");
+    }
+
+    #[tokio::test]
+    async fn test_cli_diary_write_is_visible_to_mcp_diary_read_on_shared_storage() {
+        let (config, _td) = setup_test();
+        let config_dir = config.config_dir.clone();
+
+        tokio::task::spawn_blocking(move || {
+            cli_handlers::run(Cli {
+                config_dir: Some(config_dir.clone()),
+                command: Commands::Init(InitCommand {
+                    name: "Tester".to_string(),
+                }),
+            })
+        })
+        .await
+        .unwrap()
+        .unwrap();
+
+        let config_dir = config.config_dir.clone();
+        tokio::task::spawn_blocking(move || {
+            cli_handlers::run(Cli {
+                config_dir: Some(config_dir),
+                command: Commands::Diary(DiaryCommand {
+                    command: DiarySubcommands::Write(DiaryWriteCommand {
+                        content: "shared memory".to_string(),
+                        tags: Some("focus".to_string()),
+                        emotion: None,
+                        wing: None,
+                        room: None,
+                    }),
+                }),
+            })
+        })
+        .await
+        .unwrap()
+        .unwrap();
+
+        let config_dir = config.config_dir.clone();
+        let server = McpServer::new_test(MempalaceConfig::new(Some(config_dir.clone())));
+        let read = server
+            .mempalace_diary_read(&json!({ "agent": "Tester", "last_n": 5 }))
+            .await
+            .unwrap();
+
+        let entries = read["entries"].as_array().unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0]["content"], "shared memory");
+
+        let conn = rusqlite::Connection::open(config_dir.join("vectors.db")).unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM memories WHERE source_file = 'diary://Tester'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_mempalace_diary_write_with_metadata_fields() {
+        let (config, _td) = setup_test();
+        let server = McpServer::new_test(config);
+
+        let write_args = json!({
+            "agent": "meta-agent",
+            "content": "test diary entry with metadata",
+            "tags": ["focus", "journal"],
+            "emotion": "joy",
+            "timestamp": "2026-04-14T08:30:00Z",
+            "room": "journal"
+        });
+        let write_res = server.mempalace_diary_write(&write_args).await.unwrap();
+        assert_eq!(write_res["status"], "success");
+        assert!(write_res["memory_id"].as_i64().unwrap() > 0);
+
+        let read_args = json!({ "agent": "meta-agent", "last_n": 1 });
+        let res = server.mempalace_diary_read(&read_args).await.unwrap();
+        let entries = res["entries"].as_array().unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0]["content"], "test diary entry with metadata");
+        assert_eq!(entries[0]["emotion"], "joy");
+        assert_eq!(entries[0]["emotion_code"], "joy");
+        assert_eq!(entries[0]["room"], "journal");
     }
 
     #[tokio::test]

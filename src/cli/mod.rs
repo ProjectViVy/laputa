@@ -1,1 +1,5 @@
-//! CLI 接口模块，子命令 init/write/recall/wakeup/mark。
+pub mod commands;
+pub mod handlers;
+pub mod output;
+
+pub use commands::Cli;

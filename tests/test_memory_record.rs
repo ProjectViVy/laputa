@@ -1,4 +1,5 @@
 use chrono::{TimeZone, Utc};
+use laputa::api::LaputaError;
 use laputa::storage::memory::{ensure_memory_schema, LaputaMemoryRecord};
 use rusqlite::Connection;
 use serial_test::serial;
@@ -37,13 +38,60 @@ fn test_laputa_memory_record_defaults() {
 #[test]
 fn test_heat_roundtrip_conversion() {
     let mut record = make_record();
-    record.set_heat(50.0);
+    record.set_heat(50.0).unwrap();
     assert_eq!(record.heat_i32, 5_000);
     assert_eq!(record.get_heat(), 50.0);
 
-    record.set_heat(72.55);
+    record.set_heat(72.55).unwrap();
     assert_eq!(record.heat_i32, 7_255);
     assert_eq!(record.get_heat(), 72.55);
+}
+
+#[test]
+fn test_set_heat_below_zero_returns_error() {
+    let mut record = make_record();
+    let result = record.set_heat(-1.0);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(matches!(err, LaputaError::ValidationError(_)));
+    // Original heat unchanged after error
+    assert_eq!(record.heat_i32, 5_000);
+}
+
+#[test]
+fn test_set_heat_above_max_returns_error() {
+    let mut record = make_record();
+    let result = record.set_heat(101.0);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(matches!(err, LaputaError::ValidationError(_)));
+    // Original heat unchanged after error
+    assert_eq!(record.heat_i32, 5_000);
+}
+
+#[test]
+fn test_set_heat_nan_returns_error() {
+    let mut record = make_record();
+    let result = record.set_heat(f64::NAN);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(matches!(err, LaputaError::ValidationError(_)));
+    // Original heat unchanged after error
+    assert_eq!(record.heat_i32, 5_000);
+}
+
+#[test]
+fn test_set_heat_boundary_values_success() {
+    let mut record = make_record();
+    // Lower boundary: 0.0
+    record.set_heat(0.0).unwrap();
+    assert_eq!(record.heat_i32, 0);
+    assert_eq!(record.get_heat(), 0.0);
+
+    // Upper boundary: 100.0
+    record.set_heat(100.0).unwrap();
+    assert_eq!(record.heat_i32, 10_000);
+    assert_eq!(record.get_heat(), 100.0);
 }
 
 #[test]
@@ -114,6 +162,9 @@ fn test_schema_migration_adds_memory_extension_columns() {
         "emotion_valence",
         "emotion_arousal",
         "is_archive_candidate",
+        "reason",
+        "discard_candidate",
+        "merged_into_id",
     ] {
         assert!(
             columns.iter().any(|column| column == required_column),
@@ -128,4 +179,5 @@ fn test_schema_migration_adds_memory_extension_columns() {
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
     assert!(indexes.iter().any(|index| index == "idx_heat"));
+    assert!(indexes.iter().any(|index| index == "idx_discard_candidate"));
 }

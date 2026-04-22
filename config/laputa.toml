@@ -21,3 +21,9 @@ max_tokens = 1200
 include_identity = true
 include_recent_events = true
 include_resonance = true
+
+[rhythm]
+weekly_schedule = "0 2 * * 1"
+enabled = true
+max_retries = 3
+retry_delay_seconds = 300

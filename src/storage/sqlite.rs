@@ -23,9 +23,12 @@ pub struct MemoryRecord {
 }
 
 /// 创建 Story 1.2 要求的最小 SQLite schema。
+/// 使用事务保障 DDL 执行的原子性，失败时自动 ROLLBACK。
 pub fn create_schema(conn: &Connection) -> Result<(), LaputaError> {
     conn.execute_batch(
         r#"
+        BEGIN;
+
         CREATE TABLE IF NOT EXISTS memories (
             id              TEXT PRIMARY KEY,
             text_content    TEXT NOT NULL,
@@ -38,13 +41,15 @@ pub fn create_schema(conn: &Connection) -> Result<(), LaputaError> {
             last_accessed   INTEGER NOT NULL,
             access_count    INTEGER NOT NULL DEFAULT 0,
             is_archive_candidate INTEGER NOT NULL DEFAULT 0,
-            emotion_valence INTEGER NOT NULL DEFAULT 0,
-            emotion_arousal INTEGER NOT NULL DEFAULT 0
+            emotion_valence INTEGER NOT NULL DEFAULT 0 CHECK(emotion_valence >= -100 AND emotion_valence <= 100),
+            emotion_arousal INTEGER NOT NULL DEFAULT 0 CHECK(emotion_arousal >= 0 AND emotion_arousal <= 100)
         );
 
         CREATE INDEX IF NOT EXISTS idx_memories_valid_from ON memories(valid_from DESC);
         CREATE INDEX IF NOT EXISTS idx_memories_heat ON memories(heat_i32 DESC);
         CREATE INDEX IF NOT EXISTS idx_memories_wing ON memories(wing);
+
+        COMMIT;
         "#,
     )?;
 

@@ -4,12 +4,12 @@ version = "0.1.0"
 edition = "2021"
 description = "High-performance, local AI memory with AAAK v3.2 protocol and temporal Knowledge Graph"
 license = "MIT"
-repository = "https://github.com/jxoesneon/mempalace-rs"
-homepage = "https://github.com/jxoesneon/mempalace-rs"
+repository = "https://github.com/jxoesneon/laputa"
+homepage = "https://github.com/jxoesneon/laputa"
 keywords = ["memory", "ai", "mcp", "knowledge-graph", "aaak"]
 categories = ["command-line-utilities", "database", "artificial-intelligence"]
 readme = "README.md"
-documentation = "https://docs.rs/mempalace-rs"
+documentation = "https://github.com/jxoesneon/laputa#readme"
 default-run = "laputa"
 exclude = [
     "models/*",

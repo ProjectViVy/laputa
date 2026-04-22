@@ -1,8 +1,10 @@
 pub mod memory;
 pub mod sqlite;
 
+use crate::api::LaputaError;
 use crate::config::MempalaceConfig;
 use crate::models::Wing;
+use crate::searcher::RecallQuery;
 use crate::vector_storage::VectorStorage;
 use anyhow::{anyhow, Result};
 use rusqlite::{params, Connection, Result as SqlResult};
@@ -286,6 +288,60 @@ impl Layer2 {
             .collect();
         Self::format_retrieval(wing.as_ref(), room.as_ref(), &docs, &metas)
     }
+
+    pub async fn retrieve_by_time_range(&self, query: RecallQuery) -> String {
+        let vs = match open_vector_storage(&self.config) {
+            Ok(vs) => vs,
+            Err(_) => return "Could not connect to vector storage.".to_string(),
+        };
+        let records = match vs.recall_by_time_range(&query) {
+            Ok(r) => r,
+            Err(e) => {
+                if let Some(LaputaError::ValidationError(message)) = e.downcast_ref::<LaputaError>()
+                {
+                    return format!("Retrieval error: Validation error: {message}");
+                }
+                return format!("Retrieval error: {}", e);
+            }
+        };
+        if records.is_empty() {
+            return Self::format_retrieval(query.wing.as_ref(), query.room.as_ref(), &[], &[]);
+        }
+
+        for record in &records {
+            let _ = vs.touch_memory(record.id);
+        }
+
+        let docs: Vec<Option<String>> = records
+            .iter()
+            .map(|record| Some(record.text_content.clone()))
+            .collect();
+        let metas: Vec<Option<serde_json::Map<String, serde_json::Value>>> = records
+            .iter()
+            .map(|record| {
+                let mut meta = serde_json::Map::new();
+                meta.insert(
+                    "importance".to_string(),
+                    serde_json::Value::Number(
+                        serde_json::Number::from_f64(record.importance as f64)
+                            .unwrap_or_else(|| serde_json::Number::from(0)),
+                    ),
+                );
+                meta.insert(
+                    "room".to_string(),
+                    serde_json::Value::String(record.room.clone()),
+                );
+                if let Some(source_file) = &record.source_file {
+                    meta.insert(
+                        "source_file".to_string(),
+                        serde_json::Value::String(source_file.clone()),
+                    );
+                }
+                Some(meta)
+            })
+            .collect();
+        Self::format_retrieval(query.wing.as_ref(), query.room.as_ref(), &docs, &metas)
+    }
 }
 
 pub struct Layer3 {
@@ -467,6 +523,10 @@ impl MemoryStack {
         n_results: usize,
     ) -> String {
         self.l2.retrieve(wing, room, n_results).await
+    }
+
+    pub async fn recall_by_time_range(&self, query: RecallQuery) -> String {
+        self.l2.retrieve_by_time_range(query).await
     }
 
     pub async fn search(

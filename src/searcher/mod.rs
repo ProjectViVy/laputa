@@ -1,15 +1,40 @@
+mod hybrid;
+mod recall;
+
 use crate::config::MempalaceConfig;
-use crate::storage::MemoryStack;
-use crate::vector_storage::VectorStorage;
+use crate::vector_storage::{EmotionQuery, MemoryRecord, VectorStorage};
+use crate::wakeup::WakePackGenerator;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
+
+pub use hybrid::{
+    compute_composite_score, load_hybrid_ranking_config, merge_hybrid_results,
+    normalize_heat_score, normalize_time_score, HybridQuery, HybridRankingConfig,
+    HybridSearchResult,
+};
+pub use recall::RecallQuery;
 
 // Note: Custom VectorStorage (fastembed + usearch + rusqlite) is used.
 
 /// High-level search interface for retrieving context from the Palace.
 pub struct Searcher {
     pub config: MempalaceConfig,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SemanticSearchOptions {
+    pub wing: Option<String>,
+    pub room: Option<String>,
+    pub include_discarded: bool,
+    pub sort_by_heat: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SearchResult {
+    pub record: MemoryRecord,
+    pub similarity: f32,
+    pub rank: usize,
 }
 
 impl Searcher {
@@ -38,7 +63,9 @@ impl Searcher {
                 "Vector storage unavailable; memory was not persisted"
             ));
         };
-        let id = store.add_memory(text, wing, room, source_file, source_mtime)?;
+        let id = store
+            .add_memory(text, wing, room, source_file, source_mtime)
+            .map_err(|_| anyhow::anyhow!("Vector storage unavailable; memory was not persisted"))?;
         store.save_index(self.config.config_dir.join("vectors.usearch"))?;
         Ok(id)
     }
@@ -55,9 +82,128 @@ impl Searcher {
         Ok(())
     }
 
+    pub fn update_memory_emotion(
+        &self,
+        memory_id: i64,
+        valence: i32,
+        arousal: u32,
+    ) -> Result<MemoryRecord> {
+        let Some(store) = self.open_vector_storage() else {
+            return Err(anyhow::anyhow!(
+                "Vector storage unavailable; emotion update was not persisted"
+            ));
+        };
+        store.update_memory_emotion(memory_id, valence, arousal)
+    }
+
+    pub fn list_memories_by_emotion(&self, query: &EmotionQuery) -> Result<Vec<MemoryRecord>> {
+        let Some(store) = self.open_vector_storage() else {
+            return Ok(vec![]);
+        };
+        store.list_memories_by_emotion(query)
+    }
+
     pub async fn wake_up(&self, wing: Option<String>) -> Result<String> {
-        let mut stack = MemoryStack::new(self.config.clone());
-        Ok(stack.wake_up(wing).await)
+        WakePackGenerator::new(self.config.clone()).generate_json(wing)
+    }
+
+    pub async fn recall_by_time_range(&self, query: RecallQuery) -> Result<Vec<MemoryRecord>> {
+        let Some(store) = self.open_vector_storage() else {
+            return Ok(vec![]);
+        };
+
+        let records = store.recall_by_time_range(&query)?;
+        for record in &records {
+            let _ = store.touch_memory(record.id);
+        }
+        Ok(records)
+    }
+
+    pub async fn semantic_search(
+        &self,
+        query: &str,
+        top_k: usize,
+        options: SemanticSearchOptions,
+    ) -> Result<Vec<SearchResult>> {
+        if top_k == 0 {
+            return Ok(vec![]);
+        }
+
+        let Some(store) = self.open_vector_storage() else {
+            return Ok(vec![]);
+        };
+
+        let query = truncate_embedding_input(query);
+        let query_vector = match store.embed_single(&query) {
+            Ok(vector) => vector,
+            Err(_) => return Ok(vec![]),
+        };
+
+        let results = store.semantic_search(
+            &query_vector,
+            top_k,
+            options.wing.as_deref(),
+            options.room.as_deref(),
+            options.include_discarded,
+            options.sort_by_heat,
+        )?;
+
+        for (record, _) in &results {
+            let _ = store.touch_memory(record.id);
+        }
+
+        Ok(results
+            .into_iter()
+            .enumerate()
+            .map(|(index, (mut record, similarity))| {
+                record.score = similarity;
+                SearchResult {
+                    record,
+                    similarity,
+                    rank: index + 1,
+                }
+            })
+            .collect())
+    }
+
+    pub async fn hybrid_search(&self, mut query: HybridQuery) -> Result<Vec<HybridSearchResult>> {
+        if query.ranking_config == HybridRankingConfig::default() {
+            if let Some(config) = load_hybrid_ranking_config(&self.config.config_dir) {
+                query.ranking_config = config;
+            }
+        }
+
+        let time_results = self
+            .recall_by_time_range(query.recall_query.clone())
+            .await
+            .unwrap_or_default();
+
+        let semantic_results = if query.semantic_query.trim().is_empty() {
+            vec![]
+        } else {
+            self.semantic_search(
+                &query.semantic_query,
+                query.semantic_limit,
+                SemanticSearchOptions {
+                    wing: query.recall_query.wing.clone(),
+                    room: query.recall_query.room.clone(),
+                    include_discarded: query.recall_query.include_discarded,
+                    sort_by_heat: false,
+                },
+            )
+            .await
+            .unwrap_or_default()
+        };
+
+        Ok(merge_hybrid_results(&query, time_results, semantic_results))
+    }
+
+    pub fn merge_hybrid_results(
+        query: &HybridQuery,
+        time_results: Vec<MemoryRecord>,
+        semantic_results: Vec<SearchResult>,
+    ) -> Vec<HybridSearchResult> {
+        hybrid::merge_hybrid_results(query, time_results, semantic_results)
     }
 
     pub fn build_where_clause(
@@ -161,50 +307,105 @@ impl Searcher {
         room: Option<String>,
         n_results: usize,
     ) -> Result<String> {
-        // Use pure-Rust VectorStorage (lazy initialization)
-        let Some(store) = self.open_vector_storage() else {
-            return Ok(format!(
-                "\n  No results found for: \"{}\" (vector storage unavailable)",
-                query
-            ));
-        };
+        let results = self
+            .semantic_search(
+                query,
+                n_results,
+                SemanticSearchOptions {
+                    wing: wing.clone(),
+                    room: room.clone(),
+                    ..SemanticSearchOptions::default()
+                },
+            )
+            .await?;
 
-        // Use search_room for pre-filtered search if wing+room provided, else global search
-        let records = match (&wing, &room) {
-            (Some(w), Some(r)) => store.search_room(query, w, r, n_results, None)?,
-            _ => store.search(query, n_results)?,
-        };
-
-        if records.is_empty() {
+        if results.is_empty() {
             return Ok(format!("\n  No results found for: \"{}\"", query));
         }
 
-        // Convert records to legacy format for display
-        let docs: Vec<String> = records.iter().map(|r| r.text_content.clone()).collect();
-        let metas: Vec<Option<serde_json::Map<String, serde_json::Value>>> = records
+        let docs: Vec<String> = results
             .iter()
-            .map(|r| {
+            .map(|result| result.record.text_content.clone())
+            .collect();
+        let metas: Vec<Option<serde_json::Map<String, serde_json::Value>>> = results
+            .iter()
+            .map(|result| {
+                let record = &result.record;
                 let mut m = serde_json::Map::new();
                 m.insert(
                     "wing".to_string(),
-                    serde_json::Value::String(r.wing.clone()),
+                    serde_json::Value::String(record.wing.clone()),
                 );
                 m.insert(
                     "room".to_string(),
-                    serde_json::Value::String(r.room.clone()),
+                    serde_json::Value::String(record.room.clone()),
                 );
                 m.insert(
                     "valid_from".to_string(),
-                    serde_json::Value::Number(r.valid_from.into()),
+                    serde_json::Value::Number(record.valid_from.into()),
                 );
+                if let Some(source_file) = &record.source_file {
+                    m.insert(
+                        "source_file".to_string(),
+                        serde_json::Value::String(source_file.clone()),
+                    );
+                }
                 Some(m)
             })
             .collect();
-        let dists: Vec<f32> = records.iter().map(|r| 1.0 - r.score).collect();
+        let dists: Vec<f32> = results
+            .iter()
+            .map(|result| 1.0 - result.similarity)
+            .collect();
 
         let output =
             Self::format_search_results(query, wing.as_ref(), room.as_ref(), &docs, &metas, &dists);
         Ok(output)
+    }
+
+    pub fn format_semantic_json_results(
+        query: &str,
+        options: &SemanticSearchOptions,
+        results: &[SearchResult],
+    ) -> serde_json::Value {
+        let hits: Vec<serde_json::Value> = results
+            .iter()
+            .map(|result| {
+                let record = &result.record;
+                serde_json::json!({
+                    "rank": result.rank,
+                    "similarity": result.similarity,
+                    "record": {
+                        "id": record.id,
+                        "text": &record.text_content,
+                        "wing": &record.wing,
+                        "room": &record.room,
+                        "source_file": &record.source_file,
+                        "valid_from": record.valid_from,
+                        "valid_to": record.valid_to,
+                        "heat_i32": record.heat_i32,
+                        "last_accessed": record.last_accessed.to_rfc3339(),
+                        "access_count": record.access_count,
+                        "emotion_valence": record.emotion_valence,
+                        "emotion_arousal": record.emotion_arousal,
+                        "is_archive_candidate": record.is_archive_candidate,
+                        "discard_candidate": record.discard_candidate,
+                        "merged_into_id": record.merged_into_id
+                    }
+                })
+            })
+            .collect();
+
+        serde_json::json!({
+            "query": query,
+            "filters": {
+                "wing": &options.wing,
+                "room": &options.room,
+                "include_discarded": options.include_discarded,
+                "sort_by_heat": options.sort_by_heat,
+            },
+            "results": hits
+        })
     }
 
     pub fn format_json_results(
@@ -245,50 +446,36 @@ impl Searcher {
         room: Option<String>,
         n_results: usize,
     ) -> Result<serde_json::Value> {
-        // Use pure-Rust VectorStorage (lazy initialization)
-        let Some(store) = self.open_vector_storage() else {
-            return Ok(Self::format_json_results(
-                query,
-                wing.as_ref(),
-                room.as_ref(),
-                &[],
-                &[],
-                &[],
-            ));
+        let options = SemanticSearchOptions {
+            wing,
+            room,
+            ..SemanticSearchOptions::default()
         };
-
-        let records = match (&wing, &room) {
-            (Some(w), Some(r)) => store.search_room(query, w, r, n_results, None)?,
-            _ => store.search(query, n_results)?,
-        };
-
-        let docs: Vec<String> = records.iter().map(|r| r.text_content.clone()).collect();
-        let metas: Vec<Option<serde_json::Map<String, serde_json::Value>>> = records
-            .iter()
-            .map(|r| {
-                let mut m = serde_json::Map::new();
-                m.insert(
-                    "wing".to_string(),
-                    serde_json::Value::String(r.wing.clone()),
-                );
-                m.insert(
-                    "room".to_string(),
-                    serde_json::Value::String(r.room.clone()),
-                );
-                m.insert("id".to_string(), serde_json::Value::Number(r.id.into()));
-                Some(m)
-            })
-            .collect();
-        let dists: Vec<f32> = records.iter().map(|r| 1.0 - r.score).collect();
-
-        Ok(Self::format_json_results(
-            query,
-            wing.as_ref(),
-            room.as_ref(),
-            &docs,
-            &metas,
-            &dists,
+        let results = self
+            .semantic_search(query, n_results, options.clone())
+            .await?;
+        Ok(Self::format_semantic_json_results(
+            query, &options, &results,
         ))
+    }
+}
+
+fn truncate_embedding_input(query: &str) -> String {
+    const MAX_TOKENS: usize = 512;
+    let mut parts = query.split_whitespace();
+    let mut truncated = Vec::with_capacity(MAX_TOKENS);
+
+    for _ in 0..MAX_TOKENS {
+        let Some(part) = parts.next() else {
+            break;
+        };
+        truncated.push(part);
+    }
+
+    if truncated.is_empty() {
+        query.to_string()
+    } else {
+        truncated.join(" ")
     }
 }
 
@@ -489,6 +676,17 @@ mod tests {
         assert!(res2.is_ok());
     }
 
+    #[tokio::test]
+    async fn test_recall_by_time_range_graceful_when_unavailable() {
+        let config = MempalaceConfig::default();
+        let searcher = Searcher::new(config);
+
+        let res = searcher
+            .recall_by_time_range(RecallQuery::by_time_range(100, 200))
+            .await;
+        assert!(res.is_ok());
+    }
+
     #[test]
     fn test_format_search_results_multiline_doc() {
         let docs = vec!["line 1\nline 2\nline 3".to_string()];
@@ -513,5 +711,18 @@ mod tests {
     fn test_format_json_results_empty_pure() {
         let res = Searcher::format_json_results("none", None, None, &[], &[], &[]);
         assert_eq!(res["results"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_truncate_embedding_input_caps_word_count() {
+        let query = (0..600)
+            .map(|index| format!("token{index}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        let truncated = truncate_embedding_input(&query);
+        assert_eq!(truncated.split_whitespace().count(), 512);
+        assert!(truncated.starts_with("token0 token1"));
+        assert!(!truncated.contains("token599"));
     }
 }

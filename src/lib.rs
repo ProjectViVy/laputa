@@ -6,6 +6,7 @@ pub mod cli;
 pub mod config;
 pub mod dialect;
 pub mod diary;
+pub mod export;
 pub mod extractor;
 pub mod heat;
 pub mod identity;

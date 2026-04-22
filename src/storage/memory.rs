@@ -1,3 +1,4 @@
+use crate::api::LaputaError;
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, TimeZone, Utc};
 use rusqlite::Connection;
@@ -28,6 +29,9 @@ pub struct LaputaMemoryRecord {
     pub emotion_valence: i32,
     pub emotion_arousal: u32,
     pub is_archive_candidate: bool,
+    pub reason: Option<String>,
+    pub discard_candidate: bool,
+    pub merged_into_id: Option<i64>,
 }
 
 impl LaputaMemoryRecord {
@@ -60,6 +64,9 @@ impl LaputaMemoryRecord {
             emotion_valence: 0,
             emotion_arousal: 0,
             is_archive_candidate: false,
+            reason: None,
+            discard_candidate: false,
+            merged_into_id: None,
         }
     }
 
@@ -67,8 +74,18 @@ impl LaputaMemoryRecord {
         heat_from_i32(self.heat_i32)
     }
 
-    pub fn set_heat(&mut self, heat: f64) {
+    /// Sets the heat value with boundary validation.
+    /// Returns `ValidationError` if value is outside [0.0, 100.0] range.
+    /// NaN inputs are also rejected.
+    pub fn set_heat(&mut self, heat: f64) -> Result<(), LaputaError> {
+        if heat.is_nan() || !(0.0..=100.0).contains(&heat) {
+            return Err(LaputaError::ValidationError(format!(
+                "heat out of range [0.0, 100.0]: {}",
+                heat
+            )));
+        }
         self.heat_i32 = heat_to_i32(heat);
+        Ok(())
     }
 
     pub fn update_emotion(&mut self, valence: i32, arousal: u32) {
@@ -80,10 +97,19 @@ impl LaputaMemoryRecord {
         self.is_archive_candidate = true;
     }
 
+    /// Creates a new record with updated heat (builder style).
+    /// Caller is responsible for ensuring heat is in valid range [0.0, 100.0].
+    /// # Panics (debug only)
+    /// Panics in debug builds if `heat` is NaN or outside [0.0, 100.0].
     pub fn with_updated_heat(&self, heat: f64) -> Self {
-        let mut updated = self.clone();
-        updated.set_heat(heat);
-        updated
+        debug_assert!(
+            !heat.is_nan() && (0.0..=100.0).contains(&heat),
+            "with_updated_heat: heat={heat} is out of range [0.0, 100.0] or NaN"
+        );
+        Self {
+            heat_i32: heat_to_i32(heat),
+            ..self.clone()
+        }
     }
 }
 
@@ -91,8 +117,10 @@ pub fn heat_from_i32(value: i32) -> f64 {
     value as f64 / 100.0
 }
 
+/// Converts heat f64 to i32 representation (scaled by 100).
+/// Caller must ensure value is in [0.0, 100.0] range; no clamping performed.
 pub fn heat_to_i32(value: f64) -> i32 {
-    (value.clamp(0.0, 100.0) * 100.0).round() as i32
+    (value * 100.0).round() as i32
 }
 
 pub fn ensure_memory_schema(conn: &Connection) -> Result<()> {
@@ -115,7 +143,10 @@ pub fn ensure_memory_schema(conn: &Connection) -> Result<()> {
             heat_i32 INTEGER DEFAULT 5000,
             emotion_valence INTEGER DEFAULT 0,
             emotion_arousal INTEGER DEFAULT 0,
-            is_archive_candidate INTEGER DEFAULT 0
+            is_archive_candidate INTEGER DEFAULT 0,
+            reason TEXT,
+            discard_candidate INTEGER DEFAULT 0,
+            merged_into_id INTEGER
          );
          CREATE INDEX IF NOT EXISTS idx_source_file ON memories (source_file);
          CREATE INDEX IF NOT EXISTS idx_wing_room ON memories (wing, room);
@@ -129,7 +160,22 @@ pub fn ensure_memory_schema(conn: &Connection) -> Result<()> {
             filed_at TEXT NOT NULL,
             embedding_id INTEGER REFERENCES memories(id)
          );
-         CREATE INDEX IF NOT EXISTS idx_drawers_wing_room ON drawers (wing, room);",
+         CREATE INDEX IF NOT EXISTS idx_drawers_wing_room ON drawers (wing, room);
+         CREATE TABLE IF NOT EXISTS capsules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            week_id TEXT NOT NULL UNIQUE,
+            week_start INTEGER NOT NULL,
+            week_end INTEGER NOT NULL,
+            capsule_json TEXT NOT NULL,
+            markdown_content TEXT NOT NULL,
+            compressed_content TEXT NOT NULL,
+            original_tokens INTEGER NOT NULL,
+            summary_tokens INTEGER NOT NULL,
+            compression_ratio REAL NOT NULL,
+            incomplete INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+         );
+         CREATE INDEX IF NOT EXISTS idx_capsules_week_start ON capsules (week_start DESC);",
     )?;
 
     let mut statement = conn.prepare("PRAGMA table_info(memories)")?;
@@ -187,8 +233,29 @@ pub fn ensure_memory_schema(conn: &Connection) -> Result<()> {
         "is_archive_candidate",
         "ALTER TABLE memories ADD COLUMN is_archive_candidate INTEGER DEFAULT 0",
     )?;
+    add_column_if_missing(
+        conn,
+        &existing_columns,
+        "reason",
+        "ALTER TABLE memories ADD COLUMN reason TEXT",
+    )?;
+    add_column_if_missing(
+        conn,
+        &existing_columns,
+        "discard_candidate",
+        "ALTER TABLE memories ADD COLUMN discard_candidate INTEGER DEFAULT 0",
+    )?;
+    add_column_if_missing(
+        conn,
+        &existing_columns,
+        "merged_into_id",
+        "ALTER TABLE memories ADD COLUMN merged_into_id INTEGER",
+    )?;
 
-    conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_heat ON memories (heat_i32 DESC);")?;
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_heat ON memories (heat_i32 DESC);
+         CREATE INDEX IF NOT EXISTS idx_discard_candidate ON memories (discard_candidate);",
+    )?;
 
     Ok(())
 }
