@@ -1,0 +1,17 @@
+# Go artifacts
+*.exe
+*.exe~
+*.test
+*.out
+
+# Mentle binary artifacts (these have mempalace strings from before rename)
+mentle/mempalace.exe
+mentle/mempalace-test
+
+# Garden runtime
+garden/garden.exe
+garden/.garden/
+
+# OS
+.DS_Store
+Thumbs.db
