@@ -1,801 +1,386 @@
-# GARDEN 实施计划 — Phase 0 起手版
+# GARDEN 实施计划 — v3-final (状态冻结版)
 
 > **作者**: 松本(大湿)
-> **日期**: 2026-07-09
-> **关联 ADR**: `~/Desktop/garden/docs/architecture/0001-garden-merge.md`
-> **替代**: ~~GARDEN-PLAN-2026-07-08.md~~(vendor 假设,作废)
-> **范围**: Go 路径(laputa + mentle + garden);Rust 路径完全不动
+> **日期**: 2026-07-14
+> **状态**: Phase 0/1/2/3 已完成,Phase 4 待开
+> **替代**: ~~GARDEN-PLAN-2026-07-08.md~~(已移至 `docs/archive/`)
+> **关联 ADR**: `docs/architecture/0001-garden-merge.md`
 > **关联 README**: `~/Desktop/garden/README.md`(设计哲学)
+> **范围**: Go 路径(laputa + mentle + garden);Rust 路径完全不动
 
 ---
 
-## 0. 5 个决策(已拍,本计划基础)
-
-| # | 决策 | 含义 |
-|---|---|---|
-| Q1 | **b** | CRUD = write / read / list / forget |
-| Q2 | **b** | garden = `~/Desktop/garden/` **全新顶层工作区**(不混合 vendor) |
-| Q3 | **b+i** | mentle 仓库边界保留 + **物理搬入 garden 内部**,garden 内相对 import,**不 vendor** |
-| Q4 | **b** | laputa 重整成 `governance` 包,laputa.exe 退役 |
-| Q-WORKSPACE | **B** | 工作区顶层 `~/Desktop/garden/`,与 `~/Desktop/projects/` 物理隔离 |
-| **命名** | — | `mempalace-go-redis-v2` 一律称 **mentle**(目录 + module path),无 `-go` 后缀 |
-| **README** | — | 项目名仍是 `laputa`,README 第一行 `# Laputa — Garden Laputa`,哲学放 README |
-
-### 0.1 物理布局（搬入后）
+## 0. 一句话架构(终极,不再变)
 
 ```
-~/Desktop/garden/                      ← 工作区根
-├── README.md                          ← 哲学 + 架构入口
-├── docs/architecture/0001-garden-merge.md  ← ADR
-├── GARDEN-PLAN.md                     ← 本文件
-├── laputa/                            ← 仓库 1：搬入自 ~/Desktop/projects/laputa/
-│   ├── go.mod                         module github.com/dashimaki/laputa
-│   ├── governance/                    ← Phase 0 新顶层包
-│   ├── cmd/laputa/main.go             ← deprecate 一行注释
-│   └── ...
-├── mentle/                            ← 仓库 2：搬入自 ~/Desktop/projects/mempalace-go-redis-v2/
-│   ├── go.mod                         module github.com/dashimaki/mentle   ← 改名!
-│   ├── facade/                        ← Phase 0 新顶层包
-│   ├── cmd/server/                    ← 内部 import path 全改
-│   └── internal/                      ← 17 internal 保持原状
-└── garden/                            ← 仓库 3：Phase 1 起新建
-    └── go.mod                         module github.com/dashimaki/garden
+单 garden.exe HTTP :7373
+  → CRUD 4 个动作 (write / read / list / forget)
+    → key 前缀路由:
+       section:*  → laputa/governance   (14 section, 纯文件)
+       memory:*   → mentle/facade       (redis + sqlite + govector + sqlite-vec)
 ```
 
-### 0.2 命名替换清单
+工作区布局:
 
-| 旧 | 新 |
+```
+~/Desktop/garden/                              ← 唯一工作区,跟 ~/Desktop/projects/ 物理隔离
+├── README.md                                  ← 设计哲学(土壤/天空/种植)
+├── GARDEN-PLAN.md                             ← 本文件(状态冻结版)
+├── docs/
+│   ├── architecture/0001-garden-merge.md      ← ADR
+│   └── archive/                               ← 历史计划
+│       └── GARDEN-PLAN-2026-07-08.md          ← v1 已废弃
+├── PHASE0-RESULT.md                           ← 3.7 KB
+├── PHASE1-RESULT.md                           ← 3.8 KB
+├── PHASE2-RESULT.md                           ← 4.3 KB
+├── PHASE3-RESULT.md                           ← 4.6 KB
+├── laputa/                                    ← 仓库 1:治理层(天空)
+│   ├── go.mod            module github.com/dashimaki/laputa
+│   ├── governance/       ← 顶层包
+│   └── cmd/laputa/       ← deprecated fallback (保 :7373 兼容)
+├── mentle/                                    ← 仓库 2:记忆层(土壤,V2 多存储版)
+│   ├── go.mod            module github.com/dashimaki/mentle
+│   ├── facade/           ← 顶层包(4 CRUD)
+│   └── internal/         ← 17 internal 保持原状
+└── garden/                                    ← 仓库 3:种植层(CLI/HTTP)
+    ├── go.mod            module github.com/dashimaki/garden
+    ├── main.go
+    └── internal/{crud, router, server, lifecycle, supervision}
+```
+
+**模块名 / 仓库名固定不变**:
+- `github.com/dashimaki/laputa` (V1 治理)
+- `github.com/dashimaki/mentle` (V2 多存储兼容)
+- `github.com/dashimaki/garden` (应用层)
+
+---
+
+## 1. 当前完成状态(冻结快照,2026-07-14)
+
+### 1.1 5 个 Phase 完成度
+
+| Phase | 内容 | 状态 | 交付物 | commit |
+|---|---|---|---|---|
+| **0** | 物理搬入 + mentle 改名 + 抽 governance/facade 顶层包 | ✅ 完成 | `PHASE0-RESULT.md` | `7e16be3` |
+| **1** | garden 仓库骨架 + 4 CRUD + key 前缀 router | ✅ 完成 | `PHASE1-RESULT.md` | `48cc0fc` |
+| **2** | HTTP server + 4 CRUD 路由 + /health + graceful degradation | ✅ 完成 | `PHASE2-RESULT.md` | `3537c4c` |
+| **3** | lifecycle + supervision + signal + 日志双写 | ✅ 完成 | `PHASE3-RESULT.md` | `673c27c` |
+| **4** | 4 个独立测试入口(含 e2e build tag) | 🟡 待开 | 暂无 | — |
+
+**主体进度: 80% (4/5 phase)。**
+
+### 1.2 Phase 0 完成事实(2026-07-09)
+
+| 改动 | 路径 |
 |---|---|
-| `~/Desktop/projects/mempalace-go-redis-v2/` | `~/Desktop/garden/mentle/` |
-| `github.com/dashimaki/mempalace-go-redis`（module） | `github.com/dashimaki/mentle` |
-| 文档里 `mentle-go` | `mentle` |
-| 文档里 `mempalace`（指 Go 版仓库的） | `mentle` |
-| `mempalace-py`（Python 版，已在 morediva/.workspace） | **不动** |
-| `github.com/dashimaki/laputa`（module） | **不动** |
-| Rust 路径（memtle / agent-diva-laputa） | **不动** |
+| `~/Desktop/projects/laputa/` → `~/Desktop/garden/laputa/` | 物理 mv |
+| `~/Desktop/projects/mempalace-go-redis/` → `~/Desktop/garden/mentle/` | 物理 mv + 改名 |
+| `github.com/dashimaki/mempalace-go-redis` → `github.com/dashimaki/mentle` | go.mod 改名 |
+| `laputa.go` → `governance/engine.go` | package = `governance` |
+| `internal/{rhythm,scheduler,store,wakeup,web}` → `governance/*` | 5 sub-package |
+| 新建 `mentle/facade/{facade.go,crud.go,facade_test.go}` | 顶层包 |
 
----
-
-## 1. 终极架构(一句话)
-
-> **单 `garden` CLI / HTTP** 通过 garden 内相对 import 引用 **`laputa/governance`** 和 **`mentle/facade`**，对外暴露 **4 个 CRUD**：`write` / `read` / `list` / `forget`。`key` 前缀路由：`section:*` → governance；其它 → mentle facade。
-
----
-
-## 2. 5 个 Phase 工作流
-
-```
-Phase 0 (基础设施)    物理搬运 + mentle module path 改名 + governance/facade 顶层包抽出
-       ↓
-Phase 1 (CRUD)        garden 仓库骨架 + write/read/list/forget 4 个动作
-       ↓
-Phase 2 (HTTP)        garden HTTP server + 路由分发
-       ↓
-Phase 3 (运维)        lifecycle + supervision + 日志
-       ↓
-Phase 4 (测试)        4 个独立测试入口（governance / facade / garden / 集成）
-```
-
----
-
-## 3. Phase 0 — 基础设施重构 (3-5 天)
-
-### 3.1 目标
-
-1. 把 `~/Desktop/projects/laputa/` 搬进 `~/Desktop/garden/laputa/`
-2. 把 `~/Desktop/projects/mempalace-go-redis-v2/` 搬进 `~/Desktop/garden/mentle/`
-3. mentle 仓库 module path 从 `mempalace-go-redis` 改 `mentle`
-4. laputa 暴露顶层 `governance` 包
-5. mentle 暴露顶层 `facade` 包
-6. 两边 `go build ./...` + `go test ./...` 全绿
-7. 写 `PHASE0-RESULT.md`
-
-### 3.2 操作序列（执行清单）
-
-**步骤 A：物理搬运**
-
+**验收**:
 ```bash
-# 0. 预检：确认 ~/Desktop/projects/laputa 和 ~/Desktop/projects/mempalace-go-redis-v2 都在
-ls ~/Desktop/projects/laputa/go.mod
-ls ~/Desktop/projects/mempalace-go-redis-v2/go.mod
-
-# 1. 搬 laputa
-mv ~/Desktop/projects/laputa ~/Desktop/garden/laputa
-
-# 2. 搬 mentle（同时改路径名）
-mv ~/Desktop/projects/mempalace-go-redis-v2 ~/Desktop/garden/mentle
-
-# 3. 验证
-ls ~/Desktop/garden/
-# 应该看到 laputa/ mentle/ README.md docs/ GARDEN-PLAN.md ...
-ls ~/Desktop/projects/
-# 应该不再有 laputa/ mempalace-go-redis-v2/
+cd ~/Desktop/garden/laputa && go build ./governance/... && go test ./governance/...
+cd ~/Desktop/garden/mentle && go build ./... && go test ./facade/...
 ```
 
-**步骤 B：mentle module path 改名**
+### 1.3 Phase 1 完成事实(2026-07-09)
 
-```bash
-cd ~/Desktop/garden/mentle
-
-# 1. 改 go.mod 第一行
-sed -i 's|module github.com/dashimaki/mempalace-go-redis|module github.com/dashimaki/mentle|' go.mod
-
-# 2. 全文替换所有 .go 文件里的 import path
-grep -rl 'github.com/dashimaki/mempalace-go-redis' --include='*.go' . | xargs sed -i 's|github.com/dashimaki/mempalace-go-redis|github.com/dashimaki/mentle|g'
-
-# 3. 重建 go.sum
-rm go.sum
-go mod tidy
-
-# 4. 验证编译
-go build ./...
-```
-
-**步骤 C：laputa governance 重命名**
-
-```bash
-cd ~/Desktop/garden/laputa
-
-# 1. 建顶层 governance/ 目录
-mkdir governance
-
-# 2. 移 laputa.go → governance/engine.go，并改 package
-mv laputa.go governance/engine.go
-sed -i 's/^package laputa$/package governance/' governance/engine.go
-
-# 3. 移 internal/* 进 governance/*（保留 package 边界，只改物理位置）
-mv internal/rhythm    governance/rhythm
-mv internal/scheduler governance/scheduler
-mv internal/store     governance/store
-mv internal/wakeup    governance/wakeup
-mv internal/web       governance/web
-
-# 4. deprecate cmd/laputa（保留作 fallback 二进制）
-cat > cmd/laputa/main.go << 'EOF'
-// Deprecated: laputa.exe is replaced by garden (laputa + mentle facade).
-// Kept as fallback binary for hermes plugin HTTP compatibility on :7373.
-package main
-EOF
-
-# 5. 验证编译
-go build ./...
-```
-
-### 3.3 mentle facade 抽出
-
-```bash
-cd ~/Desktop/garden/mentle
-
-# 1. 新建顶层 facade/ 目录
-mkdir facade
-
-# 2. 写 facade.go（Service 聚合 17 internal）
-cat > facade/facade.go << 'EOF'
-package facade
-
-import (
-    "context"
-    "github.com/dashimaki/mentle/internal/config"
-    "github.com/dashimaki/mentle/internal/diary"
-    "github.com/dashimaki/mentle/internal/kg"
-)
-
-type Service struct {
-    Cfg   *config.Config
-    Diary *diary.Diary
-    KG    *kg.KnowledgeGraph
-}
-
-func (s *Service) Init(ctx context.Context, opts Options) error {
-    // 复制 cmd/server/main.go 里的组装逻辑
-    return nil
-}
-
-func (s *Service) Close() error { return nil }
-EOF
-
-# 3. 写 facade/crud.go write/read/list/forget
-cat > facade/crud.go << 'EOF'
-package facade
-
-import "context"
-
-func (s *Service) Write(ctx context.Context, key, content string, meta map[string]any) (string, error) {
-    return "", nil
-}
-func (s *Service) Read(ctx context.Context, key string) (map[string]any, error) { return nil, nil }
-func (s *Service) List(ctx context.Context, prefix string, limit int) ([]map[string]any, error) {
-    return nil, nil
-}
-func (s *Service) Forget(ctx context.Context, key string) (bool, error) { return false, nil }
-EOF
-
-# 4. cmd/server 简化为 facade 入口
-cat > cmd/server/main.go << 'EOF'
-package main
-
-import (
-    "context"
-    "github.com/dashimaki/mentle/facade"
-)
-
-func main() {
-    ctx := context.Background()
-    svc := &facade.Service{}
-    if err := svc.Init(ctx, facade.Options{}); err != nil { panic(err) }
-    defer svc.Close()
-    // 原 MCP serve 逻辑后续接上
-    select {}
-}
-EOF
-
-# 5. 验证
-go build ./...
-go test ./facade/...
-```
-
-### 3.4 Phase 0 验收
-
-```bash
-# laputa governance
-cd ~/Desktop/garden/laputa
-go build ./governance/... && echo "laputa gov OK"
-go test ./governance/... && echo "laputa gov tests OK"
-
-# mentle facade
-cd ~/Desktop/garden/mentle
-go build ./... && echo "mentle OK"
-go test ./facade/... && echo "mentle facade tests OK"
-
-# hermes plugin HTTP（如果 laputa.exe 还能跑）
-curl -s -m 3 http://127.0.0.1:7373/healthz
-```
-
-### 3.5 Git 状态
-
-| 仓库 | 提交 |
-|---|---|
-| `~/Desktop/garden/laputa` | 1-2 commits: 搬入（如果需要） + `refactor: consolidate into governance package` |
-| `~/Desktop/garden/mentle` | 2 commits: `refactor: rename module to mentle` + `feat(facade): add facade package` |
-| `~/Desktop/garden` | 1 commit: `docs: README + updated GARDEN-PLAN + PHASE0-RESULT` |
-
-### 3.6 已知风险与缓解
-
-| 风险 | 概率 | 缓解 |
+| 包 | 路径 | 内容 |
 |---|---|---|
-| mentle 17 internal 互相 import 路径全乱 | 高 | `grep -rl` 一次扫完 + 批量 sed + `go mod tidy` 重生 |
-| laputa internal/* 物理位置改导致 import path 断裂 | 中 | 移动前先 grep 确认 import path 是相对路径还是 module path；后者才需要 sed |
-| mentle cmd/server 启动跑不起来（chromadb 问题） | 中 | Phase 0 只验 `go build` + `go test ./facade/`，不要求 cmd/server 启动 |
-| git 历史跨目录移动丢失 | 中 | 用 `git mv` 而非 `mv`，先在仓库内改名再 mv 到 garden |
+| `internal/crud` | `garden/internal/crud/crud.go` | `Handler.Write/Read/List/Forget` |
+| `internal/router` | `garden/internal/router/{router,governance,mentle_adapter}.go` | key 前缀分发 + 2 adapter |
+| `internal/router` | `garden/internal/router/router_test.go` | 路由表 |
 
----
+**路由规则** (ADR §3.2):
+- `section:*` → governance backend
+- `memory:*` → mentle facade
+- 其他 → error
 
-## 4. Phase 1 — garden 仓库 + CRUD 4 个动作 (3-5 天)
-
-### 4.1 目标
-
-在 `~/Desktop/garden/garden/` 建立全新 Go module,实现 4 个 CRUD 函数调用 `laputa/governance` + `mentle/facade`。
-
-### 4.2 仓库初始化
-
-```bash
-cd ~/Desktop/garden
-mkdir garden
-cd garden
-
-# 1. git init
-git init
-git config user.name "Matsumoto"
-git config user.email "matsumoto@dashimaki.local"
-
-# 2. go.mod（本地相对路径，物理上都在 ~/Desktop/garden/）
-cat > go.mod << 'EOF'
-module github.com/dashimaki/garden
-
-go 1.26.4
-
-require (
-    github.com/dashimaki/laputa v0.0.0
-    github.com/dashimaki/mentle  v0.0.0
-)
-
-require (
-    // 由 go mod tidy 自动填入 indirect deps
-)
-
+**go.mod replace**:
+```go
 replace (
     github.com/dashimaki/laputa => ../laputa
     github.com/dashimaki/mentle  => ../mentle
 )
-EOF
-
-# 3. main.go 占位
-cat > main.go << 'EOF'
-package main
-
-func main() { println("garden v0.0.1") }
-EOF
-
-# 4. 验证
-go mod tidy
-go build ./...
 ```
 
-### 4.3 目录布局
+### 1.4 Phase 2 完成事实(2026-07-09)
 
-```
-~/Desktop/garden/garden/
-├── go.mod
-├── go.sum
-├── main.go                          cmd/garden 入口
-├── internal/
-│   ├── crud/
-│   │   └── crud.go                  4 个动作
-│   ├── router/
-│   │   └── router.go                key 前缀分发
-│   ├── server/                      (Phase 2 实现)
-│   ├── lifecycle/                   (Phase 3 实现)
-│   └── supervision/                 (Phase 3 实现)
-├── config/
-│   └── config.example.yaml
-├── e2e/                             (Phase 4)
-└── README.md
-```
+**HTTP 端点** (5 个):
 
-### 4.4 CRUD 4 个动作（核心代码）
+| Method | Route | Handler |
+|---|---|---|
+| POST | `/v1/memories` | `crud.Handler.Write` |
+| GET | `/v1/memories/{key}` | `crud.Handler.Read` |
+| GET | `/v1/memories` | `crud.Handler.List` |
+| DELETE | `/v1/memories/{key}` | `crud.Handler.Forget` |
+| GET | `/health` | 静态 OK + timestamp |
 
-```go
-// internal/crud/crud.go
-package crud
+**Graceful degradation**: mentle 启动失败 → 回退到 governance-only 模式 (section: keys 继续工作,memory: keys 返回 error)。
 
-import (
-    "context"
-    "github.com/dashimaki/garden/internal/router"
-    "github.com/dashimaki/laputa/governance"
-    "github.com/dashimaki/mentle/facade"
-)
-
-type Handler struct {
-    Gov    *governance.Engine
-    Facade *facade.Service
-    Router *router.Router
-}
-
-func (h *Handler) Write(ctx context.Context, key, value string, meta map[string]any) (string, error) {
-    backend, err := h.Router.Route(key)
-    if err != nil { return "", err }
-    return backend.Write(ctx, key, value, meta)
-}
-
-func (h *Handler) Read(ctx context.Context, key string) (map[string]any, error) {
-    backend, err := h.Router.Route(key)
-    if err != nil { return nil, err }
-    return backend.Read(ctx, key)
-}
-
-func (h *Handler) List(ctx context.Context, prefix string, limit int) ([]map[string]any, error) {
-    backend, err := h.Router.Route(prefix)
-    if err != nil { return nil, err }
-    return backend.List(ctx, prefix, limit)
-}
-
-func (h *Handler) Forget(ctx context.Context, key string) (bool, error) {
-    backend, err := h.Router.Route(key)
-    if err != nil { return false, err }
-    return backend.Forget(ctx, key)
-}
-```
-
-```go
-// internal/router/router.go
-package router
-
-import (
-    "context"
-    "errors"
-    "strings"
-)
-
-type Backend interface {
-    Write(ctx context.Context, key, value string, meta map[string]any) (string, error)
-    Read(ctx context.Context, key string) (map[string]any, error)
-    List(ctx context.Context, prefix string, limit int) ([]map[string]any, error)
-    Forget(ctx context.Context, key string) (bool, error)
-}
-
-type Router struct {
-    Governance Backend
-    Mentle     Backend
-}
-
-func (r *Router) Route(key string) (Backend, error) {
-    if strings.HasPrefix(key, "section:") { return r.Governance, nil }
-    if strings.HasPrefix(key, "memory:")  { return r.Mentle, nil }
-    return nil, errors.New("unknown key prefix")
-}
-```
-
-### 4.5 Phase 1 验收
-
-```bash
-cd ~/Desktop/garden/garden
-go build ./...
-go test ./internal/crud/... -v
-```
-
-### 4.6 Git 状态
-
-| 仓库 | 提交 |
+**环境变量**:
+| Variable | Default |
 |---|---|
-| `~/Desktop/garden/garden` | 2-3 commits: `init: garden module` + `feat(crud): 4 actions` + `test: crud unit` |
+| `GARDEN_ADDR` | `:7373` |
+| `GARDEN_GOVERNANCE_DIR` | `~/.laputa/sections` |
+
+**main.go wiring**: `governance.Engine` + `facade.Service` + `crud.Handler` + `server.Server`。
+
+### 1.5 Phase 3 完成事实(2026-07-09)
+
+**架构改进** (超出 plan): `lifecycle` 内部封装 `supervision`,`main.go` 只依赖 `lifecycle`。
+
+**main.go 一行启动**:
+```go
+lifecycle.Run(ctx, srv)
+```
+
+**默认策略** (解决 plan §13 待拍 #3):
+
+| 策略 | 默认值 | 来源 |
+|---|---|---|
+| Health 检查间隔 | 10s | `supervision.New` |
+| Health 失败后停止阈值 | 3 | `supervision.HealthCheckFailLimit` |
+| Server crash 重启延迟 | 5s | `supervision.CrashRestartDelay` |
+| 最大重试次数 | 3 | `supervision.MaxCrashRestarts` |
+| 优雅关闭超时 | 30s | `lifecycle.defaultShutdownTimeout` |
+
+**环境变量新增**:
+| Variable | Default |
+|---|---|
+| `GARDEN_LOG_DIR` | `~/.garden` |
+
+**日志双写**: `~/.garden/garden.log` + stderr。
+
+### 1.6 累计测试覆盖(Phase 1+2+3)
+
+| 包 | 测试 |
+|---|---|
+| `laputa/governance/...` | Phase 0 已 work |
+| `mentle/facade/...` | Phase 0 已 work |
+| `garden/internal/crud` | ✅ |
+| `garden/internal/router` | ✅ |
+| `garden/internal/server` | ✅ 6 handler tests |
+| `garden/internal/lifecycle` | ✅ |
+| `garden/internal/supervision` | ✅ |
+
+**总数**: 至少 17 个 test 通过 (Phase 3 dispatcher 报告)。
 
 ---
 
-## 5. Phase 2 — HTTP server + 路由 (2-3 天)
+## 2. Phase 4 — 待开 (待派,我后面自己开)
 
-### 5.1 目标
+### 2.1 目标
 
-`garden.exe` 起 HTTP server，4 个 CRUD 暴露为 HTTP 路由。
+完成 4 个**独立** `go test` 入口(用户原话:"分开写测试脚本做测试")。
 
-### 5.2 server.go 骨架
+### 2.2 4 个 test 入口
 
-```go
-// internal/server/server.go
-package server
+| 入口 | 路径 | 命令 |
+|---|---|---|
+| `governance_test` | `laputa/governance/` | `cd laputa && go test ./governance/...` |
+| `facade_test` | `mentle/facade/` | `cd mentle && go test ./facade/...` |
+| `garden_unit_test` | `garden/internal/` | `cd garden && go test ./internal/...` |
+| `garden_e2e_test` | `garden/e2e/` | `cd garden && go test -tags=e2e ./e2e/...` |
 
-import (
-    "encoding/json"
-    "net/http"
-    "github.com/dashimaki/garden/internal/crud"
-)
+**前 3 个已 work** (Phase 3 验证),仅 e2e 待建。
 
-type Server struct {
-    Handler *crud.Handler
-    Addr    string
-}
-
-func (s *Server) ListenAndServe() error {
-    mux := http.NewServeMux()
-    mux.HandleFunc("POST /v1/memories",          s.handleWrite)
-    mux.HandleFunc("GET /v1/memories/{key}",     s.handleRead)
-    mux.HandleFunc("GET /v1/memories",           s.handleList)
-    mux.HandleFunc("DELETE /v1/memories/{key}",  s.handleForget)
-    mux.HandleFunc("GET /health",                s.handleHealth)
-    return http.ListenAndServe(s.Addr, mux)
-}
-
-func (s *Server) handleWrite(w http.ResponseWriter, r *http.Request) {
-    var body struct {
-        Key   string         `json:"key"`
-        Value string         `json:"value"`
-        Meta  map[string]any `json:"meta,omitempty"`
-    }
-    if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-        http.Error(w, err.Error(), 400)
-        return
-    }
-    id, err := s.Handler.Write(r.Context(), body.Key, body.Value, body.Meta)
-    if err != nil { http.Error(w, err.Error(), 500); return }
-    json.NewEncoder(w).Encode(map[string]string{"id": id})
-}
-```
-
-### 5.3 main.go 串联
+### 2.3 e2e 实现要点
 
 ```go
-// main.go
-package main
-
-import (
-    "context"
-    "github.com/dashimaki/garden/internal/crud"
-    "github.com/dashimaki/garden/internal/lifecycle"
-    "github.com/dashimaki/garden/internal/router"
-    "github.com/dashimaki/garden/internal/server"
-    "github.com/dashimaki/laputa/governance"
-    "github.com/dashimaki/mentle/facade"
-)
-
-func main() {
-    ctx := context.Background()
-    gov, err := governance.NewEngine(...).Init(ctx, governance.Options{})
-    if err != nil { panic(err) }
-
-    mem := &facade.Service{}
-    mem.Init(ctx, facade.Options{})
-
-    h := &crud.Handler{
-        Gov:    gov,
-        Facade: mem,
-        Router: &router.Router{Governance: gov, Mentle: mem},
-    }
-
-    srv := &server.Server{Handler: h, Addr: ":7373"}
-    lifecycle.Run(ctx, srv)
-}
-```
-
-### 5.4 Phase 2 验收
-
-```bash
-cd ~/Desktop/garden/garden
-go build -o garden.exe .
-./garden.exe &
-sleep 2
-
-curl -s -X POST http://127.0.0.1:7373/v1/memories \
-  -H 'Content-Type: application/json' \
-  -d '{"key":"section:01-identity","value":"{\"agent\":\"matsumoto\"}"}'
-curl -s http://127.0.0.1:7373/v1/memories/section:01-identity
-curl -s http://127.0.0.1:7373/v1/memories
-curl -s -X DELETE http://127.0.0.1:7373/v1/memories/section:01-identity
-curl -s http://127.0.0.1:7373/health
-```
-
-### 5.5 Git 状态
-
-| 仓库 | 提交 |
-|---|---|
-| `~/Desktop/garden/garden` | `feat(server): HTTP server with 4 CRUD routes` |
-
----
-
-## 6. Phase 3 — Lifecycle + Supervision (2-3 天)
-
-### 6.1 目标
-
-启停顺序、优雅关闭、crash 重试、健康检查。
-
-### 6.2 lifecycle.go
-
-```go
-// internal/lifecycle/lifecycle.go
-package lifecycle
-
-import (
-    "context"
-    "os"
-    "os/signal"
-    "syscall"
-    "github.com/dashimaki/garden/internal/server"
-    "github.com/dashimaki/garden/internal/supervision"
-)
-
-func Run(ctx context.Context, srv *server.Server) {
-    ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-    defer cancel()
-
-    sup := supervision.New(srv)
-    sup.Start(ctx)
-
-    <-ctx.Done()
-    sup.Stop(ctx)
-}
-```
-
-### 6.3 supervision.go
-
-```go
-// internal/supervision/supervision.go
-package supervision
-
-import (
-    "context"
-    "time"
-)
-
-type Supervisor struct {
-    srv         interface{ Shutdown(context.Context) error }
-    healthTick  time.Ticker
-    crashCount  int
-}
-
-func New(srv interface{ Shutdown(context.Context) error }) *Supervisor {
-    return &Supervisor{srv: srv}
-}
-
-func (s *Supervisor) Start(ctx context.Context) {
-    go s.healthCheckLoop(ctx)
-}
-
-func (s *Supervisor) Stop(ctx context.Context) {
-    _ = s.srv.Shutdown(ctx)
-}
-
-func (s *Supervisor) healthCheckLoop(ctx context.Context) {
-    s.healthTick = *time.NewTicker(10 * time.Second)
-    defer s.healthTick.Stop()
-    for {
-        select {
-        case <-ctx.Done(): return
-        case <-s.healthTick.C:
-            // 失败累计 3 次 → 全停
-        }
-    }
-}
-```
-
-### 6.4 Phase 3 验收
-
-```bash
-cd ~/Desktop/garden/garden
-./garden.exe &
-PID=$!
-sleep 3
-kill -TERM $PID
-sleep 2
-ps -p $PID || echo "garden exited cleanly"
-cat ~/.garden/garden.log
-```
-
-### 6.5 Git 状态
-
-| 仓库 | 提交 |
-|---|---|
-| `~/Desktop/garden/garden` | `feat(lifecycle): supervision + graceful shutdown` |
-
----
-
-## 7. Phase 4 — 4 个独立测试入口 (2-3 天)
-
-### 7.1 目标
-
-**用户原话:"分开写测试脚本做测试"**。4 个独立 `go test` 入口,不混在一起。
-
-### 7.2 4 个 test 入口
-
-| 入口 | 路径 | 范围 | 命令 |
-|---|---|---|---|
-| `governance_test` | `~/Desktop/garden/laputa/governance/` | laputa governance 单测 | `cd laputa && go test ./governance/...` |
-| `facade_test` | `~/Desktop/garden/mentle/facade/` | mentle facade 单测 | `cd mentle && go test ./facade/...` |
-| `garden_unit_test` | `~/Desktop/garden/garden/internal/` | garden 4 CRUD 单测 | `cd garden && go test ./internal/...` |
-| `garden_e2e_test` | `~/Desktop/garden/garden/e2e/` | 起 garden,真 HTTP,查结果 | `cd garden && go test -tags=e2e ./e2e/...` |
-
-### 7.3 e2e test 写法
-
-```go
-// e2e/e2e_test.go
+// garden/e2e/e2e_test.go
 //go:build e2e
 
 package e2e
 
-import (
-    "os/exec"
-    "testing"
-    "time"
-)
-
 func TestGardenEndToEnd(t *testing.T) {
-    cmd := exec.Command("./garden.exe")
-    cmd.Start()
-    defer cmd.Process.Kill()
-
-    time.Sleep(3 * time.Second)
-
-    // POST /v1/memories
-    // GET  /v1/memories/key
-    // GET  /v1/memories
-    // DELETE /v1/memories/key
-    // GET  /health
+    // 1. go build garden.exe  到 t.TempDir()
+    // 2. net.Listen 找空闲端口
+    // 3. exec.Command 启动 subprocess
+    //    env: GARDEN_ADDR, GARDEN_GOVERNANCE_DIR, GARDEN_LOG_DIR 指向 t.TempDir()
+    // 4. poll GET /health 直到 200 或 timeout
+    // 5. POST /v1/memories {key: "section:01-identity", value: "..."}
+    // 6. GET /v1/memories/{key} 验证 value
+    // 7. defer process.Kill()
 }
 ```
 
-### 7.4 Phase 4 验收
+**build tag 必须**: `//go:build e2e` 在文件顶。
+**不能用 mock**: e2e 必须起 garden 真 HTTP 进程,跑全栈。
+
+### 2.4 验收
 
 ```bash
-cd ~/Desktop/garden/laputa && go test ./governance/...
-cd ~/Desktop/garden/mentle && go test ./facade/...
-cd ~/Desktop/garden/garden && go test ./internal/...
-cd ~/Desktop/garden/garden && go test -tags=e2e ./e2e/...
+# 1. 普通跑不应触发 e2e
+cd ~/Desktop/garden/garden
+GOSUMDB=off go test ./...
+
+# 2. 带 tag 跑 e2e
+GOSUMDB=off go test -tags=e2e ./e2e/...
 ```
 
-### 7.5 Git 状态
+### 2.5 预计交付
 
-| 仓库 | 提交 |
+- `garden/e2e/e2e_test.go` (1 个 file,~80 行)
+- `PHASE4-RESULT.md` (仿 0-3 模板,3-5 KB)
+- 仓库 commit:`test(e2e): end-to-end test entry`
+
+**预估时间**: 1-2 小时 (cursor 7/09 之前实测 ~133 秒 / phase, e2e 更简单)。
+
+---
+
+## 3. 移交清单 / 接手要点
+
+### 3.1 你需要知道的真身歧义
+
+**之前 compaction 里的错误认知已校正:**
+
+| 错误认知 | 真相 |
 |---|---|
-| `~/Desktop/garden/laputa` | `test(governance): unit tests` |
-| `~/Desktop/garden/mentle` | `test(facade): unit tests for 4 CRUD` |
-| `~/Desktop/garden/garden` | `test(garden): unit + e2e` |
+| "Go laputa 不存在" | **存在**,7/05 initial commit 起就在 `~/Desktop/projects/laputa/`(现在 `~/Desktop/garden/laputa/`),跟 argylelabcoat-mempalace-go 是**两个独立项目** |
+| "argylelabcoat 是 laputa-go 真身" | **错**。argylelabcoat-mempalace-go 是 mempalace-flavored fork,dashimaki/laputa 是独立 governance 框架 |
+| "`mempalace-go-redis-v2` 是真名" | **错**。真名是 `mempalace-go-redis`(无 -v2) |
+| "mentle-go 是项目名" | **错**。本会话期间口头用过,真名是 `mentle`(无 -go) |
+| "mentle" = 只有 governance | **错**。laputa=governance,**mentle=mempalace V2 多存储兼容版**(redis + sqlite + govector + sqlite-vec) |
 
----
+**真身一对**:
 
-## 8. 工作量估算
+| 项目名 | 物理位置 | module | 角色 |
+|---|---|---|---|
+| **laputa** (V1) | `~/Desktop/garden/laputa/` | `github.com/dashimaki/laputa` | 治理框架 (14 section, 纯文件) |
+| **mentle** (V2) | `~/Desktop/garden/mentle/` | `github.com/dashimaki/mentle` | mempalace V2 (redis + sqlite 多 backend) |
 
-```
-Phase 0  基础设施重构         3-5 天
-Phase 1  garden + CRUD        3-5 天
-Phase 2  HTTP server          2-3 天
-Phase 3  lifecycle + super    2-3 天
-Phase 4  4 个独立测试         2-3 天
-──────────────────────────────────
-总计                          12-19 天 (3-4 周)
-```
+### 3.2 已拍板的 5 个决策 (不再反复)
 
----
+| # | 决策 | 含义 |
+|---|---|---|
+| Q1 | **b** | CRUD = write / read / list / forget |
+| Q2 | **b** | garden = `~/Desktop/garden/` 全新顶层工作区 |
+| Q3 | **b+i** | mentle 仓库边界保留 + 物理搬入 garden 内部,garden 内相对 import,**不 vendor** |
+| Q4 | **b** | laputa 重整成 `governance` 包,laputa.exe 退役 |
+| Q-WORKSPACE | **B** | 工作区顶层 `~/Desktop/garden/`,与 `~/Desktop/projects/` 物理隔离 |
 
-## 9. 不做清单
+### 3.3 已处理的 4 个开放问题
+
+| # | plan §13 待拍 | 处理结果 |
+|---|---|---|
+| 1 | mentle module 是否改名 | ✅ 已改 (`mempalace-go-redis` → `mentle`) |
+| 2 | garden HTTP 端口 | ✅ `:7373` (继承 laputa) + `GARDEN_ADDR` env 覆盖 |
+| 3 | supervision 1 次停 vs 3 次重试 | ✅ 3 次重试后 exit (Phase 3 默认值) |
+| 4 | mentle 启动问题修复时间 | ⚠️ 未修复,通过 facade + graceful degradation 隔离,启动失败 garden 回退 governance-only |
+
+### 3.4 不做清单(继承 ADR §3.5)
 
 | 项 | 不做原因 |
 |---|---|
 | 重写 laputa 业务代码 | governance 重命名已足够 |
 | 重写 mentle 17 internal | 抽 facade 已足够 |
-| 5 facade 业务方法（7/6 doc） | 4 CRUD 取而代之 |
-| Pipeline / WorkflowStep / Interceptor | 7/6 doc Layer 2，Phase 1 之后看是否再引入 |
+| 5 facade 业务方法(7/6 doc) | 4 CRUD 取而代之 |
+| Pipeline / WorkflowStep / Interceptor | 7/6 doc Layer 2,Phase 1 后看是否引入 |
 | LLM profile routing | 7/6 doc Layer 3 |
 | Memory file export | 7/6 doc Layer 5 |
-| MCP server（garden） | facade 已收敛 43 tool |
+| MCP server (garden) | facade 已收敛 |
 | Postgres / 多 agent / 多模态 | 没必要 |
 | **Rust 路径任何变更** | 用户明示 "go vs rust 隔离" |
 | 修改 laputa module path | "叫 laputa" 不变 |
-| mempalace-py 改动 | 已搬到 morediva/.workspace，物理隔离 |
+| mempalace-py 改动 | 已搬到 `morediva/.workspace`,物理隔离 |
+
+### 3.5 接手人守则
+
+1. **go.mod replace 不要改**:
+   ```go
+   replace (
+       github.com/dashimaki/laputa => ../laputa
+       github.com/dashimaki/mentle  => ../mentle
+   )
+   ```
+   garden 不动这俩 replace 就能编。
+
+2. **GOSUMDB=off** 是必需的 (本机 Go sumdb 不可达,环境变量加在命令前)。
+
+3. **mentle 启动问题** 不要在 Phase 4 解决,graceful degradation 已隔离,Phase 4 测试 governance-only mode 就能 pass。
+
+4. **Hermes 禁区**: `/c/Users/Administrator/.hermes/`, `~/.claude/` 不可触碰。
+
+5. **不接 proxy**: 7892 FlClashHelperService 在跑,但环境变量不 persist,也不需要。
+
+6. **不接 codex/claude-code/subagent**: 用户偏好 (memory 持久化)。
+
+7. **rust 隔离**: `laputa-work/`、`morediva/`、`olv-rs/`、`new-mentle/memtle` 完全不动。
 
 ---
 
-## 10. 风险与缓解
-
-| 风险 | 概率 | 缓解 |
-|---|---|---|
-| mentle 启动问题（7/8 实测）在 Phase 0 末段爆发 | 中 | Phase 0 只验 `go build` + `go test ./facade/`，不要求 cmd/server 启动 |
-| governance 重命名 breaking hermes plugin | 低 | hermes 只调 :7373 HTTP，cmd/laputa 保留 fallback |
-| facade 整合破坏 cmd/server MCP 兼容 | 中 | Phase 0 跑 MCP smoke（可选） |
-| 跨 git 仓库开发体验差 | 低 | 物理搬入后都用 garden 顶层，相对路径 |
-| 命名混乱（mempalace vs mentle） | 低 | 文档统一用 mentle，本计划已替换完成 |
-
----
-
-## 11. 关键命令速查
+## 4. 关键命令速查
 
 ```bash
-# Phase 0 完
-cd ~/Desktop/garden/laputa && go test ./governance/...
-cd ~/Desktop/garden/mentle && go test ./facade/...
+# === 工作区根 ===
+cd ~/Desktop/garden
 
-# Phase 1 完
-cd ~/Desktop/garden/garden && go build ./...
+# === Phase 0 验证 ===
+cd laputa && go build ./governance/... && go test ./governance/...
+cd ../mentle && go build ./... && go test ./facade/...
 
-# Phase 2 完
-cd ~/Desktop/garden/garden && ./garden.exe &
+# === Phase 1/2/3 验证 ===
+cd garden
+GOSUMDB=off go build ./...
+GOSUMDB=off go build -o garden.exe .
+GOSUMDB=off go test ./internal/...
+
+# === 运行 garden ===
+./garden.exe &
 sleep 2
 curl -s http://127.0.0.1:7373/health
+curl -s -X POST http://127.0.0.1:7373/v1/memories \
+  -H 'Content-Type: application/json' \
+  -d '{"key":"section:01-identity","value":"hello garden"}'
+curl -s http://127.0.0.1:7373/v1/memories/section:01-identity
 
-# Phase 3 完
-kill -TERM $(pgrep garden) && cat ~/.garden/garden.log
+# === Phase 3 验证 (signal) ===
+PID=$(pgrep garden)
+kill -TERM $PID
+sleep 2
+ps -p $PID || echo "garden exited cleanly"
+cat ~/.garden/garden.log
 
-# Phase 4 完 — 4 个独立 test
-cd ~/Desktop/garden/laputa && go test ./governance/...
-cd ~/Desktop/garden/mentle && go test ./facade/...
-cd ~/Desktop/garden/garden && go test ./internal/...
-cd ~/Desktop/garden/garden && go test -tags=e2e ./e2e/...
+# === Phase 4 (待开) ===
+GOSUMDB=off go test ./...                    # 不应触发 e2e
+GOSUMDB=off go test -tags=e2e ./e2e/...      # 跑 e2e
 ```
 
 ---
 
-## 12. 时间线
+## 5. git 状态
 
-| 日期 | 里程碑 |
-|---|---|
-| 2026-07-09（今天） | README + 本计划更新完，派 cursor 开 Phase 0 |
-| 2026-07-10 ~ 07-13 | Phase 0 |
-| 2026-07-14 ~ 07-18 | Phase 1 |
-| 2026-07-19 ~ 07-22 | Phase 2 |
-| 2026-07-23 ~ 07-26 | Phase 3 |
-| 2026-07-27 ~ 07-30 | Phase 4 |
+```text
+garden (顶层)
+├── 673c27c docs: Phase 3 complete — lifecycle + supervision
+├── 3537c4c docs: Phase 2 complete — HTTP server with 4 CRUD routes
+├── 48cc0fc docs: Phase 1 complete — garden module + 4 CRUD + router
+└── 7e16be3 docs: Garden Laputa Phase 0 complete — initialize workspace
 
----
+garden/garden (子模块)
+├── c1cf3d9 feat(lifecycle): signal handling + supervision + graceful shutdown
+├── 0b34692 feat(server): HTTP server with 4 CRUD routes + health
+└── 67e154b feat: scaffold garden module + 4 CRUD + router
 
-## 13. 待拍（写完本计划后的开放问题）
-
-| # | 问题 | 何时拍 |
-|---|---|---|
-| 1 | mentle module path 改名是否要在 git rename PR 里做（保持历史） | Phase 0 末段 |
-| 2 | garden HTTP 端口（7373 / 7374） | Phase 2 |
-| 3 | supervision 默认（1 次停 vs 3 次重试） | Phase 3 |
-| 4 | mentle 启动问题修复时间窗 | Phase 0 末段 |
+garden/laputa + garden/mentle (Phase 0 各自仓库)
+```
 
 ---
 
-**计划完成**: 2026-07-09 16:00
+## 6. 下一步
+
+1. **派自己(用户)** 开 Phase 4 e2e (用户 2026-07-14 已确认 "我待会自己派")
+2. e2e 完成后写 `PHASE4-RESULT.md`
+3. garden 整体进入"5/5 phase 完成"状态
+
+---
+
+**计划完成**: 2026-07-14 (Phase 0/1/2/3 真实已 work,Phase 4 待开)
 **本计划文件**: `C:\Users\Administrator\Desktop\garden\GARDEN-PLAN.md`
 **配套 ADR**: `C:\Users\Administrator\Desktop\garden\docs\architecture\0001-garden-merge.md`
 **配套 README**: `C:\Users\Administrator\Desktop\garden\README.md`
-**下一步**: 派 cursor 开 Phase 0
+**历史归档**: `C:\Users\Administrator\Desktop\garden\docs\archive\GARDEN-PLAN-2026-07-08.md`

@@ -83,17 +83,17 @@ Laputa 的名字取自宫崎骏《天空之城》。但 Garden Laputa 不只是�
 
 ---
 
-## 3. 当前状态：Phase 0
+## 3. 当前状态：Phase 4 待开
 
-| Phase | 内容 | 状态 |
-|---|---|---|
-| **0** | 仓库物理搬迁 + module path 重命名 + 抽顶层 governance/facade 包 | 🚧 进行中 |
-| 1 | garden 仓库骨架 + 4 CRUD（write/read/list/forget） | ⏳ 待开 |
-| 2 | garden HTTP server + 路由分发 | ⏳ 待开 |
-| 3 | lifecycle + supervision + 日志 | ⏳ 待开 |
-| 4 | 4 个独立测试入口（governance / facade / garden / 集成） | ⏳ 待开 |
+| Phase | 内容 | 状态 | commit |
+|---|---|---|---|
+| **0** | 仓库物理搬迁 + module path 重命名 + 抽顶层 governance/facade 包 | ✅ 完成 | `7e16be3` |
+| **1** | garden 仓库骨架 + 4 CRUD（write/read/list/forget） | ✅ 完成 | `48cc0fc` |
+| **2** | garden HTTP server + 路由分发 | ✅ 完成 | `3537c4c` |
+| **3** | lifecycle + supervision + 日志 | ✅ 完成 | `673c27c` |
+| **4** | 4 个独立测试入口（governance / facade / garden / 集成） | 🟡 待开 | — |
 
-详细实施计划见 [`GARDEN-PLAN.md`](./GARDEN-PLAN.md)。
+**主体进度: 80% (4/5 phase)。** 完整状态冻结见 [`GARDEN-PLAN.md`](./GARDEN-PLAN.md)。
 架构决策记录见 [`docs/architecture/0001-garden-merge.md`](./docs/architecture/0001-garden-merge.md)。
 设计哲学与历史背景见 [`NEW-LAPUTA.md`](./NEW-LAPUTA.md)（2026-07-06 决策快照）。
 
