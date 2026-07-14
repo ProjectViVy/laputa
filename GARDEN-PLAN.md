@@ -2,7 +2,7 @@
 
 > **作者**: 松本(大湿)
 > **日期**: 2026-07-14
-> **状态**: Phase 0/1/2/3 已完成,Phase 4 待开
+> **状态**: Phase 0/1/2/3/4/5 已完成
 > **替代**: ~~GARDEN-PLAN-2026-07-08.md~~(已移至 `docs/archive/`)
 > **关联 ADR**: `docs/architecture/0001-garden-merge.md`
 > **关联 README**: `~/Desktop/garden/README.md`(设计哲学)
@@ -65,9 +65,10 @@
 | **1** | garden 仓库骨架 + 4 CRUD + key 前缀 router | ✅ 完成 | `PHASE1-RESULT.md` | `48cc0fc` |
 | **2** | HTTP server + 4 CRUD 路由 + /health + graceful degradation | ✅ 完成 | `PHASE2-RESULT.md` | `3537c4c` |
 | **3** | lifecycle + supervision + signal + 日志双写 | ✅ 完成 | `PHASE3-RESULT.md` | `673c27c` |
-| **4** | 4 个独立测试入口(含 e2e build tag) | 🟡 待开 | 暂无 | — |
+| **4** | 4 个独立测试入口(含 e2e build tag) | ✅ 完成 | `PHASE4-RESULT.md` | 待提交 |
+| **5** | Pipeline 治理 + Agentic RAG + Mentle 真实 facade | ✅ 完成 | `PHASE5-RESULT.md` | 待提交 |
 
-**主体进度: 80% (4/5 phase)。**
+**主体进度: 100% (6/6 phase)。**
 
 ### 1.2 Phase 0 完成事实(2026-07-09)
 
@@ -171,7 +172,7 @@ lifecycle.Run(ctx, srv)
 
 ---
 
-## 2. Phase 4 — 待开 (待派,我后面自己开)
+## 2. Phase 4 — 已完成 (2026-07-14)
 
 ### 2.1 目标
 
@@ -186,7 +187,7 @@ lifecycle.Run(ctx, srv)
 | `garden_unit_test` | `garden/internal/` | `cd garden && go test ./internal/...` |
 | `garden_e2e_test` | `garden/e2e/` | `cd garden && go test -tags=e2e ./e2e/...` |
 
-**前 3 个已 work** (Phase 3 验证),仅 e2e 待建。
+**4 个入口均已可用**。E2E 使用真实编译出的 Garden 子进程、临时目录和随机 loopback 端口；详情见 `PHASE4-RESULT.md`。
 
 ### 2.3 e2e 实现要点
 
@@ -224,11 +225,19 @@ GOSUMDB=off go test -tags=e2e ./e2e/...
 
 ### 2.5 预计交付
 
-- `garden/e2e/e2e_test.go` (1 个 file,~80 行)
-- `PHASE4-RESULT.md` (仿 0-3 模板,3-5 KB)
-- 仓库 commit:`test(e2e): end-to-end test entry`
+- `garden/e2e/e2e_test.go` (1 个 build-tagged E2E file)
+- `PHASE4-RESULT.md` (完成记录与验证结果)
+- Garden 子仓库变更待提交
 
-**预估时间**: 1-2 小时 (cursor 7/09 之前实测 ~133 秒 / phase, e2e 更简单)。
+**实际验证**: `GOSUMDB=off go test -tags=e2e ./e2e/...` 通过 (4.272s)。
+
+---
+
+## 2.6 Phase 5 — 已完成 (2026-07-14)
+
+Garden 已增加受治理的 `agentic_recall_v1` Pipeline：读取 Laputa 策略，自动规划 Mentle 混合检索、KG 与时间线扩展，经过即时 deny 过滤、去重、重排和引用校验后，通过 `POST /v1/context/resolve` 返回 ContextPackage。Pipeline 配置从 YAML 启动时加载，并提供只读状态与脱敏运行轨迹 API。
+
+Mentle `facade` 原有空 CRUD 已替换为真实实现，并公开带 RRF 分数及检索渠道的 Retrieval、KG、Timeline DTO。无外部模型时使用确定性规划；Mentle 不可用时返回 governance-only 上下文。详见 `PHASE5-RESULT.md` 与 `docs/architecture/0002-agentic-rag-pipeline.md`。
 
 ---
 
@@ -345,7 +354,7 @@ sleep 2
 ps -p $PID || echo "garden exited cleanly"
 cat ~/.garden/garden.log
 
-# === Phase 4 (待开) ===
+# === Phase 4 (已完成) ===
 GOSUMDB=off go test ./...                    # 不应触发 e2e
 GOSUMDB=off go test -tags=e2e ./e2e/...      # 跑 e2e
 ```
@@ -373,13 +382,14 @@ garden/laputa + garden/mentle (Phase 0 各自仓库)
 
 ## 6. 下一步
 
-1. **派自己(用户)** 开 Phase 4 e2e (用户 2026-07-14 已确认 "我待会自己派")
-2. e2e 完成后写 `PHASE4-RESULT.md`
-3. garden 整体进入"5/5 phase 完成"状态
+1. Phase 4 e2e 已完成，详见 `PHASE4-RESULT.md`
+2. Phase 5 Pipeline 治理与 Agentic RAG 已完成，详见 `PHASE5-RESULT.md`
+3. garden 整体已进入"6/6 phase 完成"状态
+4. 变更提交后可开始后续发布或部署工作
 
 ---
 
-**计划完成**: 2026-07-14 (Phase 0/1/2/3 真实已 work,Phase 4 待开)
+**计划完成**: 2026-07-14 (Phase 0/1/2/3/4/5 均已验证)
 **本计划文件**: `C:\Users\Administrator\Desktop\garden\GARDEN-PLAN.md`
 **配套 ADR**: `C:\Users\Administrator\Desktop\garden\docs\architecture\0001-garden-merge.md`
 **配套 README**: `C:\Users\Administrator\Desktop\garden\README.md`

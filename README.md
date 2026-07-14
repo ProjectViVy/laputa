@@ -83,7 +83,7 @@ Laputa 的名字取自宫崎骏《天空之城》。但 Garden Laputa 不只是�
 
 ---
 
-## 3. 当前状态：Phase 4 待开
+## 3. 当前状态：Phase 5 已完成
 
 | Phase | 内容 | 状态 | commit |
 |---|---|---|---|
@@ -91,10 +91,12 @@ Laputa 的名字取自宫崎骏《天空之城》。但 Garden Laputa 不只是�
 | **1** | garden 仓库骨架 + 4 CRUD（write/read/list/forget） | ✅ 完成 | `48cc0fc` |
 | **2** | garden HTTP server + 路由分发 | ✅ 完成 | `3537c4c` |
 | **3** | lifecycle + supervision + 日志 | ✅ 完成 | `673c27c` |
-| **4** | 4 个独立测试入口（governance / facade / garden / 集成） | 🟡 待开 | — |
+| **4** | 4 个独立测试入口（governance / facade / garden / 集成） | ✅ 完成 | 待提交 |
+| **5** | Pipeline 治理 + Agentic RAG ContextPackage | ✅ 完成 | 待提交 |
 
-**主体进度: 80% (4/5 phase)。** 完整状态冻结见 [`GARDEN-PLAN.md`](./GARDEN-PLAN.md)。
+**主体进度: 100% (6/6 phase)。** 完整状态冻结见 [`GARDEN-PLAN.md`](./GARDEN-PLAN.md)。
 架构决策记录见 [`docs/architecture/0001-garden-merge.md`](./docs/architecture/0001-garden-merge.md)。
+Agentic RAG 决策见 [`docs/architecture/0002-agentic-rag-pipeline.md`](./docs/architecture/0002-agentic-rag-pipeline.md)。
 设计哲学与历史背景见 [`NEW-LAPUTA.md`](./NEW-LAPUTA.md)（2026-07-06 决策快照）。
 
 ---
