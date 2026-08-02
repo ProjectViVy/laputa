@@ -1,138 +1,131 @@
-# Laputa — Garden Laputa
+# Garden MemoryOS
 
-> **一个花园，三件事**：在肥沃的土壤里挖呀挖呀挖，在碧蓝的天空下晒呀晒呀晒，
-> 而你——在与 AI 对话的过程里种下一棵记忆。
+[中文文档](README_CN.md)
 
----
+A governed memory operating system for continuous AI agents. Garden connects personal work materials to recalled context and reusable capability — without treating storage, retrieval, or evolution output as authority by themselves.
 
-## 1. 设计哲学
+## Core Idea
 
-Laputa 的名字取自宫崎骏《天空之城》。但 Garden Laputa 不只是一座飘在云端的城堡——
-它是一座**长出来的花园**。人格和记忆从来不是被设计出来的，
-它们是在合适的条件下，**缓慢地、自然地**从土壤里生长出来的。
-
-```
-                ☁  天空  sky          ← governance（治理）
-            晴 / 雨 / 风 / 霾           外界环境决定花园能不能长大
-               ／    ＼
-              ／      ＼
-             ／   🌱    ＼
-            ／  garden   ＼
-           ／   laputa    ＼
-          ／                ＼
-        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-                  土壤  soil          ← mentle（记忆）
-            化石 / 根系 / 矿藏          蕴藏人类历史一切信息的地方
+```text
+MemoryOS = a memory operating system centered on agent identity and governed memory,
+           capable of understanding, locating, and invoking all personal work information.
 ```
 
-### 三件事
+Three independent Go modules enforce strict ownership boundaries:
 
-| 角色 | 隐喻 | 工程映射 | 它做什么 |
-|---|---|---|---|
-| **土壤** | 蕴藏人类历史一切信息的地方。可能有化石，但全数包裹。 | **`mentle`**（原 mempalace-go） | 持久存储、向量检索、知识图谱、日记 |
-| **天空** | 外界环境因素。空气质量、温度、日照、风雨。决定 garden 长得好不好。 | **`governance`**（原 laputa 内部包） | 14 section 治理、写权规则、step 编排、审计 |
-| **种植** | 人与 AI 对话的过程。每一句话是浇的水、施的肥。 | **`garden` CLI / HTTP**（Phase 1+） | 4 CRUD（write/read/list/forget）+ 调度 |
+| Module | Responsibility |
+|--------|---------------|
+| **Laputa** | Identity, authority, lifecycle, policy, audit |
+| **Mentle** | Canonical material, evidence, retrieval, taxonomy, knowledge graph |
+| **Garden** | Source ingestion, recall orchestration, ContextView assembly, HTTP gateway |
 
-### 挖呀挖呀挖
+No module holds authority over the others. Each degrades gracefully.
 
-记忆的检索不是查询，是**发掘**。在小小的花园里挖——找到的可能是种子（一条事实），
-可能是化石（一段旧关系），可能是一块从未见过的东西（一段没说出口的偏好）。
-每一次挖掘都在改变土壤的形状。
+## Key Design Decisions
 
-### 花园长得好不好
+- **Progressive Recall** — Fast Recall (default): zero LLM, deterministic, low-latency, cacheable. Deep Recall (explicit upgrade): independent budget, KG/timeline/graph expansion, full trace.
+- **Candidate ≠ Evidence ≠ ContextView** — discovery, bounded evidence read, and final assembly are separate stages with separate budgets.
+- **No silent high-impact mutation** — authority changes, skill approval, host installation, and physical deletion are always explicit and audited.
+- **Governed evolution** — external Evolver proposes capability; only Laputa approves and applies authority.
 
-取决于**空气质量**——也就是 governance：
-写权是否混乱？section 之间是否联动？审计是否完整？step 是否原子？
-这些不是技术细节，它们是**花园能呼吸的空气**。
+## Architecture
 
----
-
-## 2. 仓库结构
-
-```
-~/Desktop/garden/                  ← 工作区根（本仓库）
-│
-├── README.md                      ← 本文件：哲学 + 架构入口
-├── GARDEN-PLAN.md                 ← 实施计划（5 个 Phase）
-├── docs/architecture/
-│   └── 0001-garden-merge.md       ← ADR：为什么选 Garden 顶层 + 单 exe
-│
-├── laputa/                        ← 仓库 1：治理层（天空）
-│   ├── go.mod                     module github.com/dashimaki/laputa
-│   ├── governance/                ← 顶层包（原 laputa.go 拆分入此）
-│   ├── cmd/laputa/                ← 已 deprecate，保留作 fallback
-│   └── ...
-│
-├── mentle/                        ← 仓库 2：记忆层（土壤）
-│   ├── go.mod                     module github.com/dashimaki/mentle
-│   ├── facade/                    ← 顶层包（4 CRUD + Service）
-│   ├── cmd/server/                ← stdio MCP（被 facade 替代中）
-│   └── internal/                  ← 17 个 internal 包保持原状
-│
-└── garden/                        ← 仓库 3：种植层（CLI/HTTP）   [Phase 1+]
-    └── go.mod                     module github.com/dashimaki/garden
+```text
+┌─────────────────────────────────────────────────────┐
+│  Host Adapters (Hermes / Claude Code / Codex)       │
+└──────────────────────┬──────────────────────────────┘
+                       │ HTTP
+┌──────────────────────▼──────────────────────────────┐
+│  Garden — orchestration gateway                     │
+│  /v2/recall/fast · /v2/recall/deep                  │
+│  /v2/activity/*  · /v2/governance/*                 │
+│  /v2/evolution/* · /v1/* (compat)                   │
+└───────┬─────────────────────────────┬───────────────┘
+        │                             │
+┌───────▼────────┐          ┌─────────▼──────────────┐
+│  Laputa        │          │  Mentle                │
+│  governance    │          │  material + retrieval  │
+│  authority     │          │  evidence + graph      │
+│  audit         │          │  hybrid search (HNSW)  │
+└────────────────┘          └────────────────────────┘
 ```
 
-### 三层职责
+## Quick Start
 
-| 层 | 仓库 | package 顶层 | 何时引入 |
-|---|---|---|---|
-| **记忆（土壤）** | `mentle/` | `facade` | **Phase 0 进行中** |
-| **治理（天空）** | `laputa/` | `governance` | **Phase 0 进行中** |
-| **种植（入口）** | `garden/` | `crud` / `server` | Phase 1 起 |
+```bash
+# Prerequisites: Go 1.26+, CGO enabled (for SQLite)
 
----
+# Build all modules
+cd laputa  && go build ./...
+cd ../mentle && go build ./...
+cd ../garden && go build -o garden.exe .
 
-## 3. 当前状态：Phase 5 已完成
+# Run the server (default: http://127.0.0.1:7373)
+./garden.exe
 
-| Phase | 内容 | 状态 | commit |
-|---|---|---|---|
-| **0** | 仓库物理搬迁 + module path 重命名 + 抽顶层 governance/facade 包 | ✅ 完成 | `7e16be3` |
-| **1** | garden 仓库骨架 + 4 CRUD（write/read/list/forget） | ✅ 完成 | `48cc0fc` |
-| **2** | garden HTTP server + 路由分发 | ✅ 完成 | `3537c4c` |
-| **3** | lifecycle + supervision + 日志 | ✅ 完成 | `673c27c` |
-| **4** | 4 个独立测试入口（governance / facade / garden / 集成） | ✅ 完成 | 待提交 |
-| **5** | Pipeline 治理 + Agentic RAG ContextPackage | ✅ 完成 | 待提交 |
+# Health check
+curl -s http://127.0.0.1:7373/health
+```
 
-**主体进度: 100% (6/6 phase)。** 完整状态冻结见 [`GARDEN-PLAN.md`](./GARDEN-PLAN.md)。
-架构决策记录见 [`docs/architecture/0001-garden-merge.md`](./docs/architecture/0001-garden-merge.md)。
-Agentic RAG 决策见 [`docs/architecture/0002-agentic-rag-pipeline.md`](./docs/architecture/0002-agentic-rag-pipeline.md)。
-设计哲学与历史背景见 [`NEW-LAPUTA.md`](./NEW-LAPUTA.md)（2026-07-06 决策快照）。
+## Configuration
 
----
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `GARDEN_PIPELINE_CONFIG` | Path to pipelines.yaml | `~/.garden/pipelines.yaml` |
+| `GARDEN_RAG_BASE_URL` | OpenAI-compatible LLM endpoint | _(disabled)_ |
+| `GARDEN_RAG_API_KEY` | API key for LLM planner | _(disabled)_ |
+| `GARDEN_RAG_MODEL` | Model name for planner | _(disabled)_ |
 
-## 4. 引用
+Without LLM environment variables, Garden uses a deterministic planner and reports degradation without failing.
 
-### 4.1 项目内
-- 实施计划：[`GARDEN-PLAN.md`](./GARDEN-PLAN.md)
-- ADR-0001：[`docs/architecture/0001-garden-merge.md`](./docs/architecture/0001-garden-merge.md)
-- 历史快照：[`NEW-LAPUTA.md`](./NEW-LAPUTA.md)
-- 旧版计划（已废弃）：[`GARDEN-PLAN-2026-07-08.md`](./GARDEN-PLAN-2026-07-08.md)
+## Testing
 
-### 4.2 命名对照
+```bash
+cd laputa  && GOSUMDB=off go test ./governance/...
+cd ../mentle && GOSUMDB=off go test ./facade/...
+cd ../garden && GOSUMDB=off go test ./internal/...
+GOSUMDB=off go test -tags=e2e ./e2e/...
+```
 
-| 旧名 | 新名 | 含义 |
-|---|---|---|
-| `mempalace-go-redis-v2/` | `mentle/` | 土壤。去掉 -go 后缀，因 Go 已不是区分标志 |
-| `mempalace-go-redis`（module path） | `mentle`（module path） | 同上 |
-| `laputa.go`（monolith） | `governance/engine.go` + 5 sub-package | 拆包，仍叫 laputa 仓库 |
-| `garden`（项目名） | `laputa`（项目名） + README 副标题 Garden Laputa | 项目仍叫 laputa |
-| `garden.exe`（未来二进制） | 待定 | Phase 1 决定 |
+## Repository Layout
 
-### 4.3 不在本仓库
-- **`mempalace-py`**（Python 版）已在 `~/Desktop/morediva/.workspace/mempalace-py/`，**不动**
-- **Rust 路径**（memtle crate、agent-diva-laputa）**完全不动**
+```text
+laputa/    Go governance module — authority, identity, lifecycle, audit
+mentle/    Go material & retrieval module — canonical catalog, evidence, hybrid search, graph
+garden/    Go application module — HTTP gateway, recall, activity orchestration
+docs/      Architecture decisions, migration plans, historical archive
+```
 
----
+## Performance Targets
 
-## 5. 一句话架构
+| Operation | Target |
+|-----------|--------|
+| Governance projection (warm) | P95 ≤ 5 ms |
+| SearchCards | P95 ≤ 80 ms |
+| Filter / rank / dedupe | P95 ≤ 10 ms |
+| Bounded ReadEvidence | P95 ≤ 40 ms |
+| Fast Recall total | P95 ≤ 150 ms |
+| Governance-only degradation | P95 ≤ 30 ms |
 
-> **单 `garden` CLI / HTTP** 调用 **`laputa`（governance）** 和 **`mentle`（facade）**，
-> 对外暴露 **4 个 CRUD**：`write` / `read` / `list` / `forget`。
-> `key` 前缀路由：`section:*` → governance；其它 → mentle facade。
+## Documentation
 
----
+- [Architecture Plan (vNext)](docs/architecture/0001-memoryos-vnext-architecture.md)
+- [ADR-0002: Cognitive Partition](docs/architecture/0002-laputa-cognitive-partition-decision.md)
+- [ADR-0003: Operations Console](docs/architecture/0003-operations-console-design.md)
+- [Documentation Index](docs/README.md)
+- [Historical Archive](docs/archive/2026-08-01-pre-memoryos-redesign/)
 
-*作者：松本（大湿）*
-*日期：2026-07-09*
-*状态：Phase 0 进行中*
+## References & Inspiration
+
+- [MemGPT / Letta](https://github.com/letta-ai/letta) — LLM memory management with virtual context paging
+- [Mem0](https://github.com/mem0ai/mem0) — memory layer for AI agents
+- [Zep](https://github.com/getzep/zep) — long-term memory service for AI assistants
+- [LangChain Memory](https://github.com/langchain-ai/langchain) — composable memory modules for LLM applications
+- [LlamaIndex](https://github.com/run-llama/llama_index) — data framework for LLM-based retrieval
+- [Cognee](https://github.com/topoteretes/cognee) — memory management for AI agents using knowledge graphs
+- [HNSW (govector)](https://github.com/DotNetAge/govector) — HNSW vector index used in Mentle
+- [Eino (CloudWeGo)](https://github.com/cloudwego/eino) — LLM orchestration framework used in Laputa
+
+## License
+
+[MIT](LICENSE)
