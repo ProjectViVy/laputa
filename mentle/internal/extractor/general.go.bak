@@ -1,0 +1,173 @@
+// Package extractor provides memory extraction from text using pattern matching.
+// It identifies decisions, preferences, milestones, problems, and emotional content.
+package extractor
+
+import (
+	"regexp"
+	"strings"
+)
+
+type Memory struct {
+	Content    string `json:"content"`
+	MemoryType string `json:"memory_type"`
+	ChunkIndex int    `json:"chunk_index"`
+}
+
+type Extractor struct {
+	decisionPatterns   []*regexp.Regexp
+	preferencePatterns []*regexp.Regexp
+	milestonePatterns  []*regexp.Regexp
+	problemPatterns    []*regexp.Regexp
+	emotionalPatterns  []*regexp.Regexp
+}
+
+func NewExtractor() *Extractor {
+	e := &Extractor{}
+
+	e.decisionPatterns = []*regexp.Regexp{
+		regexp.MustCompile(`(?i)\blet'?s (use|go with|try|pick|choose|switch to)\b`),
+		regexp.MustCompile(`(?i)\bwe (should|decided|chose|went with|picked|settled on)\b`),
+		regexp.MustCompile(`(?i)\bi'?m going (to|with)\b`),
+		regexp.MustCompile(`(?i)\bbetter (to|than|approach|option|choice)\b`),
+		regexp.MustCompile(`(?i)\binstead of\b`),
+		regexp.MustCompile(`(?i)\brather than\b`),
+		regexp.MustCompile(`(?i)\bthe reason (is|was|being)\b`),
+		regexp.MustCompile(`(?i)\bbecause\b`),
+		regexp.MustCompile(`(?i)\btrade-?off\b`),
+		regexp.MustCompile(`(?i)\bpros and cons\b`),
+		regexp.MustCompile(`(?i)\barchitecture\b`),
+		regexp.MustCompile(`(?i)\bapproach\b`),
+		regexp.MustCompile(`(?i)\bstrategy\b`),
+		regexp.MustCompile(`(?i)\bpattern\b`),
+		regexp.MustCompile(`(?i)\bstack\b`),
+		regexp.MustCompile(`(?i)\bframework\b`),
+		regexp.MustCompile(`(?i)\binfrastructure\b`),
+	}
+
+	e.preferencePatterns = []*regexp.Regexp{
+		regexp.MustCompile(`(?i)\bi prefer\b`),
+		regexp.MustCompile(`(?i)\balways use\b`),
+		regexp.MustCompile(`(?i)\bnever use\b`),
+		regexp.MustCompile(`(?i)\bi like (to|when|how)\b`),
+		regexp.MustCompile(`(?i)\bi hate (when|how|it when)\b`),
+		regexp.MustCompile(`(?i)\bplease (always|never|don'?t)\b`),
+		regexp.MustCompile(`(?i)\bmy (rule|preference|style|convention) is\b`),
+		regexp.MustCompile(`(?i)\bwe (always|never)\b`),
+		regexp.MustCompile(`(?i)\bsnake_?case\b`),
+		regexp.MustCompile(`(?i)\bcamel_?case\b`),
+	}
+
+	e.milestonePatterns = []*regexp.Regexp{
+		regexp.MustCompile(`(?i)\bit works\b`),
+		regexp.MustCompile(`(?i)\bit worked\b`),
+		regexp.MustCompile(`(?i)\bgot it working\b`),
+		regexp.MustCompile(`(?i)\bfixed\b`),
+		regexp.MustCompile(`(?i)\bsolved\b`),
+		regexp.MustCompile(`(?i)\bbreakthrough\b`),
+		regexp.MustCompile(`(?i)\bfigured (it )?out\b`),
+		regexp.MustCompile(`(?i)\bnailed it\b`),
+		regexp.MustCompile(`(?i)\bfinally\b`),
+		regexp.MustCompile(`(?i)\bfirst time\b`),
+		regexp.MustCompile(`(?i)\bdiscovered\b`),
+		regexp.MustCompile(`(?i)\brealized\b`),
+		regexp.MustCompile(`(?i)\bfound (out|that)\b`),
+		regexp.MustCompile(`(?i)\bthe key (is|was|insight)\b`),
+		regexp.MustCompile(`(?i)\bthe trick (is|was)\b`),
+		regexp.MustCompile(`(?i)\bbuilt\b`),
+		regexp.MustCompile(`(?i)\bcreated\b`),
+		regexp.MustCompile(`(?i)\bimplemented\b`),
+		regexp.MustCompile(`(?i)\bshipped\b`),
+		regexp.MustCompile(`(?i)\blaunched\b`),
+	}
+
+	e.problemPatterns = []*regexp.Regexp{
+		regexp.MustCompile(`(?i)\bbroke\b`),
+		regexp.MustCompile(`(?i)\bcrashed\b`),
+		regexp.MustCompile(`(?i)\bfailed\b`),
+		regexp.MustCompile(`(?i)\berror\b`),
+		regexp.MustCompile(`(?i)\bexception\b`),
+		regexp.MustCompile(`(?i)\bbug\b`),
+		regexp.MustCompile(`(?i)\bissue\b`),
+		regexp.MustCompile(`(?i)\bproblem\b`),
+		regexp.MustCompile(`(?i)\bfix\b`),
+		regexp.MustCompile(`(?i)\bworkaround\b`),
+		regexp.MustCompile(`(?i)\broot cause\b`),
+		regexp.MustCompile(`(?i)\bwhy\b`),
+	}
+
+	e.emotionalPatterns = []*regexp.Regexp{
+		regexp.MustCompile(`(?i)\bi feel\b`),
+		regexp.MustCompile(`(?i)\bi was (sad|happy|angry|scared)\b`),
+		regexp.MustCompile(`(?i)\bfeelings?\b`),
+		regexp.MustCompile(`(?i)\bemotion\b`),
+		regexp.MustCompile(`(?i)\bvulnerable\b`),
+		regexp.MustCompile(`(?i)\bhonestly\b`),
+		regexp.MustCompile(`(?i)\btruth is\b`),
+		regexp.MustCompile(`(?i)\bthe thing is\b`),
+		regexp.MustCompile(`(?i)\bi'?m (not |really )?sure\b`),
+		regexp.MustCompile(`(?i)\bhope\b`),
+		regexp.MustCompile(`(?i)\bfear\b`),
+		regexp.MustCompile(`(?i)\bworry\b`),
+	}
+
+	return e
+}
+
+func (e *Extractor) ExtractMemories(text string) []Memory {
+	var memories []Memory
+	chunkIndex := 0
+
+	sentences := splitSentences(text)
+
+	for _, sentence := range sentences {
+		sentence = strings.TrimSpace(sentence)
+		if len(sentence) < 10 {
+			continue
+		}
+
+		memType := e.detectMemoryType(sentence)
+		if memType != "" {
+			memories = append(memories, Memory{
+				Content:    sentence,
+				MemoryType: memType,
+				ChunkIndex: chunkIndex,
+			})
+			chunkIndex++
+		}
+	}
+
+	return memories
+}
+
+func (e *Extractor) detectMemoryType(text string) string {
+	if e.hasPattern(e.decisionPatterns, text) {
+		return "decision"
+	}
+	if e.hasPattern(e.preferencePatterns, text) {
+		return "preference"
+	}
+	if e.hasPattern(e.milestonePatterns, text) {
+		return "milestone"
+	}
+	if e.hasPattern(e.problemPatterns, text) {
+		return "problem"
+	}
+	if e.hasPattern(e.emotionalPatterns, text) {
+		return "emotional"
+	}
+	return ""
+}
+
+func (e *Extractor) hasPattern(patterns []*regexp.Regexp, text string) bool {
+	for _, p := range patterns {
+		if p.MatchString(text) {
+			return true
+		}
+	}
+	return false
+}
+
+func splitSentences(text string) []string {
+	re := regexp.MustCompile(`[^.!?\n]+`)
+	return re.FindAllString(text, -1)
+}

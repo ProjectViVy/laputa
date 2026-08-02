@@ -1,0 +1,167 @@
+{
+  "app": {
+    "name": "MemoryOS",
+    "subtitle": "Operations Console",
+    "contract": "garden-hermes/1"
+  },
+  "nav": {
+    "overview": "Overview",
+    "governance": "Governance Map",
+    "work": "Active Work",
+    "materials": "Materials & Evidence",
+    "trace": "Recall Trace",
+    "reports": "Reports",
+    "operations": "Operations",
+    "library": "Architecture Library",
+    "settings": "Settings"
+  },
+  "topbar": {
+    "scope": "Scope",
+    "host": "single-host · local",
+    "language": "Language",
+    "live": "LIVE"
+  },
+  "banner": {
+    "localOnly": "Local-only",
+    "degraded": "Degraded: {{names}}",
+    "pendingSpool": "{{count}} pending_mentle recovery",
+    "compat": "legacy-compatibility mode"
+  },
+  "status": {
+    "ok": "ok",
+    "degraded": "degraded",
+    "down": "offline",
+    "unknown": "unknown",
+    "live": "live",
+    "compat": "compat",
+    "acceptedDesign": "accepted-design",
+    "deferred": "deferred"
+  },
+  "common": {
+    "loading": "Loading",
+    "error": "Error",
+    "retry": "Retry",
+    "empty": "No data",
+    "source": "source",
+    "notImplemented": "Not implemented",
+    "viewDocs": "Related documents"
+  },
+  "overview": {
+    "title": "Overview",
+    "lede": "Is identity, working memory, material library, and runtime healthy — and what needs attention now?",
+    "runtime": "Runtime health",
+    "cognitive": "Cognitive health",
+    "governance": "Governance health",
+    "data": "Data health",
+    "components": "components",
+    "degradedCount": "degraded",
+    "stmFreshness": "STM freshness",
+    "worldConflicts": "WORLD candidate conflicts",
+    "frozenCore": "Frozen Core completeness",
+    "rulesVersion": "rules version",
+    "pendingReview": "pending review",
+    "spoolPending": "pending_mentle spool",
+    "ingestionTotal": "ingestions tracked",
+    "failedSources": "failed sources",
+    "workSurface": "Current work surface",
+    "recentAudit": "Recent governance activity",
+    "noAudit": "No audited mutations yet",
+    "componentState": "Component state"
+  },
+  "governance": {
+    "title": "Governance Map",
+    "lede": "Layered system graph with per-component flow status. Click a node to inspect.",
+    "flow": {
+      "context": "Context Flow",
+      "ingestion": "Raw-first Ingestion",
+      "recall": "Recall Flow",
+      "change": "Governance / Change"
+    },
+    "layers": {
+      "runtime": "Runtime",
+      "data": "Data",
+      "governance": "Governance",
+      "roadmap": "Roadmap"
+    },
+    "inspector": {
+      "responsibility": "Responsibility",
+      "runtime": "Runtime state",
+      "boundary": "Data boundary",
+      "io": "Inputs / outputs",
+      "apis": "Related API / trace",
+      "rules": "Governance rules",
+      "limitations": "Known limitations",
+      "phase": "Architecture phase",
+      "docs": "Related documents & ADR"
+    }
+  },
+  "operations": {
+    "title": "Operations",
+    "lede": "Engineering control surface: component health, spool, audit, pipelines.",
+    "componentHealth": "Component health",
+    "spool": "Transient spool",
+    "pendingCount": "pending",
+    "noSpool": "Spool empty — nothing awaiting Mentle recovery",
+    "audit": "Governance / audit log",
+    "noAudit": "No audit entries",
+    "pipelines": "Pipelines",
+    "noPipelines": "No pipelines configured",
+    "runs": "runs",
+    "revision": "revision",
+    "ingestion": "Ingestion queue",
+    "seq": "seq",
+    "section": "section",
+    "action": "action",
+    "actor": "actor",
+    "reason": "reason",
+    "when": "when"
+  },
+  "trace": {
+    "title": "Recall Trace",
+    "lede": "Replay a Fast/Deep recall: why candidates were selected, what evidence was read, what was rejected.",
+    "inputLabel": "Trace ID",
+    "inputPlaceholder": "paste a recall trace id…",
+    "load": "Replay",
+    "notFound": "No trace found for that id",
+    "hint": "Run a deep recall against the API to produce a trace id, then replay it here.",
+    "request": "Request",
+    "query": "query",
+    "scope": "scope",
+    "trigger": "trigger reason",
+    "timeline": "Trace timeline",
+    "selected": "Selected candidates",
+    "read": "Evidence read",
+    "rejected": "Rejected / filtered",
+    "budget": "Budget",
+    "budgetChars": "budget chars",
+    "usedChars": "used chars",
+    "kgQueries": "KG queries",
+    "timelineQueries": "timeline queries",
+    "cardSearches": "card searches",
+    "performance": "Performance",
+    "duration": "duration",
+    "degraded": "degraded",
+    "none": "none recorded",
+    "filterConditions": "filter conditions",
+    "sourceSet": "source set"
+  },
+  "library": {
+    "title": "Architecture Library",
+    "lede": "Documents grouped by role (L0–L5), not by directory. Status and supersession are explicit.",
+    "status": {
+      "accepted": "accepted",
+      "implemented": "implemented",
+      "proposed": "proposed",
+      "superseded": "superseded",
+      "archived": "archived"
+    },
+    "modules": "Impacted modules",
+    "supersedes": "Supersedes",
+    "supersededBy": "Superseded by",
+    "archiveNote": "Historical evidence — read-only, explicitly not the current contract."
+  },
+  "placeholder": {
+    "title": "Accepted design — not yet implemented",
+    "body": "This surface is defined in ADR-0003 but has no runtime yet. No mock data is shown. It will appear here when its backend exists."
+  }
+}

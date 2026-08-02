@@ -1,0 +1,167 @@
+{
+  "app": {
+    "name": "MemoryOS",
+    "subtitle": "运营台",
+    "contract": "garden-hermes/1"
+  },
+  "nav": {
+    "overview": "概览",
+    "governance": "治理图谱",
+    "work": "工作上下文",
+    "materials": "材料与证据",
+    "trace": "Recall Trace",
+    "reports": "报告系统",
+    "operations": "运行与审计",
+    "library": "文档与架构",
+    "settings": "设置"
+  },
+  "topbar": {
+    "scope": "作用域",
+    "host": "单主机 · 本地",
+    "language": "语言",
+    "live": "实时"
+  },
+  "banner": {
+    "localOnly": "仅本地",
+    "degraded": "降级:{{names}}",
+    "pendingSpool": "{{count}} 条 pending_mentle 待恢复",
+    "compat": "遗留兼容模式"
+  },
+  "status": {
+    "ok": "正常",
+    "degraded": "降级",
+    "down": "离线",
+    "unknown": "未知",
+    "live": "实时",
+    "compat": "兼容",
+    "acceptedDesign": "已接受设计",
+    "deferred": "已推迟"
+  },
+  "common": {
+    "loading": "加载中",
+    "error": "错误",
+    "retry": "重试",
+    "empty": "暂无数据",
+    "source": "来源",
+    "notImplemented": "未实现",
+    "viewDocs": "相关文档"
+  },
+  "overview": {
+    "title": "概览",
+    "lede": "身份、工作记忆、材料库与运行时是否健康——现在需要关注什么?",
+    "runtime": "运行时健康",
+    "cognitive": "认知健康",
+    "governance": "治理健康",
+    "data": "数据健康",
+    "components": "组件",
+    "degradedCount": "降级",
+    "stmFreshness": "STM 新鲜度",
+    "worldConflicts": "WORLD 候选冲突",
+    "frozenCore": "Frozen Core 完整度",
+    "rulesVersion": "规则版本",
+    "pendingReview": "待审阅",
+    "spoolPending": "pending_mentle 缓冲",
+    "ingestionTotal": "摄取总数",
+    "failedSources": "失败来源",
+    "workSurface": "当前工作台面",
+    "recentAudit": "近期治理活动",
+    "noAudit": "尚无被审计的变更",
+    "componentState": "组件状态"
+  },
+  "governance": {
+    "title": "治理图谱",
+    "lede": "分层系统图谱,带逐组件流状态。点击节点查看详情。",
+    "flow": {
+      "context": "上下文流",
+      "ingestion": "Raw-first 摄取流",
+      "recall": "Recall 流",
+      "change": "治理 / 变更流"
+    },
+    "layers": {
+      "runtime": "运行时",
+      "data": "数据",
+      "governance": "治理",
+      "roadmap": "路线图"
+    },
+    "inspector": {
+      "responsibility": "职责",
+      "runtime": "运行状态",
+      "boundary": "数据边界",
+      "io": "输入 / 输出",
+      "apis": "关联 API / trace",
+      "rules": "治理规则",
+      "limitations": "已知限制",
+      "phase": "架构阶段",
+      "docs": "相关文档与 ADR"
+    }
+  },
+  "operations": {
+    "title": "运行与审计",
+    "lede": "工程控制台面:组件健康、缓冲、审计、流水线。",
+    "componentHealth": "组件健康",
+    "spool": "瞬态缓冲",
+    "pendingCount": "待处理",
+    "noSpool": "缓冲为空——没有等待 Mentle 恢复的条目",
+    "audit": "治理 / 审计日志",
+    "noAudit": "暂无审计条目",
+    "pipelines": "流水线",
+    "noPipelines": "未配置流水线",
+    "runs": "次运行",
+    "revision": "修订",
+    "ingestion": "摄取队列",
+    "seq": "序号",
+    "section": "区段",
+    "action": "操作",
+    "actor": "执行者",
+    "reason": "原因",
+    "when": "时间"
+  },
+  "trace": {
+    "title": "Recall Trace",
+    "lede": "回放一次 Fast/Deep 召回:为何选中候选、读取了哪些证据、什么被拒绝。",
+    "inputLabel": "Trace ID",
+    "inputPlaceholder": "粘贴 recall trace id…",
+    "load": "回放",
+    "notFound": "未找到该 trace",
+    "hint": "先对 API 发起一次 deep recall 生成 trace id,再在此回放。",
+    "request": "请求",
+    "query": "查询",
+    "scope": "作用域",
+    "trigger": "触发原因",
+    "timeline": "Trace 时间线",
+    "selected": "选中的候选",
+    "read": "读取的证据",
+    "rejected": "被拒绝 / 过滤",
+    "budget": "预算",
+    "budgetChars": "预算字符",
+    "usedChars": "已用字符",
+    "kgQueries": "KG 查询",
+    "timelineQueries": "时间线查询",
+    "cardSearches": "卡片检索",
+    "performance": "性能",
+    "duration": "耗时",
+    "degraded": "降级",
+    "none": "无记录",
+    "filterConditions": "过滤条件",
+    "sourceSet": "来源集合"
+  },
+  "library": {
+    "title": "文档与架构",
+    "lede": "按角色(L0–L5)而非目录分组文档。状态与取代关系明确标注。",
+    "status": {
+      "accepted": "已接受",
+      "implemented": "已实现",
+      "proposed": "提议中",
+      "superseded": "已被取代",
+      "archived": "已归档"
+    },
+    "modules": "影响模块",
+    "supersedes": "取代",
+    "supersededBy": "被取代于",
+    "archiveNote": "历史证据——只读,明确不是当前契约。"
+  },
+  "placeholder": {
+    "title": "已接受设计——尚未实现",
+    "body": "该台面已在 ADR-0003 中定义,但尚无运行时。不展示任何模拟数据。待其后端存在后会出现在此处。"
+  }
+}

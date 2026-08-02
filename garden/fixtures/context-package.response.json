@@ -1,0 +1,1 @@
+{"trace_id":"run_01JEXAMPLE","mode":"advanced","context":"Architecture A was selected [ev_001].","evidence":[{"id":"ev_001","source":"memory","locator":"mem_01JEXAMPLE","excerpt":"Laputa uses architecture A.","score":0.82}],"confidence":0.75,"degraded":false,"warnings":[]}

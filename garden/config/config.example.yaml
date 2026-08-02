@@ -1,0 +1,10 @@
+# Garden config example (Phase 2+)
+
+server:
+  addr: ":7373"
+
+governance:
+  store_dir: "~/.laputa/sections"
+
+mentle:
+  config_dir: "~/.mentle"

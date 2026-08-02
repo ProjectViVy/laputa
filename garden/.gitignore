@@ -1,0 +1,5 @@
+/garden.exe
+/garden
+*.exe
+*.test
+*.out

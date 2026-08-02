@@ -1,0 +1,11 @@
+# Go build artifacts not covered by the parent garden .gitignore.
+# (Parent rules apply at the superproject level; submodule ignores must
+# be declared locally to keep `go test` / `go run` clean output out of
+# submodule diffs.)
+*.exe
+*.test
+*.out
+
+# Convenience binary built by `go run ./cmd/warmup` while iterating.
+cmd/warmup/warmup.exe
+warmup.exe

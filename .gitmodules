@@ -1,6 +1,0 @@
-[submodule "laputa"]
-	path = laputa
-	url = ./laputa
-[submodule "mentle"]
-	path = mentle
-	url = ./mentle

@@ -1,0 +1,52 @@
+:root {
+  /* ---- surface ---- */
+  --bg-0: #0a1216;
+  --bg-1: #0d1a20;
+  --panel: #101f27;
+  --panel-2: #142631;
+  --panel-3: #182d3a;
+  --line: #1d3641;
+  --line-strong: #2a4a58;
+
+  /* ---- text ---- */
+  --ink: #e8f2f3;
+  --ink-2: #a9c0c7;
+  --ink-3: #6d8791;
+  --ink-faint: #47606a;
+
+  /* ---- semantic status ---- */
+  --ok: #3ecf8e;
+  --ok-dim: rgba(62, 207, 142, 0.14);
+  --degraded: #ffb454;
+  --degraded-dim: rgba(255, 180, 84, 0.14);
+  --down: #ff6b6b;
+  --down-dim: rgba(255, 107, 107, 0.14);
+  --info: #5cc8ff;
+  --info-dim: rgba(92, 200, 255, 0.13);
+
+  /* ---- brand ---- */
+  --brand: #e8a15c;
+  --brand-strong: #f0b878;
+  --brand-dim: rgba(232, 161, 92, 0.13);
+
+  /* ---- type ---- */
+  --font-display: "Space Grotesk Variable", "Space Grotesk", system-ui, sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Mono", monospace;
+
+  /* ---- geometry ---- */
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --sidebar-w: 232px;
+  --topbar-h: 56px;
+
+  /* ---- motion ---- */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --t-fast: 140ms;
+  --t-med: 240ms;
+
+  /* ---- glow ---- */
+  --glow-brand: 0 0 24px rgba(232, 161, 92, 0.16);
+  --glow-info: 0 0 20px rgba(92, 200, 255, 0.12);
+}

@@ -1,0 +1,32 @@
+schema_version: "1"
+pipelines:
+  - name: agentic_recall_v1
+    version: 1.0.0
+    capabilities: [governance, llm, hybrid, kg, timeline]
+    max_steps: 20
+    max_visits_per_step: 2
+    steps:
+      - id: load_governance
+        timeout_ms: 3000
+      - id: resolve_policy
+        timeout_ms: 1000
+      - id: build_plan
+        timeout_ms: 10000
+        on_error: skip
+      - id: retrieve_candidates
+        timeout_ms: 5000
+        on_error: skip
+      - id: expand_graph
+        timeout_ms: 5000
+        on_error: skip
+      - id: judge_sufficiency
+        timeout_ms: 10000
+        on_error: skip
+        next: [retrieve_candidates]
+      - id: deduplicate_and_rerank
+        timeout_ms: 1000
+      - id: governance_filter
+        timeout_ms: 1000
+      - id: assemble_context
+        timeout_ms: 10000
+        on_error: skip

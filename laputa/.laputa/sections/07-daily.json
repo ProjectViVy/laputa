@@ -1,0 +1,17 @@
+{
+  "_meta": {
+    "updated_at": "2026-07-04T08:16:03Z",
+    "version": "1.0"
+  },
+  "reports": [
+    {
+      "generated_at": "2026-07-04T08:16:03Z",
+      "highlights": [
+        "completed task A"
+      ],
+      "open_questions": null,
+      "summary": "All systems nominal.",
+      "title": "Daily Rhythm Report"
+    }
+  ]
+}

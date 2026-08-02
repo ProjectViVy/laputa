@@ -1,0 +1,271 @@
+// Package dialect implements AAAK (Aphantix Abstraction Annotating Kit) compression.
+// It compresses memory entries into compact, semantically-rich strings.
+package dialect
+
+import (
+	"regexp"
+	"sort"
+	"strings"
+	"unicode"
+)
+
+var emotionCodes = map[string]string{
+	"vulnerability": "vul", "vulnerable": "vul",
+	"joy": "joy", "joyful": "joy",
+	"fear": "fear", "mild_fear": "fear",
+	"trust": "trust", "trust_building": "trust",
+	"grief": "grief", "raw_grief": "grief",
+	"wonder": "wonder", "philosophical_wonder": "wonder",
+	"rage": "rage", "anger": "rage",
+	"love": "love", "devotion": "love",
+	"hope":    "hope",
+	"despair": "despair", "hopelessness": "despair",
+	"peace": "peace",
+	"humor": "humor", "dark_humor": "humor",
+	"tenderness":  "tender",
+	"raw_honesty": "raw", "brutal_honesty": "raw",
+	"self_doubt": "doubt",
+	"anxiety":    "anx", "anxious": "anx",
+	"exhaustion": "exhaust",
+	"conviction": "convict", "quiet_passion": "passion",
+}
+
+var emotionSignals = map[string]string{
+	"decided": "determ", "prefer": "convict",
+	"worried": "anx", "excited": "excite",
+	"frustrated": "frust", "confused": "confuse",
+	"love": "love", "hate": "rage",
+	"hope": "hope", "fear": "fear",
+	"trust": "trust", "happy": "joy",
+	"sad": "grief", "surprised": "surprise",
+	"grateful": "grat", "curious": "curious",
+	"wonder": "wonder", "relieved": "relief",
+}
+
+var flagSignals = map[string]string{
+	"decided": "DECISION", "chose": "DECISION",
+	"founded": "ORIGIN", "created": "ORIGIN",
+	"started": "ORIGIN", "born": "ORIGIN",
+	"launched": "ORIGIN", "first time": "ORIGIN",
+	"core": "CORE", "fundamental": "CORE",
+	"essential": "CORE", "principle": "CORE",
+	"belief": "CORE", "always": "CORE",
+	"turning point": "PIVOT", "changed everything": "PIVOT",
+	"realized": "PIVOT", "breakthrough": "PIVOT",
+	"api": "TECHNICAL", "database": "TECHNICAL",
+	"architecture": "TECHNICAL", "deploy": "TECHNICAL",
+}
+
+var stopWords = map[string]bool{
+	"the": true, "a": true, "an": true, "is": true, "are": true,
+	"was": true, "were": true, "be": true, "been": true,
+	"have": true, "has": true, "had": true, "do": true,
+	"to": true, "of": true, "in": true, "for": true,
+	"on": true, "with": true, "at": true, "by": true,
+	"from": true, "as": true, "into": true, "about": true,
+}
+
+type Encoder struct {
+	entityCodes map[string]string
+	skipNames   []string
+}
+
+func NewEncoder() *Encoder {
+	return &Encoder{
+		entityCodes: make(map[string]string),
+		skipNames:   []string{},
+	}
+}
+
+func (e *Encoder) Compress(text string, metadata map[string]string) string {
+	entities := e.detectEntities(text)
+	entityStr := strings.Join(entities[:min(3, len(entities))], "+")
+	if entityStr == "" {
+		entityStr = "???"
+	}
+
+	topics := e.extractTopics(text, 3)
+	topicStr := strings.Join(topics, "_")
+	if topicStr == "" {
+		topicStr = "misc"
+	}
+
+	quote := e.extractKeySentence(text)
+
+	emotions := e.detectEmotions(text)
+	emotionStr := strings.Join(emotions, "+")
+
+	flags := e.detectFlags(text)
+	flagStr := strings.Join(flags, "+")
+
+	var parts []string
+	parts = append(parts, "0:"+entityStr)
+	parts = append(parts, topicStr)
+	if quote != "" {
+		parts = append(parts, `"`+quote+`"`)
+	}
+	if emotionStr != "" {
+		parts = append(parts, emotionStr)
+	}
+	if flagStr != "" {
+		parts = append(parts, flagStr)
+	}
+
+	return strings.Join(parts, "|")
+}
+
+func (e *Encoder) detectEmotions(text string) []string {
+	textLower := strings.ToLower(text)
+	var emotions []string
+	seen := make(map[string]bool)
+
+	for keyword, code := range emotionSignals {
+		if strings.Contains(textLower, keyword) && !seen[code] {
+			emotions = append(emotions, code)
+			seen[code] = true
+		}
+	}
+
+	return emotions[:min(3, len(emotions))]
+}
+
+func (e *Encoder) detectFlags(text string) []string {
+	textLower := strings.ToLower(text)
+	var flags []string
+	seen := make(map[string]bool)
+
+	for keyword, flag := range flagSignals {
+		if strings.Contains(textLower, keyword) && !seen[flag] {
+			flags = append(flags, flag)
+			seen[flag] = true
+		}
+	}
+
+	return flags[:min(3, len(flags))]
+}
+
+func (e *Encoder) extractTopics(text string, maxTopics int) []string {
+	re := regexp.MustCompile(`[a-zA-Z][a-zA-Z_-]{2,}`)
+	words := re.FindAllString(text, -1)
+
+	freq := make(map[string]int)
+	for _, w := range words {
+		wLower := strings.ToLower(w)
+		if stopWords[wLower] || len(wLower) < 3 {
+			continue
+		}
+		freq[wLower]++
+		for _, orig := range words {
+			if strings.ToLower(orig) == wLower && unicode.IsUpper(rune(orig[0])) {
+				freq[wLower] += 2
+				break
+			}
+		}
+	}
+
+	type pair struct {
+		word string
+		freq int
+	}
+	var ranked []pair
+	for w, f := range freq {
+		ranked = append(ranked, pair{w, f})
+	}
+	sort.Slice(ranked, func(i, j int) bool { return ranked[i].freq > ranked[j].freq })
+
+	var topics []string
+	for i := 0; i < min(maxTopics, len(ranked)); i++ {
+		topics = append(topics, ranked[i].word)
+	}
+	return topics
+}
+
+func (e *Encoder) extractKeySentence(text string) string {
+	sentences := regexp.MustCompile(`[^.!?\n]+`).FindAllString(text, -1)
+
+	type scored struct {
+		text  string
+		score int
+	}
+	var scoredSentences []scored
+
+	decisionWords := map[string]bool{
+		"decided": true, "because": true, "instead": true,
+		"prefer": true, "switched": true, "chose": true,
+		"realized": true, "important": true, "key": true,
+		"critical": true, "discovered": true, "learned": true,
+	}
+
+	for _, s := range sentences {
+		s = strings.TrimSpace(s)
+		if len(s) < 10 {
+			continue
+		}
+		score := 0
+		sLower := strings.ToLower(s)
+		for w := range decisionWords {
+			if strings.Contains(sLower, w) {
+				score += 2
+			}
+		}
+		if len(s) < 80 {
+			score++
+		}
+		if len(s) > 150 {
+			score -= 2
+		}
+		scoredSentences = append(scoredSentences, scored{s, score})
+	}
+
+	if len(scoredSentences) == 0 {
+		return ""
+	}
+
+	sort.Slice(scoredSentences, func(i, j int) bool {
+		return scoredSentences[i].score > scoredSentences[j].score
+	})
+
+	best := scoredSentences[0].text
+	if len(best) > 55 {
+		best = best[:52] + "..."
+	}
+	return best
+}
+
+func (e *Encoder) detectEntities(text string) []string {
+	var entities []string
+
+	for name, code := range e.entityCodes {
+		lowerName := strings.ToLower(name)
+		if strings.Contains(strings.ToLower(text), lowerName) && code != "" {
+			entities = append(entities, code)
+		}
+	}
+
+	if len(entities) > 0 {
+		return entities[:min(3, len(entities))]
+	}
+
+	re := regexp.MustCompile(`\b([A-Z][a-z]{2,})\b`)
+	matches := re.FindAllStringSubmatch(text, -1)
+	var seen []string
+	for _, m := range matches {
+		if len(seen) >= 3 {
+			break
+		}
+		code := strings.ToUpper(m[1][:min(3, len(m[1]))])
+		if !contains(seen, code) {
+			seen = append(seen, code)
+		}
+	}
+	return seen
+}
+
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
