@@ -1,8 +1,8 @@
 # TODOLIST — Garden MemoryOS
 
-> **Last updated:** 2026-08-02  
-> **Current focus:** Gate D — Operations Console: `/v2/admin/*` backend + MVP-0 frontend (React/Vite) built & verified on live data; next = Materials & Evidence (needs Mentle `/v2/materials/*`), design-preview toggle, Go-embed prod bundle  
-> **Architecture source:** [0001 MemoryOS vNext Architecture](docs/architecture/0001-memoryos-vnext-architecture.md) + [ADR-0002 Cognitive Partition](docs/architecture/0002-laputa-cognitive-partition-decision.md)  
+> **Last updated:** 2026-08-03  
+> **Current focus:** Gate A — Cognitive files: ADR-0004 written, `cognitive` package scaffolded (MemRules + WorldStore), compat write-blocking on 06/13/14, `/v2/cognitive/world` endpoint live. Next = Phase 2 integration (MEMRULES enforcement in recall, WORLD projection in Fast/Deep, audit rotation, Context Plane tests).  
+> **Architecture source:** [0001 MemoryOS vNext Architecture](docs/architecture/0001-memoryos-vnext-architecture.md) + [ADR-0002 Cognitive Partition](docs/architecture/0002-laputa-cognitive-partition-decision.md) + [ADR-0004 Cognitive Files Migration](docs/architecture/0004-cognitive-files-migration.md)  
 > This file tracks execution status only. It must not restate design contracts.
 
 **Legend:** ✅ done · 🚧 active · ⬜ planned · ⛔ blocked  
@@ -56,17 +56,19 @@ Archived pre-vNext docs and established active documentation navigation. The act
 
 > The older Wave 1–7 implementation checklist is superseded as an execution plan where it assumes LTM promotion, `LONGMEM.MD`, legacy section semantics, or reuse of `proposal_inbox`. Retain it only as historical design input until the tasks below are approved and decomposed.
 
-### ⬜ Gate A — Cognitive files and compatibility migration design
+### 🚧 Gate A — Cognitive files and compatibility migration design
 
 **Goal:** specify physical representations, validation, migration/no-data-loss policy and host projections before implementation.
 
-- [ ] `[L][G]` Define `MEMRULES.MD` storage location, schema, human-only edit path and Garden enforcement boundary.
-- [ ] `[L][G]` Define `WORLD.MD` claim format, provenance/status/confidence/visibility convention, user edit path and bounded projection API.
-- [ ] `[L]` Map legacy `06-history_md` and the 14-section registry to compatibility-only behavior; define read-only/data-preservation migration.
-- [ ] `[L]` Define append-only change/audit log backend and retention; exclude ordinary STM edits and raw Mentle ingest.
-- [ ] `[G]` Define Context Plane test matrix: Frozen Core + STM + scoped WORLD, excluding full WORLD/MEMRULES/reports/raw material.
+- [x] `[L][G]` Define `MEMRULES.MD` storage location, schema, human-only edit path and Garden enforcement boundary.
+- [x] `[L][G]` Define `WORLD.MD` claim format, provenance/status/confidence/visibility convention, user edit path and bounded projection API.
+- [x] `[L]` Map legacy `06-history_md` and the 14-section registry to compatibility-only behavior; define read-only/data-preservation migration.
+- [x] `[L]` Define append-only change/audit log backend and retention; exclude ordinary STM edits and raw Mentle ingest.
+- [x] `[G]` Define Context Plane test matrix: Frozen Core + STM + scoped WORLD, excluding full WORLD/MEMRULES/reports/raw material.
 
 **Exit:** architecture review accepts a concrete migration ADR and test plan. No registry rename/delete before this gate.
+
+**Status:** ADR-0004 written, Phase 1 scaffolding implemented (cognitive package, compat blocking, endpoint). Phase 2 integration pending.
 
 ### ⬜ Gate B — Report-system expansion design
 
@@ -90,18 +92,18 @@ Archived pre-vNext docs and established active documentation navigation. The act
 
 **Exit:** mailbox and Obsidian-ingestion designs are approved independently.
 
-### 🚧 Gate D — Operations Console (ADR-0003)
+### ✅ Gate D — Operations Console (ADR-0003)
 
 **Goal:** deliver the local-first MemoryOS 运营台: workbench-first admin UI (sidebar/top-bar/main), layered governance graph, recall trace, materials/evidence, architecture library, i18n (English default + 中文 toggle), dev-server iteration with Garden `/v2/admin/*` aggregation.
 
 - [x] `[G]` Define `/v2/admin/*` read-only aggregation contract: overview, components, spool, audit; every field carries `source: live | compat | accepted-design`.
-- [x] `[G]` Stand up frontend dev server (Vite-class) proxying `/v1/*` + `/v2/*` to Garden `127.0.0.1:7373`; prod target = Garden-embedded static bundle. (dev server done; Go-embed prod bundle still pending)
+- [x] `[G]` Stand up frontend dev server (Vite-class) proxying `/v1/*` + `/v2/*` to Garden `127.0.0.1:7373`; prod target = Garden-embedded static bundle. (dev server + Go-embed prod bundle both done)
 - [x] `[F]` MVP-0 pages: Overview (4 health axes), Governance Map (layered graph + 4-layer node state + Inspector), Pipeline/ingestion/recall trace read, Architecture Library L0–L5.
 - [x] `[F]` i18n scaffold: English default, 中文 catalog, top-bar language toggle; every shipped string externalized.
-- [ ] `[F]` Materials & Evidence two-layer model: Card discovery → bounded Evidence read; no full-text dump in search results. (blocked on Mentle `/v2/materials/*` adapter)
+- [x] `[F]` Materials & Evidence two-layer model: Card discovery → bounded Evidence read; no full-text dump in search results. (`/v2/materials/*` adapter + three-pane page)
 - [x] `[F]` Recall Trace replay: selected / read / rejected paths visible for a real trace id.
 - [x] `[F]` Legacy 14-section registry and `06/13/14` visually marked compatibility-only with ADR-0002 mapping.
-- [ ] `[F]` Design-preview mode toggle (`source: accepted-design` labels); production zero-mock enforced. (per-item `accepted-design` labels done; global toggle pending)
+- [x] `[F]` Design-preview mode toggle (`source: accepted-design` labels); production zero-mock enforced.
 - [x] `[G][F]` Safety banner reflects real degraded state (mentle/pipeline/planner, pending_mentle); loopback-only admin API.
 
 **Exit:** ADR-0003 acceptance criteria §9 all pass with real data; no write path in MVP-0.

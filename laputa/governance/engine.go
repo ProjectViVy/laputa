@@ -66,24 +66,26 @@ type SectionInfo struct {
 	WriteAuth   WriteAuthority
 	SchemaOwner string
 	Status      string // "stable" or "tbd"
+	Compat      bool   // true = read-only legacy section, writes blocked
+	Frozen      bool   // true = Frozen Core, cached at session bootstrap
 }
 
 // SectionRegistry maps section names to their metadata.
 var SectionRegistry = map[SectionName]SectionInfo{
-	SectionIdentity:          {Name: SectionIdentity, WriteAuth: AuthorityAgentSelf, SchemaOwner: "laputa", Status: "stable"},
-	SectionRelationship:      {Name: SectionRelationship, WriteAuth: AuthorityAgentSelf, SchemaOwner: "laputa", Status: "stable"},
-	SectionCommitment:        {Name: SectionCommitment, WriteAuth: AuthorityUserOnly, SchemaOwner: "laputa", Status: "stable"},
-	SectionPreferences:       {Name: SectionPreferences, WriteAuth: AuthorityAgentSelf, SchemaOwner: "laputa", Status: "stable"},
+	SectionIdentity:          {Name: SectionIdentity, WriteAuth: AuthorityAgentSelf, SchemaOwner: "laputa", Status: "stable", Frozen: true},
+	SectionRelationship:      {Name: SectionRelationship, WriteAuth: AuthorityAgentSelf, SchemaOwner: "laputa", Status: "stable", Frozen: true},
+	SectionCommitment:        {Name: SectionCommitment, WriteAuth: AuthorityUserOnly, SchemaOwner: "laputa", Status: "stable", Frozen: true},
+	SectionPreferences:       {Name: SectionPreferences, WriteAuth: AuthorityAgentSelf, SchemaOwner: "laputa", Status: "stable", Frozen: true},
 	SectionMemoryMD:          {Name: SectionMemoryMD, WriteAuth: AuthorityAgentSelf, SchemaOwner: "laputa", Status: "stable"},
-	SectionHistoryMD:         {Name: SectionHistoryMD, WriteAuth: AuthorityAgentSelf, SchemaOwner: "laputa", Status: "stable"},
+	SectionHistoryMD:         {Name: SectionHistoryMD, WriteAuth: AuthorityAgentSelf, SchemaOwner: "laputa", Status: "stable", Compat: true},
 	SectionDaily:             {Name: SectionDaily, WriteAuth: AuthorityReport, SchemaOwner: "report_system", Status: "stable"},
 	SectionWeekly:            {Name: SectionWeekly, WriteAuth: AuthorityReport, SchemaOwner: "report_system", Status: "stable"},
 	SectionMonthly:           {Name: SectionMonthly, WriteAuth: AuthorityReport, SchemaOwner: "report_system", Status: "stable"},
 	SectionJournalReflective: {Name: SectionJournalReflective, WriteAuth: AuthorityTBD, SchemaOwner: "tbd", Status: "tbd"},
 	SectionProposalInbox:     {Name: SectionProposalInbox, WriteAuth: AuthorityTBD, SchemaOwner: "tbd", Status: "tbd"},
 	SectionChangelog:         {Name: SectionChangelog, WriteAuth: AuthorityTBD, SchemaOwner: "tbd", Status: "tbd"},
-	SectionReportIndexes:     {Name: SectionReportIndexes, WriteAuth: AuthorityTBD, SchemaOwner: "tbd", Status: "tbd"},
-	SectionAAAKSummaries:     {Name: SectionAAAKSummaries, WriteAuth: AuthorityTBD, SchemaOwner: "tbd", Status: "tbd"},
+	SectionReportIndexes:     {Name: SectionReportIndexes, WriteAuth: AuthorityTBD, SchemaOwner: "tbd", Status: "tbd", Compat: true},
+	SectionAAAKSummaries:     {Name: SectionAAAKSummaries, WriteAuth: AuthorityTBD, SchemaOwner: "tbd", Status: "tbd", Compat: true},
 }
 
 // SectionStore is the interface for CRUD operations on governance sections.

@@ -25,6 +25,7 @@ import (
 	"github.com/dashimaki/garden/internal/report"
 	"github.com/dashimaki/garden/internal/router"
 	"github.com/dashimaki/laputa/governance"
+	"github.com/dashimaki/laputa/governance/cognitive"
 	"github.com/dashimaki/mentle/facade"
 	"github.com/google/uuid"
 )
@@ -45,6 +46,7 @@ type Server struct {
 	Governed       *governance.GovernedService
 	GovernedWriter *authority.GovernedWriter
 	Materials      MaterialsProvider
+	Cognitive      *cognitive.WorldStore
 	Components     map[string]string
 	Addr           string
 	httpServer     *http.Server
@@ -96,6 +98,7 @@ func (s *Server) HTTPHandler() http.Handler {
 	mux.HandleFunc("GET /v2/materials/cards", s.handleMaterialsCards)
 	mux.HandleFunc("GET /v2/materials/cards/{id}/evidence", s.handleMaterialsEvidence)
 	mux.HandleFunc("GET /v2/materials/collections", s.handleMaterialsCollections)
+	mux.HandleFunc("GET /v2/cognitive/world", s.handleCognitiveWorld)
 	mux.HandleFunc("/", s.spaHandler())
 
 	return requestMiddleware(mux)
@@ -535,6 +538,10 @@ func writeHandlerError(w http.ResponseWriter, err error) {
 	}
 	if errors.Is(err, governance.ErrUnauthorized) {
 		writeError(w, http.StatusForbidden, err)
+		return
+	}
+	if errors.Is(err, governance.ErrCompatReadOnly) {
+		writeError(w, http.StatusGone, err)
 		return
 	}
 	if errors.Is(err, facade.ErrVersionConflict) || errors.Is(err, facade.ErrIdempotencyConflict) || errors.Is(err, ingest.ErrEventConflict) {
