@@ -195,7 +195,11 @@ func main() {
 	if !strings.HasPrefix(addr, "127.0.0.1:") && !strings.HasPrefix(addr, "localhost:") && !strings.HasPrefix(addr, "[::1]:") {
 		log.Printf("HIGH RISK: unauthenticated Garden API is configured on non-loopback address %q", addr)
 	}
-	srv := &server.Server{Handler: h, Resolver: resolver, FastRecall: fastRecall, DeepRecall: deepRecall, TraceStore: traceStore, Evolution: evoService, Activity: activityStore, Checkpointer: checkpointer, Pipelines: manager, Ingestions: ingestions, Reports: reports, Governed: governed, GovernedWriter: &authority.GovernedWriter{Gov: governed}, Components: components, Addr: addr}
+	var materialsProvider server.MaterialsProvider
+	if mem != nil {
+		materialsProvider = mem
+	}
+	srv := &server.Server{Handler: h, Resolver: resolver, FastRecall: fastRecall, DeepRecall: deepRecall, TraceStore: traceStore, Evolution: evoService, Activity: activityStore, Checkpointer: checkpointer, Pipelines: manager, Ingestions: ingestions, Reports: reports, Governed: governed, GovernedWriter: &authority.GovernedWriter{Gov: governed}, Materials: materialsProvider, Components: components, Addr: addr}
 	if err := lifecycle.Run(ctx, srv); err != nil {
 		log.Fatalf("lifecycle: %v", err)
 	}

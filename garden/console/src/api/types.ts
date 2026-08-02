@@ -130,3 +130,59 @@ export interface RunTrace {
 export interface PipelineRunsResponse {
   runs: RunTrace[];
 }
+
+// ============ Materials & Evidence ============
+
+export interface MemoryCard {
+  id: string;
+  kind: string;
+  collection: string;
+  scope: string;
+  title: string;
+  summary: string;
+  source_ref: string;
+  revision: number;
+  status: string;
+  valid_from: string;
+  valid_to?: string;
+  superseded_by?: string;
+  tags: string[];
+  heat_score: number;
+  last_activated?: string;
+  candidate_score: number;
+}
+
+export interface CardsResponse {
+  cards: MemoryCard[];
+  next_cursor?: string;
+  source: Source;
+}
+
+export interface EvidenceFragment {
+  card_id: string;
+  material_ref: string;
+  source_uri?: string;
+  source_rev?: string;
+  excerpt: string;
+  start_offset: number;
+  end_offset: number;
+  content_hash: string;
+  validity: string;
+  evidence_refs?: string[];
+}
+
+export interface EvidenceResponse {
+  card_id: string;
+  fragments: EvidenceFragment[];
+  source: Source;
+}
+
+export interface CollectionInfo {
+  name: string;
+  count: number;
+}
+
+export interface CollectionsResponse {
+  collections: CollectionInfo[];
+  source: Source;
+}

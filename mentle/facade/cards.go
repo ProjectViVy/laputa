@@ -3,6 +3,7 @@ package facade
 import (
 	"context"
 	"math"
+	"sort"
 	"time"
 )
 
@@ -154,4 +155,29 @@ func truncateRunes(value string, max int) string {
 		return "…"
 	}
 	return string(r[:max-1]) + "…"
+}
+
+type CollectionInfo struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+func (s *Service) ListCollections(ctx context.Context) ([]CollectionInfo, error) {
+	if s.PalaceGraph == nil {
+		return nil, ErrUnavailable
+	}
+	wingCounts := map[string]int{}
+	for _, node := range s.PalaceGraph.GetNodes() {
+		for _, wing := range node.Wings {
+			wingCounts[wing] += node.Count
+		}
+	}
+	collections := make([]CollectionInfo, 0, len(wingCounts))
+	for name, count := range wingCounts {
+		collections = append(collections, CollectionInfo{Name: name, Count: count})
+	}
+	sort.Slice(collections, func(i, j int) bool {
+		return collections[i].Name < collections[j].Name
+	})
+	return collections, nil
 }

@@ -19,7 +19,8 @@
     "scope": "Scope",
     "host": "single-host · local",
     "language": "Language",
-    "live": "LIVE"
+    "live": "LIVE",
+    "preview": "Preview"
   },
   "banner": {
     "localOnly": "Local-only",
@@ -160,8 +161,29 @@
     "supersededBy": "Superseded by",
     "archiveNote": "Historical evidence — read-only, explicitly not the current contract."
   },
+  "materials": {
+    "title": "Materials & Evidence",
+    "lede": "Card discovery and bounded evidence read. Search finds candidates; evidence opens the original fragment within budget.",
+    "searchPlaceholder": "Search cards by keyword…",
+    "search": "Search",
+    "collections": "Collections",
+    "allCollections": "All",
+    "noResults": "No cards found for this query",
+    "noCollections": "No collections available",
+    "selectCard": "Select a card to inspect evidence",
+    "evidence": "Evidence Inspector",
+    "noEvidence": "No evidence fragments for this card",
+    "validity": "validity",
+    "hash": "content hash",
+    "sourceUri": "source",
+    "materialRef": "material ref",
+    "heat": "heat",
+    "status": "status",
+    "tags": "tags"
+  },
   "placeholder": {
     "title": "Accepted design — not yet implemented",
-    "body": "This surface is defined in ADR-0003 but has no runtime yet. No mock data is shown. It will appear here when its backend exists."
+    "body": "This surface is defined in ADR-0003 but has no runtime yet. No mock data is shown. It will appear here when its backend exists.",
+    "unavailable": "This surface has no runtime yet."
   }
 }

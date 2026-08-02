@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { usePreview } from "../lib/usePreview";
 
 interface Props {
   titleKey: string;
@@ -6,6 +7,19 @@ interface Props {
 
 export default function Placeholder({ titleKey }: Props) {
   const { t } = useTranslation();
+  const { active } = usePreview();
+
+  if (!active) {
+    return (
+      <div className="page">
+        <div className="placeholder reveal">
+          <h1 className="placeholder-title">{t(titleKey)}</h1>
+          <p className="placeholder-body">{t("placeholder.unavailable")}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page">
       <div className="placeholder reveal">

@@ -5,6 +5,7 @@ import GovernanceMap from "./pages/GovernanceMap";
 import Operations from "./pages/Operations";
 import RecallTrace from "./pages/RecallTrace";
 import ArchitectureLibrary from "./pages/ArchitectureLibrary";
+import MaterialsPage from "./pages/MaterialsPage";
 import Placeholder from "./pages/Placeholder";
 
 export default function App() {
@@ -17,7 +18,7 @@ export default function App() {
         <Route path="/trace" element={<RecallTrace />} />
         <Route path="/library" element={<ArchitectureLibrary />} />
         <Route path="/work" element={<Placeholder titleKey="nav.work" />} />
-        <Route path="/materials" element={<Placeholder titleKey="nav.materials" />} />
+        <Route path="/materials" element={<MaterialsPage />} />
         <Route path="/reports" element={<Placeholder titleKey="nav.reports" />} />
         <Route path="/settings" element={<Placeholder titleKey="nav.settings" />} />
         <Route path="*" element={<Navigate to="/" replace />} />

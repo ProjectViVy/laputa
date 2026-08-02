@@ -19,7 +19,8 @@
     "scope": "作用域",
     "host": "单主机 · 本地",
     "language": "语言",
-    "live": "实时"
+    "live": "实时",
+    "preview": "预览"
   },
   "banner": {
     "localOnly": "仅本地",
@@ -160,8 +161,29 @@
     "supersededBy": "被取代于",
     "archiveNote": "历史证据——只读,明确不是当前契约。"
   },
+  "materials": {
+    "title": "材料与证据",
+    "lede": "卡片发现与有界证据读取。搜索发现候选；证据在预算内打开原始片段。",
+    "searchPlaceholder": "按关键词搜索卡片…",
+    "search": "搜索",
+    "collections": "集合",
+    "allCollections": "全部",
+    "noResults": "未找到匹配的卡片",
+    "noCollections": "暂无可用集合",
+    "selectCard": "选择一张卡片以查看证据",
+    "evidence": "证据检视器",
+    "noEvidence": "该卡片无证据片段",
+    "validity": "有效性",
+    "hash": "内容哈希",
+    "sourceUri": "来源",
+    "materialRef": "材料引用",
+    "heat": "热度",
+    "status": "状态",
+    "tags": "标签"
+  },
   "placeholder": {
     "title": "已接受设计——尚未实现",
-    "body": "该台面已在 ADR-0003 中定义,但尚无运行时。不展示任何模拟数据。待其后端存在后会出现在此处。"
+    "body": "该台面已在 ADR-0003 中定义,但尚无运行时。不展示任何模拟数据。待其后端存在后会出现在此处。",
+    "unavailable": "该台面无运行时。"
   }
 }

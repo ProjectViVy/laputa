@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/dashimaki/garden/console"
 	"github.com/dashimaki/garden/internal/activity"
 	"github.com/dashimaki/garden/internal/authority"
 	"github.com/dashimaki/garden/internal/crud"
@@ -42,6 +44,7 @@ type Server struct {
 	Reports        *report.Service
 	Governed       *governance.GovernedService
 	GovernedWriter *authority.GovernedWriter
+	Materials      MaterialsProvider
 	Components     map[string]string
 	Addr           string
 	httpServer     *http.Server
@@ -90,6 +93,10 @@ func (s *Server) HTTPHandler() http.Handler {
 	mux.HandleFunc("GET /v2/admin/context-manifest/{trace_id}", s.handleAdminContextManifest)
 	mux.HandleFunc("GET /v2/admin/spool", s.handleAdminSpool)
 	mux.HandleFunc("GET /v2/admin/audit", s.handleAdminAudit)
+	mux.HandleFunc("GET /v2/materials/cards", s.handleMaterialsCards)
+	mux.HandleFunc("GET /v2/materials/cards/{id}/evidence", s.handleMaterialsEvidence)
+	mux.HandleFunc("GET /v2/materials/collections", s.handleMaterialsCollections)
+	mux.HandleFunc("/", s.spaHandler())
 
 	return requestMiddleware(mux)
 }
@@ -100,6 +107,31 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		return nil
 	}
 	return s.httpServer.Shutdown(ctx)
+}
+
+func (s *Server) spaHandler() http.HandlerFunc {
+	sub, _ := fs.Sub(console.Dist, "dist")
+	fileServer := http.FileServer(http.FS(sub))
+	return func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if strings.HasPrefix(path, "/v1/") || strings.HasPrefix(path, "/v2/") {
+			if r.Method != http.MethodGet {
+				w.Header().Set("Allow", "GET")
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			http.NotFound(w, r)
+			return
+		}
+		clean := strings.TrimPrefix(path, "/")
+		if clean == "" {
+			clean = "index.html"
+		}
+		if _, err := fs.Stat(sub, clean); err != nil {
+			r.URL.Path = "/"
+		}
+		fileServer.ServeHTTP(w, r)
+	}
 }
 
 func (s *Server) handleWrite(w http.ResponseWriter, r *http.Request) {
