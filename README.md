@@ -1,8 +1,8 @@
-# Garden MemoryOS
+# LAPUTA
 
 [中文文档](README_CN.md)
 
-A governed memory operating system for continuous AI agents. Garden connects personal work materials to recalled context and reusable capability — without treating storage, retrieval, or evolution output as authority by themselves.
+A governed memory operating system for continuous AI agents. LAPUTA connects personal work materials to recalled context and reusable capability — without treating storage, retrieval, or evolution output as authority by themselves.
 
 ## Core Idea
 
