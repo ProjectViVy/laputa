@@ -11,6 +11,7 @@
     "materials": "材料与证据",
     "trace": "Recall Trace",
     "reports": "报告系统",
+    "modules": "志向与建议",
     "operations": "运行与审计",
     "library": "文档与架构",
     "settings": "设置"
@@ -201,6 +202,23 @@
       "decisions": "决策",
       "openLoops": "未闭合事项"
     }
+  },
+  "modules": {
+    "title": "志向与建议",
+    "lede": "仅月度的人类模块。非绑定：永不成为承诺、永不改动 Frozen Core、默认不注入上下文。月度报告可引用它们。",
+    "ambition": "AMBITION",
+    "suggestion": "USER SUGGESTIONS",
+    "create": "添加",
+    "placeholder": "写一条志向或建议…",
+    "edit": "编辑",
+    "save": "保存",
+    "cancel": "取消",
+    "dismiss": "忽略",
+    "reactivate": "恢复",
+    "empty": "暂无内容。",
+    "statusActive": "生效",
+    "statusDismissed": "已忽略",
+    "created": "创建于 {{date}}"
   },
   "placeholder": {
     "title": "已接受设计——尚未实现",

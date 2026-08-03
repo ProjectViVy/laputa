@@ -210,6 +210,46 @@ E2E_WORLD_MARKER machine description for the end-to-end test.
 	if orientation.Note != "orientation only; does not replace transient spool recovery" {
 		t.Fatalf("orientation note=%q", orientation.Note)
 	}
+
+	var modCreated struct {
+		ID     string `json:"id"`
+		Kind   string `json:"kind"`
+		Status string `json:"status"`
+	}
+	writeJSON(t, client, http.MethodPost, baseURL+"/v2/reports/modules", map[string]any{"kind": "ambition", "content": "ship gate f end to end"}, http.StatusCreated, &modCreated)
+	if modCreated.ID == "" || modCreated.Kind != "ambition" || modCreated.Status != "active" {
+		t.Fatalf("created module=%+v", modCreated)
+	}
+	var modList struct {
+		Count int `json:"count"`
+	}
+	writeJSON(t, client, http.MethodGet, baseURL+"/v2/reports/modules?kind=ambition&status=all", nil, http.StatusOK, &modList)
+	if modList.Count != 1 {
+		t.Fatalf("module list count=%d", modList.Count)
+	}
+	writeJSON(t, client, http.MethodPost, baseURL+"/v2/reports/modules", map[string]any{"kind": "suggestion", "content": "make reports more readable"}, http.StatusCreated, &modCreated)
+	writeJSON(t, client, http.MethodPatch, baseURL+"/v2/reports/modules/"+modCreated.ID, map[string]any{"status": "dismissed"}, http.StatusOK, &modCreated)
+	if modCreated.Status != "dismissed" {
+		t.Fatalf("dismissed module=%+v", modCreated)
+	}
+	writeJSON(t, client, http.MethodGet, baseURL+"/v2/reports/modules?kind=suggestion&status=active", nil, http.StatusOK, &modList)
+	if modList.Count != 0 {
+		t.Fatalf("active suggestions after dismiss=%d", modList.Count)
+	}
+	var monthly struct {
+		Generated bool `json:"generated"`
+		Report    struct {
+			Modules []string `json:"modules"`
+		} `json:"report"`
+	}
+	writeJSON(t, client, http.MethodPost, baseURL+"/v2/reports/generate", map[string]any{"cadence": "monthly"}, http.StatusOK, &monthly)
+	if !monthly.Generated {
+		t.Fatal("monthly report was not generated")
+	}
+	if len(monthly.Report.Modules) != 1 || monthly.Report.Modules[0] != "AMBITION" {
+		t.Fatalf("monthly modules=%v", monthly.Report.Modules)
+	}
+
 	var deleted struct {
 		Deleted bool `json:"deleted"`
 	}

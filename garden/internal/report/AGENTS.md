@@ -1,20 +1,15 @@
 <!-- Parent: ../AGENTS.md -->
 
-# garden/internal/report — Activity and Recall Reporting
+# garden/internal/report — Report System
 
-**Generated:** 2026-08-01  
-**Purpose:** Generate reports from activity and recall traces
+**Generated:** 2026-08-03  
+**Purpose:** ADR-0005 human-facing report system + ADR-0009 human modules
 
 ---
 
 ## Purpose
 
-The `report/` package generates human-readable summaries:
-
-- **Activity report** — what happened in a session (events, changes)
-- **Recall report** — trace of recall operations (planner decisions, cards found)
-- **Trace export** — serialize RecallTrace and ActivityTrace for storage
-- **Aggregation** — summarize across multiple sessions or time windows
+The `report/` package implements the unified report system (ADR-0005): deterministic / LLM-enriched window reports persisted to Garden state SQLite, dual-written into Laputa sections 07/08/09 via `GovernedPublisher`, plus a bounded orientation read for Mentle outage. It also owns the AMBITION / USER SUGGESTIONS human modules (ADR-0009).
 
 ---
 
@@ -22,56 +17,42 @@ The `report/` package generates human-readable summaries:
 
 ```
 report/
-├── service.go       # Report generation service
-└── service_test.go
+├── service.go       # Service, report generation, window, orientation
+├── enrich.go        # optional LLM enricher (rhythm.ArtifactGenerator)
+├── publisher.go     # GovernedPublisher → section writes (report_system actor)
+├── modules.go       # human_modules table, Module CRUD, monthly attachment
+└── *_test.go
 ```
 
 ---
 
 ## Key Concepts
 
-### Activity Report
+### Report artifact
 
-Summarizes session activity:
-```go
-type ActivityReport struct {
-    SessionID string
-    StartTime time.Time
-    EndTime   *time.Time
-    EventCount int
-    Summary   string
-    Highlights []string
-}
-```
+`Report` (JSON) carries identity (`cadence, window_start, window_end`), bounded lists (`highlights, completed, decisions, goals, open_loops`, each ≤ 10 × 240 runes), `source_ids/source_hash`, `revision`, `generator`, and `modules` (monthly only). Persisted in the `reports` table with the artifact fields in one JSON `artifact` column; `migrateArtifactColumn` adds the column on old databases.
 
-### Recall Report
+### Generation
 
-Traces a recall operation:
-```go
-type RecallReport struct {
-    TraceID      string
-    Intent       string
-    Mode         string        // "fast" or "deep"
-    PlannerMode  string        // "deterministic" or "llm"
-    CardsFound   int
-    EvidenceChars int
-    Duration     time.Duration
-}
-```
+`Generate(ctx, cadence, now)` is source-idempotent: `INSERT OR IGNORE` keyed on `(cadence, window_start, source_hash)`. An empty window never produces a report (`ErrNotFound`). The hourly loop and lazy `latest` miss share this path. Monthly reports attach `modules` names for active entries created inside the window (`moduleNamesInWindow`); daily/weekly never do.
 
-### Service Operations
+### Human modules (ADR-0009)
 
-**GenerateActivityReport(ctx, sessionID):**
-- Fetch activity trace
-- Summarize events
-- Extract highlights
-- Return ActivityReport
+`human_modules` table: user-only write path (no agent writes, no GovernedService/audit), `kind ∈ {ambition, suggestion}`, `status ∈ {active, dismissed}` (no hard delete), content ≤ 2000 runes. Non-binding; never projected into ContextView.
 
-**GenerateRecallReport(ctx, traceID):**
-- Fetch recall trace
-- Summarize planner decisions
-- Report card/evidence counts
-- Return RecallReport
+---
+
+## HTTP Surface (registered in internal/server)
+
+| Route | Behavior |
+|-------|----------|
+| `GET /v2/reports?cadence=&limit=` | history, newest first |
+| `GET /v2/reports/latest?cadence=` | latest artifact; lazy generation on miss |
+| `POST /v2/reports/generate` | synchronous idempotent generation |
+| `GET /v2/reports/orientation?budget=` | bounded orientation read with spool-recovery note |
+| `GET /v2/reports/modules?kind=&status=` | list modules (`active` default, `all`/`dismissed`) |
+| `POST /v2/reports/modules` | create module (201) |
+| `PATCH /v2/reports/modules/{id}` | edit content and/or dismiss/reactivate |
 
 ---
 
@@ -84,23 +65,27 @@ GOSUMDB=off go test -v ./internal/report/...
 
 **Behavioral tests:**
 
-- Activity reports contain accurate event counts
-- Recall reports trace planner decisions
-- Reports are human-readable
-- Reports preserve all important details
+- Generation is source-idempotent and revision increments per `(cadence, window_start)`
+- Artifact derivation bounds and decision filtering
+- Legacy schema migration (pre-artifact rows read back with defaults, `modules == []`)
+- Publication idempotency and failure isolation (publisher error leaves SQLite intact)
+- Enricher fallback keeps `generator == "deterministic"`
+- Module CRUD, validation bounds, `active ⇄ dismissed` state machine
+- Monthly-only attachment: daily/weekly carry no modules; dismissed/out-of-window entries excluded
+- Orientation truncates to budget and carries the spool-recovery note
 
 ---
 
 ## Conventions
 
-- Reports are generated on-demand, not persisted
-- All timestamps are UTC
-- Reports are immutable (generated once)
+- All timestamps stored as UTC RFC3339Nano
+- Reports are point-in-time snapshots; re-generating an unchanged window returns the saved row
+- Module writes are user actions only; nothing in this package mutates authority
 
 ---
 
 ## MANUAL
 
-Keep reports focused on summarization. Storage goes to lifecycle or persistence layer.
+Keep report generation non-fatal on publication failure; SQLite is the source of truth for HTTP reads. Modules stay non-binding and out of ContextView.
 
 Parent reference: ../AGENTS.md

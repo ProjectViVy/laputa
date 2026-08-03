@@ -192,24 +192,174 @@ func TestReportOrientationEndpoint(t *testing.T) {
 func TestReportEndpointsUnavailable(t *testing.T) {
 	srv := &Server{Addr: ":0"}
 	for _, route := range []struct {
-		method, path string
+		method, path, body string
 	}{
-		{http.MethodGet, "/v2/reports?cadence=daily"},
-		{http.MethodGet, "/v2/reports/latest?cadence=daily"},
-		{http.MethodPost, "/v2/reports/generate"},
-		{http.MethodGet, "/v2/reports/orientation"},
+		{http.MethodGet, "/v2/reports?cadence=daily", ""},
+		{http.MethodGet, "/v2/reports/latest?cadence=daily", ""},
+		{http.MethodPost, "/v2/reports/generate", `{"cadence":"daily"}`},
+		{http.MethodGet, "/v2/reports/orientation", ""},
+		{http.MethodGet, "/v2/reports/modules?kind=ambition", ""},
+		{http.MethodPost, "/v2/reports/modules", `{"kind":"ambition","content":"x"}`},
+		{http.MethodPatch, "/v2/reports/modules/mod_1", `{"status":"dismissed"}`},
 	} {
-		var body *bytes.Buffer
-		if route.method == http.MethodPost {
-			body = bytes.NewBufferString(`{"cadence":"daily"}`)
-		} else {
-			body = bytes.NewBuffer(nil)
-		}
-		req := httptest.NewRequest(route.method, route.path, body)
+		req := httptest.NewRequest(route.method, route.path, bytes.NewBufferString(route.body))
 		rec := httptest.NewRecorder()
 		srv.HTTPHandler().ServeHTTP(rec, req)
 		if rec.Code != http.StatusServiceUnavailable {
 			t.Errorf("%s %s: status=%d, want 503", route.method, route.path, rec.Code)
 		}
 	}
+}
+
+func TestModuleEndpointsLifecycle(t *testing.T) {
+	srv := reportTestServer(t, nil)
+
+	create := func(kind, content string) (int, string) {
+		req := httptest.NewRequest(http.MethodPost, "/v2/reports/modules", bytes.NewBufferString(`{"kind":"`+kind+`","content":"`+content+`"}`))
+		rec := httptest.NewRecorder()
+		srv.HTTPHandler().ServeHTTP(rec, req)
+		return rec.Code, rec.Body.String()
+	}
+
+	code, body := create("ambition", "become the best gardener")
+	if code != http.StatusCreated {
+		t.Fatalf("create status=%d body=%s", code, body)
+	}
+	var amb report.Module
+	if err := json.NewDecoder(bytes.NewBufferString(body)).Decode(&amb); err != nil {
+		t.Fatal(err)
+	}
+	if amb.ID == "" || amb.Kind != report.ModuleKindAmbition || amb.Status != report.ModuleStatusActive {
+		t.Fatalf("created=%+v", amb)
+	}
+	if code, body := create("suggestion", "add dark theme"); code != http.StatusCreated {
+		t.Fatalf("create suggestion status=%d body=%s", code, body)
+	}
+
+	list := func(status string) (int, []report.Module) {
+		req := httptest.NewRequest(http.MethodGet, "/v2/reports/modules?kind=ambition&status="+status, nil)
+		rec := httptest.NewRecorder()
+		srv.HTTPHandler().ServeHTTP(rec, req)
+		var resp struct {
+			Items []report.Module `json:"items"`
+			Count int             `json:"count"`
+		}
+		_ = json.NewDecoder(rec.Body).Decode(&resp)
+		return rec.Code, resp.Items
+	}
+
+	code, items := list("active")
+	if code != http.StatusOK || len(items) != 1 || items[0].ID != amb.ID {
+		t.Fatalf("list active code=%d items=%+v", code, items)
+	}
+	code, items = list("all")
+	if code != http.StatusOK || len(items) != 1 {
+		t.Fatalf("list all code=%d items=%+v", code, items)
+	}
+
+	req := httptest.NewRequest(http.MethodPatch, "/v2/reports/modules/"+amb.ID, bytes.NewBufferString(`{"content":"become the best gardener in the world"}`))
+	rec := httptest.NewRecorder()
+	srv.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("patch edit status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPatch, "/v2/reports/modules/"+amb.ID, bytes.NewBufferString(`{"status":"dismissed"}`))
+	rec = httptest.NewRecorder()
+	srv.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("patch dismiss status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	code, items = list("active")
+	if code != http.StatusOK || len(items) != 0 {
+		t.Fatalf("active after dismiss=%+v", items)
+	}
+	code, items = list("dismissed")
+	if code != http.StatusOK || len(items) != 1 || items[0].ID != amb.ID {
+		t.Fatalf("dismissed=%+v", items)
+	}
+}
+
+func TestModuleEndpointsValidation(t *testing.T) {
+	srv := reportTestServer(t, nil)
+	req := httptest.NewRequest(http.MethodPost, "/v2/reports/modules", bytes.NewBufferString(`{"kind":"ambition","content":"exists"}`))
+	rec := httptest.NewRecorder()
+	srv.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("seed module status=%d", rec.Code)
+	}
+	var seed report.Module
+	_ = json.NewDecoder(rec.Body).Decode(&seed)
+
+	cases := []struct {
+		method, path, body string
+		want               int
+	}{
+		{http.MethodPost, "/v2/reports/modules", `{"kind":"wish","content":"x"}`, http.StatusBadRequest},
+		{http.MethodPost, "/v2/reports/modules", `{"kind":"ambition","content":""}`, http.StatusBadRequest},
+		{http.MethodPost, "/v2/reports/modules", `{"kind":"ambition","content":"   "}`, http.StatusBadRequest},
+		{http.MethodPost, "/v2/reports/modules", `{"kind":"ambition","content":"` + longModuleContent() + `"}`, http.StatusBadRequest},
+		{http.MethodPost, "/v2/reports/modules", `not-json`, http.StatusBadRequest},
+		{http.MethodGet, "/v2/reports/modules?kind=ambition&status=bogus", "", http.StatusBadRequest},
+		{http.MethodGet, "/v2/reports/modules?kind=wish", "", http.StatusBadRequest},
+		{http.MethodPatch, "/v2/reports/modules/mod_nope", `{"status":"dismissed"}`, http.StatusNotFound},
+		{http.MethodPatch, "/v2/reports/modules/" + seed.ID, `{}`, http.StatusBadRequest},
+		{http.MethodPatch, "/v2/reports/modules/" + seed.ID, `{"status":"bogus"}`, http.StatusBadRequest},
+	}
+	for _, c := range cases {
+		req := httptest.NewRequest(c.method, c.path, bytes.NewBufferString(c.body))
+		rec := httptest.NewRecorder()
+		srv.HTTPHandler().ServeHTTP(rec, req)
+		if rec.Code != c.want {
+			t.Errorf("%s %s body=%q: status=%d, want %d", c.method, c.path, c.body, rec.Code, c.want)
+		}
+	}
+}
+
+func TestMonthlyReportModulesViaHTTP(t *testing.T) {
+	// Open with an empty lister so the startup loop inserts no report;
+	// the lister is populated only after the module exists, so the
+	// generate call performs a fresh insert with modules attached.
+	lister := &srvReportLister{}
+	path := filepath.Join(t.TempDir(), "garden.db")
+	svc, err := report.Open(path, lister, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = svc.Close() })
+	srv := &Server{Reports: svc, Addr: ":0"}
+
+	req := httptest.NewRequest(http.MethodPost, "/v2/reports/modules", bytes.NewBufferString(`{"kind":"ambition","content":"ship gate f"}`))
+	rec := httptest.NewRecorder()
+	srv.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	lister.items = []facade.Memory{{ID: "mem_1", Content: "august work", UpdatedAt: time.Date(2026, 8, 2, 12, 0, 0, 0, time.UTC)}}
+
+	req = httptest.NewRequest(http.MethodPost, "/v2/reports/generate", bytes.NewBufferString(`{"cadence":"monthly"}`))
+	rec = httptest.NewRecorder()
+	srv.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("generate status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Generated bool          `json:"generated"`
+		Report    report.Report `json:"report"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if !resp.Generated || len(resp.Report.Modules) != 1 || resp.Report.Modules[0] != "AMBITION" {
+		t.Fatalf("resp=%+v", resp)
+	}
+}
+
+func longModuleContent() string {
+	runes := make([]byte, 2001)
+	for i := range runes {
+		runes[i] = 'x'
+	}
+	return string(runes)
 }

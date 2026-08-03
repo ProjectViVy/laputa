@@ -6,8 +6,11 @@ export class ApiError extends Error {
   }
 }
 
-export async function get<T>(path: string): Promise<T> {
-  const res = await fetch(path, { headers: { Accept: "application/json" } });
+async function send<T>(path: string, init: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    ...init,
+    headers: { Accept: "application/json", ...(init.headers ?? {}) },
+  });
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -19,4 +22,24 @@ export async function get<T>(path: string): Promise<T> {
     throw new ApiError(res.status, detail);
   }
   return (await res.json()) as T;
+}
+
+export function get<T>(path: string): Promise<T> {
+  return send<T>(path, {});
+}
+
+export function post<T>(path: string, body: unknown): Promise<T> {
+  return send<T>(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export function patch<T>(path: string, body: unknown): Promise<T> {
+  return send<T>(path, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }

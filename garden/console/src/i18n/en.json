@@ -11,6 +11,7 @@
     "materials": "Materials & Evidence",
     "trace": "Recall Trace",
     "reports": "Reports",
+    "modules": "Ambitions & Suggestions",
     "operations": "Operations",
     "library": "Architecture Library",
     "settings": "Settings"
@@ -201,6 +202,23 @@
       "decisions": "Decisions",
       "openLoops": "Open loops"
     }
+  },
+  "modules": {
+    "title": "Ambitions & Suggestions",
+    "lede": "Monthly-only human modules. Non-binding: they never become commitments, never alter Frozen Core, and are never injected into context. Monthly reports may reference them.",
+    "ambition": "AMBITION",
+    "suggestion": "USER SUGGESTIONS",
+    "create": "Add",
+    "placeholder": "Write one ambition or suggestion…",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "dismiss": "Dismiss",
+    "reactivate": "Restore",
+    "empty": "Nothing here yet.",
+    "statusActive": "active",
+    "statusDismissed": "dismissed",
+    "created": "Created {{date}}"
   },
   "placeholder": {
     "title": "Accepted design — not yet implemented",

@@ -1085,6 +1085,140 @@
   color: var(--ink-3);
 }
 
+/* ============ human modules (AMBITION / USER SUGGESTIONS) ============ */
+.modules-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.modules-column {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.modules-title {
+  margin: 0 0 12px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: var(--ink-1);
+}
+
+.modules-create {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.modules-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink-1);
+  font: inherit;
+  font-size: 12px;
+  padding: 8px;
+  resize: vertical;
+}
+
+.modules-btn {
+  align-self: flex-start;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink-1);
+  font: inherit;
+  font-size: 11.5px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.modules-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg-0);
+}
+
+.modules-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.modules-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modules-item {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.modules-item.dismissed {
+  opacity: 0.55;
+}
+
+.modules-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.modules-badge {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+}
+
+.modules-badge.active {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.modules-badge.dismissed {
+  color: var(--ink-3);
+}
+
+.modules-item-date {
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+.modules-content {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--ink-1);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.modules-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.modules-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 /* ============ design-preview mode ============ */
 .preview-mode .shell-main {
   border-top: 2px dashed var(--info);

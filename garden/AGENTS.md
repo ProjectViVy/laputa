@@ -93,6 +93,14 @@ POST   /v2/evolution/runs         # Start evolution run
 POST   /v2/evolution/proposals    # Submit evolution proposal
 GET    /v2/evolution/proposals/{id} # Retrieve proposal details
 
+GET    /v2/reports                # Report history (daily/weekly/monthly)
+GET    /v2/reports/latest         # Latest artifact; lazy generation on miss
+POST   /v2/reports/generate       # Synchronous idempotent generation
+GET    /v2/reports/orientation    # Bounded Mentle-outage orientation read
+GET    /v2/reports/modules        # AMBITION / USER SUGGESTIONS list (ADR-0009)
+POST   /v2/reports/modules        # Create module (user-only write path)
+PATCH  /v2/reports/modules/{id}   # Edit content / dismiss / reactivate
+
 GET    /v2/pipelines              # Pipeline inspection
 GET    /health                    # Health check
 ```

@@ -17,6 +17,7 @@ This directory is the canonical entry point for the next Garden-Laputa MemoryOS 
 | [ADR-0006: Semantic Ingestion and Obsidian Source Adapter](./architecture/0006-semantic-ingestion-and-obsidian-adapter.md) | Raw-first `source_artifact`/`semantic_unit` kinds, provenance-preserving semantic units, `SourceAdapter` contract, bounded real-offset evidence read, no second summary authority | accepted |
 | [ADR-0007: EvoMap Mailbox](./architecture/0007-evomap-mailbox.md) | Inbox/outbox state machines, evidence refs, privacy gate, retry→dead-letter, Hub disabled by default, `mailbox_items` SQLite persistence, audit of state changes | accepted |
 | [ADR-0008: Legacy Compatibility Removal](./architecture/0008-legacy-compatibility-removal.md) | Deletes v1 routes, CRUD translator chain, 06/10/11/12/13/14 registry sections, and 410 compat mechanism; promotes target functionality to v2 | accepted |
+| [ADR-0009: AMBITION / USER SUGGESTIONS Modules](./architecture/0009-ambition-user-suggestions-modules.md) | Monthly-only human modules relocated into report-system SQLite after sections 10/11 were deleted; non-binding, user-only write path, monthly report `modules` array | accepted |
 
 ## Archive
 

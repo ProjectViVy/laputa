@@ -215,3 +215,24 @@ export interface ReportsListResponse {
   items: ReportItem[];
   count: number;
 }
+
+// ============ Human modules (AMBITION / USER SUGGESTIONS) ============
+
+export type ModuleKind = "ambition" | "suggestion";
+export type ModuleStatus = "active" | "dismissed";
+
+export interface HumanModule {
+  id: string;
+  kind: ModuleKind;
+  content: string;
+  status: ModuleStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ModulesListResponse {
+  kind: ModuleKind;
+  status: string;
+  items: HumanModule[];
+  count: number;
+}

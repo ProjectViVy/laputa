@@ -1,8 +1,8 @@
 # TODOLIST — Garden MemoryOS
 
 > **Last updated:** 2026-08-03  
-> **Current focus:** Gate E complete — ADR-0008 accepted and executed: all legacy compatibility removed (v1 routes + CRUD translator chain + `06/10/11/12/13/14` registry sections + 410 compat mechanism); target functionality promoted to v2 (`/v2/memories`, `/v2/ingest/sessions`, `/v2/ingestions/{id}`, `/v2/pipelines*`, `/v2/recall/bootstrap`); laputa registry converged to 01-05 + 07-09; e2e rewritten against v2. Next = remaining Now items (baseline test snapshot, doc-transition commit review).  
-> **Architecture source:** [0001 MemoryOS vNext Architecture](docs/architecture/0001-memoryos-vnext-architecture.md) + [ADR-0002 Cognitive Partition](docs/architecture/0002-laputa-cognitive-partition-decision.md) + [ADR-0004 Cognitive Files Migration](docs/architecture/0004-cognitive-files-migration.md) + [ADR-0005 Report System Design](docs/architecture/0005-report-system-design.md) + [ADR-0006 Semantic Ingestion](docs/architecture/0006-semantic-ingestion-and-obsidian-adapter.md) + [ADR-0007 EvoMap Mailbox](docs/architecture/0007-evomap-mailbox.md) + [ADR-0008 Legacy Compatibility Removal](docs/architecture/0008-legacy-compatibility-removal.md)  
+> **Current focus:** Gate F complete — ADR-0009 accepted and executed: AMBITION / USER SUGGESTIONS relocated from the deleted sections 10/11 (ADR-0008) into report-system SQLite as monthly-only human modules; non-binding, user-only write path (`/v2/reports/modules` GET/POST/PATCH); monthly reports attach a `modules` array; console Modules page with i18n; e2e covers the full lifecycle. Next = remaining Now items are closed; candidate batches: Obsidian adapter runtime (ADR-0006 §4), EvoMap Hub transport, host adapters (Wave 7).  
+> **Architecture source:** [0001 MemoryOS vNext Architecture](docs/architecture/0001-memoryos-vnext-architecture.md) + [ADR-0002 Cognitive Partition](docs/architecture/0002-laputa-cognitive-partition-decision.md) + [ADR-0004 Cognitive Files Migration](docs/architecture/0004-cognitive-files-migration.md) + [ADR-0005 Report System Design](docs/architecture/0005-report-system-design.md) + [ADR-0006 Semantic Ingestion](docs/architecture/0006-semantic-ingestion-and-obsidian-adapter.md) + [ADR-0007 EvoMap Mailbox](docs/architecture/0007-evomap-mailbox.md) + [ADR-0008 Legacy Compatibility Removal](docs/architecture/0008-legacy-compatibility-removal.md) + [ADR-0009 AMBITION / USER SUGGESTIONS Modules](docs/architecture/0009-ambition-user-suggestions-modules.md)  
 > This file tracks execution status only. It must not restate design contracts.
 
 **Legend:** ✅ done · 🚧 active · ⬜ planned · ⛔ blocked  
@@ -12,8 +12,8 @@
 
 ## 🔧 Now — documentation and migration boundary
 
-- [ ] `[G]` Commit/record the existing documentation transition only after reviewing all pre-existing dirty worktrees.
-- [ ] Record a current baseline-test snapshot for Laputa governance, Mentle facade, Garden internal and Garden E2E suites.
+- [x] `[G]` Commit/record the existing documentation transition only after reviewing all pre-existing dirty worktrees. (Gate E commit `3c824e8`; pre-existing `tsconfig.tsbuildinfo`/`.agents`/`.omc` reviewed and excluded)
+- [x] Record a current baseline-test snapshot for Laputa governance, Mentle facade, Garden internal and Garden E2E suites. (220/220 green at `3c824e8` — see `docs/baseline-test-snapshot-2026-08-03.md`)
 - [x] Add this `TODOLIST.MD` to version control and retain links from root project guidance.
 - [x] Produce a **separate, approved physical migration plan** before changing the legacy 14-section Go registry or persisted files (done: ADR-0008, executed in Gate E).
 
@@ -81,7 +81,7 @@ Archived pre-vNext docs and established active documentation navigation. The act
 - [x] `[R][G]` Define bounded Mentle-outage orientation read; reports must never replace raw transient-spool recovery.
 - [x] `[L]` Retire `13-report_indexes` from the target model; locate report metadata inside the report subsystem.
 
-**Status:** Complete. ADR-0005 accepted; artifact contract + SQLite migration, dual-write publisher (07/08/09, report_system actor), optional LLM enrichment, v2 endpoints (list/latest/generate/orientation), Console Reports page shipped. AMBITION / USER SUGGESTIONS modules specified in ADR-0005 only; implementation deferred to a later batch.
+**Status:** Complete. ADR-0005 accepted; artifact contract + SQLite migration, dual-write publisher (07/08/09, report_system actor), optional LLM enrichment, v2 endpoints (list/latest/generate/orientation), Console Reports page shipped. AMBITION / USER SUGGESTIONS modules were specified in ADR-0005 §8 and delivered in Gate F (ADR-0009).
 
 **Exit:** report data model and acceptance tests approved.
 
@@ -126,6 +126,21 @@ Archived pre-vNext docs and established active documentation navigation. The act
 **Status:** Complete. ADR-0008 accepted; full verification green (laputa governance, mentle facade, garden internal, e2e 5.3s). Legacy files on user machines are no longer created/read but are not actively deleted.
 
 **Exit:** physical migration plan approved and executed without data loss (inert legacy JSON files remain on disk, unreferenced).
+
+### ✅ Gate F — AMBITION / USER SUGGESTIONS modules (ADR-0009)
+
+**Goal:** deliver the ADR-0005 §8 monthly-only human modules without reviving sections 10/11 — relocated into report-system SQLite, non-binding, user-only write path, referenced from monthly reports.
+
+- [x] `[R]` Write ADR-0009: modules relocate to the report system (`human_modules` table in garden state db); supersede the ADR-0005 §8 carrier sentence (sections 10/11 deleted by ADR-0008).
+- [x] `[R]` Module store + CRUD in `internal/report`: `kind ∈ {ambition, suggestion}`, content ≤ 2000 runes, `active ⇄ dismissed`, no hard delete, no governance/audit dependency.
+- [x] `[R]` Monthly-only attachment: monthly reports carry `modules: ["AMBITION","USER SUGGESTIONS"]` for in-window active entries; daily/weekly never do; artifact JSON additive (legacy rows read back `modules == []`).
+- [x] `[G]` v2 endpoints `GET/POST /v2/reports/modules`, `PATCH /v2/reports/modules/{id}` with 200/201/400/404/503 paths.
+- [x] `[F]` Console Modules page (AMBITION + USER SUGGESTIONS columns, create/edit/dismiss/reactivate, i18n en/zh); first console write path (`post`/`patch` clients).
+- [x] `[G]` Tests: report unit (CRUD/bounds/state machine/monthly-only/legacy compat), server handlers, e2e lifecycle + monthly `modules` array, Context Plane regression (module content never in `/v2/recall/*`).
+
+**Status:** Complete. ADR-0009 accepted; full verification green (garden internal 13 pkgs, e2e 5.2s, console `tsc --noEmit`; laputa/mentle regression untouched).
+
+**Exit:** ADR-0009 test matrix §5 all pass; modules are non-binding and user-only with no ContextView projection.
 
 ---
 

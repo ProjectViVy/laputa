@@ -44,6 +44,7 @@ type Report struct {
 	SourceRefs    []string  `json:"source_refs"`
 	Revision      int       `json:"revision"`
 	Generator     string    `json:"generator"`
+	Modules       []string  `json:"modules"`
 }
 
 // artifact carries the ADR-0005 artifact fields persisted in one column.
@@ -56,6 +57,7 @@ type artifact struct {
 	SourceRefs []string `json:"source_refs"`
 	Revision   int      `json:"revision"`
 	Generator  string   `json:"generator"`
+	Modules    []string `json:"modules"`
 }
 
 func (a artifact) apply(r *Report) {
@@ -67,6 +69,7 @@ func (a artifact) apply(r *Report) {
 	r.SourceRefs = a.SourceRefs
 	r.Revision = a.Revision
 	r.Generator = a.Generator
+	r.Modules = a.Modules
 	if r.Generator == "" {
 		r.Generator = GeneratorDeterministic
 	}
@@ -84,6 +87,9 @@ func (a artifact) apply(r *Report) {
 	}
 	if r.SourceRefs == nil {
 		r.SourceRefs = []string{}
+	}
+	if r.Modules == nil {
+		r.Modules = []string{}
 	}
 }
 
@@ -105,7 +111,7 @@ func Open(path string, memory MemoryLister, publisher Publisher, enricher Enrich
 	if err != nil {
 		return nil, err
 	}
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS reports(cadence TEXT NOT NULL,window_start TEXT NOT NULL,window_end TEXT NOT NULL,source_ids TEXT NOT NULL,source_hash TEXT NOT NULL,title TEXT NOT NULL,summary TEXT NOT NULL,highlights TEXT NOT NULL,open_questions TEXT NOT NULL,generated_at TEXT NOT NULL,PRIMARY KEY(cadence,window_start,source_hash));CREATE INDEX IF NOT EXISTS reports_latest ON reports(cadence,generated_at DESC);`)
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS reports(cadence TEXT NOT NULL,window_start TEXT NOT NULL,window_end TEXT NOT NULL,source_ids TEXT NOT NULL,source_hash TEXT NOT NULL,title TEXT NOT NULL,summary TEXT NOT NULL,highlights TEXT NOT NULL,open_questions TEXT NOT NULL,generated_at TEXT NOT NULL,PRIMARY KEY(cadence,window_start,source_hash));CREATE INDEX IF NOT EXISTS reports_latest ON reports(cadence,generated_at DESC);CREATE TABLE IF NOT EXISTS human_modules(id TEXT PRIMARY KEY,kind TEXT NOT NULL CHECK(kind IN ('ambition','suggestion')),content TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','dismissed')),created_at TEXT NOT NULL,updated_at TEXT NOT NULL);`)
 	if err != nil {
 		db.Close()
 		return nil, err
@@ -212,7 +218,7 @@ func (s *Service) Generate(ctx context.Context, cadence string, now time.Time) (
 		}
 	}
 	sum := sha256.Sum256([]byte(strings.Join(ids, "\n")))
-	r := Report{Cadence: cadence, WindowStart: start, WindowEnd: end, SourceIDs: ids, SourceHash: "sha256:" + hex.EncodeToString(sum[:]), Title: strings.Title(cadence) + " Garden Memory Report", Summary: summary.String(), Highlights: highlights, OpenQuestions: []string{}, GeneratedAt: time.Now().UTC(), Scope: "mentle_active", Completed: highlights, Decisions: decisions, Goals: []string{}, OpenLoops: []string{}, SourceRefs: ids, Generator: GeneratorDeterministic}
+	r := Report{Cadence: cadence, WindowStart: start, WindowEnd: end, SourceIDs: ids, SourceHash: "sha256:" + hex.EncodeToString(sum[:]), Title: strings.Title(cadence) + " Garden Memory Report", Summary: summary.String(), Highlights: highlights, OpenQuestions: []string{}, GeneratedAt: time.Now().UTC(), Scope: "mentle_active", Completed: highlights, Decisions: decisions, Goals: []string{}, OpenLoops: []string{}, SourceRefs: ids, Generator: GeneratorDeterministic, Modules: []string{}}
 	if s.Enricher != nil {
 		if enriched, eerr := s.Enricher.Enrich(ctx, r); eerr != nil {
 			log.Printf("report enrich %s: %v", cadence, eerr)
@@ -220,11 +226,18 @@ func (s *Service) Generate(ctx context.Context, cadence string, now time.Time) (
 			r = enriched
 		}
 	}
+	if cadence == "monthly" {
+		names, merr := s.moduleNamesInWindow(ctx, start, end)
+		if merr != nil {
+			return Report{}, merr
+		}
+		r.Modules = names
+	}
 	r.Revision, err = s.nextRevision(ctx, cadence, start)
 	if err != nil {
 		return Report{}, err
 	}
-	res, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO reports(cadence,window_start,window_end,source_ids,source_hash,title,summary,highlights,open_questions,generated_at,artifact) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, r.Cadence, r.WindowStart.Format(time.RFC3339Nano), r.WindowEnd.Format(time.RFC3339Nano), encode(r.SourceIDs), r.SourceHash, r.Title, r.Summary, encode(r.Highlights), encode(r.OpenQuestions), r.GeneratedAt.Format(time.RFC3339Nano), encode(artifact{Scope: r.Scope, Goals: r.Goals, Completed: r.Completed, Decisions: r.Decisions, OpenLoops: r.OpenLoops, SourceRefs: r.SourceRefs, Revision: r.Revision, Generator: r.Generator}))
+	res, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO reports(cadence,window_start,window_end,source_ids,source_hash,title,summary,highlights,open_questions,generated_at,artifact) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, r.Cadence, r.WindowStart.Format(time.RFC3339Nano), r.WindowEnd.Format(time.RFC3339Nano), encode(r.SourceIDs), r.SourceHash, r.Title, r.Summary, encode(r.Highlights), encode(r.OpenQuestions), r.GeneratedAt.Format(time.RFC3339Nano), encode(artifact{Scope: r.Scope, Goals: r.Goals, Completed: r.Completed, Decisions: r.Decisions, OpenLoops: r.OpenLoops, SourceRefs: r.SourceRefs, Revision: r.Revision, Generator: r.Generator, Modules: r.Modules}))
 	if err != nil {
 		return Report{}, err
 	}

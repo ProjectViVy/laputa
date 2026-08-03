@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/dashimaki/garden/internal/recall"
+	"github.com/dashimaki/garden/internal/report"
 	"github.com/dashimaki/laputa/governance"
 	"github.com/dashimaki/laputa/governance/cognitive"
 )
@@ -71,6 +72,57 @@ func containsAny(haystack string, markers map[string]string) bool {
 		}
 	}
 	return false
+}
+
+func TestModuleContentNeverInContext(t *testing.T) {
+	dir := t.TempDir()
+	store, err := governance.NewFileStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := governance.NewEngine(store)
+	if err := engine.Initialize(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	svc, err := report.Open(filepath.Join(t.TempDir(), "garden.db"), nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = svc.Close() })
+	srv := &Server{FastRecall: &recall.FastService{Gov: engine}, Reports: svc, Addr: ":0"}
+
+	markers := map[string]string{
+		"ambition":   "AMBITION_MARKER_9F2A",
+		"suggestion": "SUGGESTION_MARKER_7C4E",
+	}
+	for kind, marker := range markers {
+		req := httptest.NewRequest(http.MethodPost, "/v2/reports/modules", bytes.NewBufferString(`{"kind":"`+kind+`","content":"`+marker+`"}`))
+		rec := httptest.NewRecorder()
+		srv.HTTPHandler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("create %s status=%d body=%s", kind, rec.Code, rec.Body.String())
+		}
+	}
+
+	fastReq := httptest.NewRequest(http.MethodPost, "/v2/recall/fast", bytes.NewBufferString(`{"query":"ambition marker","budget_chars":6000}`))
+	rec := httptest.NewRecorder()
+	srv.HTTPHandler().ServeHTTP(rec, fastReq)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("fast recall status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); containsAny(body, markers) {
+		t.Errorf("module content leaked into fast recall: %s", body)
+	}
+
+	bootReq := httptest.NewRequest(http.MethodPost, "/v2/recall/bootstrap", bytes.NewBufferString(`{"intent":"bootstrap","budget_chars":6000}`))
+	rec = httptest.NewRecorder()
+	srv.HTTPHandler().ServeHTTP(rec, bootReq)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("bootstrap status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); containsAny(body, markers) {
+		t.Errorf("module content leaked into bootstrap: %s", body)
+	}
 }
 
 func TestCognitiveWorldEndpoint(t *testing.T) {
