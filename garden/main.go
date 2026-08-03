@@ -217,6 +217,26 @@ func main() {
 	defer evoEvents.Close()
 	var evoProvider evolution.EvolverProvider
 	components["evolution"] = "degraded"
+	if hub, hubErr := evolution.OpenHubClient(evolution.HubClientOptions{
+		BaseURL:   os.Getenv("GARDEN_EVOMAP_HUB_URL"),
+		CredsPath: expandHome(os.Getenv("GARDEN_EVOMAP_CREDS")),
+	}); hubErr != nil {
+		log.Printf("evomap unavailable: %v", hubErr)
+	} else {
+		if !hub.HasCredentials() && os.Getenv("GARDEN_EVOMAP_AUTO_REGISTER") != "0" {
+			if claimURL, regErr := hub.EnsureRegistered(ctx); regErr != nil {
+				log.Printf("evomap registration failed: %v", regErr)
+			} else if claimURL != "" {
+				log.Printf("evomap node registered; claim (24h window): %s", claimURL)
+			}
+		}
+		if hub.HasCredentials() {
+			evoProvider = evolution.NewEvoMapProvider(hub, evoStore, evolution.DefaultProviderLimits(), os.Getenv("GARDEN_EVOMAP_HUB_PUBLISH") == "1")
+			components["evolution"] = "ok"
+		} else {
+			log.Printf("evomap credentials unavailable; run 'go run ./cmd/evomap hello' or set GARDEN_EVOMAP_CREDS")
+		}
+	}
 	evoService := &evolution.Service{Provider: evoProvider, Store: evoStore, Events: evoEvents, Hub: evolution.DefaultHubPolicy()}
 
 	mailboxStore, err := mailbox.OpenStore(stateDB)

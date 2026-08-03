@@ -1,8 +1,8 @@
 # TODOLIST — Garden MemoryOS
 
 > **Last updated:** 2026-08-03  
-> **Current focus:** Gate F complete — ADR-0009 accepted and executed: AMBITION / USER SUGGESTIONS relocated from the deleted sections 10/11 (ADR-0008) into report-system SQLite as monthly-only human modules; non-binding, user-only write path (`/v2/reports/modules` GET/POST/PATCH); monthly reports attach a `modules` array; console Modules page with i18n; e2e covers the full lifecycle. Next = remaining Now items are closed; candidate batches: Obsidian adapter runtime (ADR-0006 §4), EvoMap Hub transport, host adapters (Wave 7).  
-> **Architecture source:** [0001 MemoryOS vNext Architecture](docs/architecture/0001-memoryos-vnext-architecture.md) + [ADR-0002 Cognitive Partition](docs/architecture/0002-laputa-cognitive-partition-decision.md) + [ADR-0004 Cognitive Files Migration](docs/architecture/0004-cognitive-files-migration.md) + [ADR-0005 Report System Design](docs/architecture/0005-report-system-design.md) + [ADR-0006 Semantic Ingestion](docs/architecture/0006-semantic-ingestion-and-obsidian-adapter.md) + [ADR-0007 EvoMap Mailbox](docs/architecture/0007-evomap-mailbox.md) + [ADR-0008 Legacy Compatibility Removal](docs/architecture/0008-legacy-compatibility-removal.md) + [ADR-0009 AMBITION / USER SUGGESTIONS Modules](docs/architecture/0009-ambition-user-suggestions-modules.md)  
+> **Current focus:** Gate G complete — ADR-0010 accepted and executed: `evomap-demo` promoted to the formal in-process `EvoMapProvider` (`garden/internal/evolution`), GEP-A2A hub transport with publish/discovery dual-mode runs, mechanical privacy gate, secret redaction, hub-status endpoint, `cmd/evomap` ops CLI, hermetic mock-hub tests + e2e. Next = candidate batches: Obsidian adapter runtime (ADR-0006 §4), publish EvolutionEvent third element, semantic privacy review (ADR-0007), sidecar Evolver, host adapters (Wave 7).  
+> **Architecture source:** [0001 MemoryOS vNext Architecture](docs/architecture/0001-memoryos-vnext-architecture.md) + [ADR-0002 Cognitive Partition](docs/architecture/0002-laputa-cognitive-partition-decision.md) + [ADR-0004 Cognitive Files Migration](docs/architecture/0004-cognitive-files-migration.md) + [ADR-0005 Report System Design](docs/architecture/0005-report-system-design.md) + [ADR-0006 Semantic Ingestion](docs/architecture/0006-semantic-ingestion-and-obsidian-adapter.md) + [ADR-0007 EvoMap Mailbox](docs/architecture/0007-evomap-mailbox.md) + [ADR-0008 Legacy Compatibility Removal](docs/architecture/0008-legacy-compatibility-removal.md) + [ADR-0009 AMBITION / USER SUGGESTIONS Modules](docs/architecture/0009-ambition-user-suggestions-modules.md) + [ADR-0010 EvoMap Hub Transport Provider](docs/architecture/0010-evomap-hub-transport-provider.md)  
 > This file tracks execution status only. It must not restate design contracts.
 
 **Legend:** ✅ done · 🚧 active · ⬜ planned · ⛔ blocked  
@@ -141,6 +141,21 @@ Archived pre-vNext docs and established active documentation navigation. The act
 **Status:** Complete. ADR-0009 accepted; full verification green (garden internal 13 pkgs, e2e 5.2s, console `tsc --noEmit`; laputa/mentle regression untouched).
 
 **Exit:** ADR-0009 test matrix §5 all pass; modules are non-binding and user-only with no ContextView projection.
+
+### ✅ Gate G — EvoMap Hub transport (GEP-A2A) provider (ADR-0010)
+
+**Goal:** promote `cmd/evomap-demo` to the formal in-process `EvoMapProvider` in `garden/internal/evolution` — read/write surface already verified against the live hub; hermetic mock-hub tests for CI.
+
+- [x] `[G]` ADR-0010: in-process GEP-A2A transport refines ADR-0001 §9.2; provider run = local record of one hub round trip (publish-mode / discovery-mode); sidecar reserved for a future real Evolver.
+- [x] `[G]` `HubClient` in `internal/evolution/hub.go`: hello (idempotent auto-register), heartbeat, free search, paid fetch (CLI-only), validate, publish, report; `CanonicalHash`; typed errors (`ErrNoCredentials`/`ErrUnauthorized`/`ErrHubUnreachable`); node_secret redacted everywhere; session-only endpoints (revoke/decision) never implemented.
+- [x] `[G]` `EvoMapProvider`: `CheckOutbound` gate before any network call; publish gated by `GARDEN_EVOMAP_HUB_PUBLISH=1` + bundle policy; deterministic Gene+Capsule pair; `evomap_runs` persistence; `PollRun` local read + heartbeat + MaxLifetime timeout; `Candidates` maps hub search results (confidence from GDI) with local fallback; `Status` liveness view.
+- [x] `[G]` Wiring: `main.go` env config (`GARDEN_EVOMAP_HUB_URL`/`CREDS`/`HUB_PUBLISH`/`AUTO_REGISTER`); degraded (not fatal) without creds/hub; `GET /v2/evolution/hub/status`.
+- [x] `[G]` CLI: `cmd/evomap-demo` → `cmd/evomap` thin wrapper (hello/heartbeat/fetch/search/validate/publish/report); only path to paid fetch tier.
+- [x] `[G]` Tests: `hubtest` hermetic GEP-A2A mock; hub client (auth/redaction/errors/determinism), provider (both modes, gates, degradation, timeout, integration), server (hub/status 200/503, HTTP run flow), e2e (real binary + mock hub: auto-register → run → status).
+
+**Status:** Complete. ADR-0010 accepted; full verification green (garden internal 13 pkgs, e2e 13.8s, live `cmd/evomap heartbeat` against evomap.ai OK; laputa/mentle regression untouched).
+
+**Exit:** ADR-0010 §6 test strategy all pass; degradation paths verified; live-hub verification recorded in the research doc §10.
 
 ---
 

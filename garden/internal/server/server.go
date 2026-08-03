@@ -93,6 +93,7 @@ func (s *Server) HTTPHandler() http.Handler {
 	mux.HandleFunc("GET /v2/evolution/proposals/{proposal_id}", s.handleEvolutionGetProposal)
 	mux.HandleFunc("POST /v2/evolution/proposals/{proposal_id}/review", s.handleEvolutionReviewProposal)
 	mux.HandleFunc("GET /v2/evolution/events/{event_id}", s.handleEvolutionGetEvent)
+	mux.HandleFunc("GET /v2/evolution/hub/status", s.handleEvolutionHubStatus)
 	mux.HandleFunc("GET /v2/mailbox/inbox", s.handleMailboxInbox)
 	mux.HandleFunc("GET /v2/mailbox/outbox", s.handleMailboxOutbox)
 	mux.HandleFunc("GET /v2/mailbox/dead-letter", s.handleMailboxDeadLetter)

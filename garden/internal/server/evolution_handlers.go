@@ -155,3 +155,20 @@ func (s *Server) handleEvolutionGetEvent(w http.ResponseWriter, r *http.Request)
 	}
 	writeJSON(w, http.StatusOK, event)
 }
+
+func (s *Server) handleEvolutionHubStatus(w http.ResponseWriter, r *http.Request) {
+	if s.Evolution == nil {
+		writeError(w, http.StatusServiceUnavailable, errors.New("evolution service unavailable"))
+		return
+	}
+	status, err := s.Evolution.HubStatus(r.Context())
+	if errors.Is(err, evolution.ErrProviderUnavailable) {
+		writeError(w, http.StatusServiceUnavailable, err)
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}

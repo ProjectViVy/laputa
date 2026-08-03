@@ -94,6 +94,13 @@ All ADRs follow this structure:
 | 0001 | Proposed | MemoryOS vNext complete architecture; reconciled by ADR-0002 |
 | 0002 | Accepted | Laputa cognitive partition: Frozen Core, STM, `MEMRULES.MD`, `WORLD.MD`, human reports, removed LTM |
 | 0003 | Accepted | Operations Console design: workbench-first admin UI, governance graph, recall trace, materials/evidence, architecture library, i18n, MVP-0 read-only first |
+| 0004 | Accepted | Cognitive files migration: physical `MEMRULES.MD`/`WORLD.MD` representations, no-data-loss migration policy |
+| 0005 | Accepted | Report system design: artifact contract, monthly AMBITION / USER SUGGESTIONS modules, orientation read |
+| 0006 | Accepted | Semantic ingestion and Obsidian source adapter: raw-first kinds, `SourceAdapter` contract, bounded evidence read |
+| 0007 | Accepted | EvoMap mailbox: inbox/outbox state machines, privacy gate, hub disabled by default, audit |
+| 0008 | Accepted | Legacy compatibility removal: v1 routes, CRUD translator, sections 06/10-14, 410 mechanism |
+| 0009 | Accepted | AMBITION / USER SUGGESTIONS modules relocated into report-system SQLite after sections 10/11 deletion |
+| 0010 | Accepted | EvoMap Hub transport provider: in-process GEP-A2A client, publish gates, discovery via free search, degradation contract |
 
 ---
 

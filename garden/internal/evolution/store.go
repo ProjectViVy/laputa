@@ -38,7 +38,12 @@ CREATE TABLE IF NOT EXISTS evolution_proposals(
  reviewed_at TEXT, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS evolution_candidates(
  candidate_id TEXT PRIMARY KEY, run_id TEXT NOT NULL, kind TEXT NOT NULL,
- candidate_json TEXT NOT NULL, created_at TEXT NOT NULL);`
+ candidate_json TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS evomap_runs(
+ run_id TEXT PRIMARY KEY, mode TEXT NOT NULL, status TEXT NOT NULL,
+ asset_ids_json TEXT NOT NULL DEFAULT '[]', signals_json TEXT NOT NULL DEFAULT '[]',
+ bundle_json TEXT NOT NULL DEFAULT '{}', error TEXT NOT NULL DEFAULT '',
+ created_at TEXT NOT NULL, updated_at TEXT NOT NULL);`
 	if _, err = db.Exec(schema); err != nil {
 		db.Close()
 		return nil, err
@@ -77,6 +82,53 @@ func (s *Store) GetRun(_ context.Context, runID string) (EvolutionRun, error) {
 		run.CompletedAt = &t
 	}
 	return run, nil
+}
+
+// HubRun is the provider-local record of one EvoMap hub round trip
+// (ADR-0010 §2.1). The hub has no run lifecycle; this is Garden's own
+// bookkeeping for publish-mode and discovery-mode runs.
+type HubRun struct {
+	RunID     string
+	Mode      string // "publish" | "discovery"
+	Status    string // "running" | "completed" | "failed"
+	AssetIDs  []string
+	Signals   []string
+	Bundle    EvolutionEvidenceBundle
+	Error     string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+func (s *Store) SaveHubRun(_ context.Context, r HubRun) error {
+	assets, _ := json.Marshal(r.AssetIDs)
+	signals, _ := json.Marshal(r.Signals)
+	bundle, _ := json.Marshal(r.Bundle)
+	_, err := s.db.Exec(
+		`INSERT OR REPLACE INTO evomap_runs(run_id, mode, status, asset_ids_json, signals_json, bundle_json, error, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?)`,
+		r.RunID, r.Mode, r.Status, string(assets), string(signals), string(bundle), r.Error,
+		r.CreatedAt.UTC().Format(time.RFC3339Nano), r.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	)
+	return err
+}
+
+func (s *Store) GetHubRun(_ context.Context, runID string) (HubRun, error) {
+	var r HubRun
+	var assetsJSON, signalsJSON, bundleJSON, createdAt, updatedAt string
+	err := s.db.QueryRow(
+		`SELECT run_id, mode, status, asset_ids_json, signals_json, bundle_json, error, created_at, updated_at FROM evomap_runs WHERE run_id = ?`, runID,
+	).Scan(&r.RunID, &r.Mode, &r.Status, &assetsJSON, &signalsJSON, &bundleJSON, &r.Error, &createdAt, &updatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return HubRun{}, ErrRunNotFound
+	}
+	if err != nil {
+		return HubRun{}, err
+	}
+	_ = json.Unmarshal([]byte(assetsJSON), &r.AssetIDs)
+	_ = json.Unmarshal([]byte(signalsJSON), &r.Signals)
+	_ = json.Unmarshal([]byte(bundleJSON), &r.Bundle)
+	r.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
+	r.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updatedAt)
+	return r, nil
 }
 
 func (s *Store) UpdateRunStatus(_ context.Context, runID, status, errMsg string) error {

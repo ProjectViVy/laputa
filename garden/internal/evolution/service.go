@@ -132,6 +132,21 @@ func (s *Service) GetEvent(ctx context.Context, eventID string) (EvolutionEvent,
 	return s.Events.Get(ctx, eventID)
 }
 
+// HubStatus reports provider liveness (node, claim, credits) when the
+// active provider exposes a status view; otherwise ErrProviderUnavailable.
+func (s *Service) HubStatus(ctx context.Context) (ProviderStatus, error) {
+	if s == nil || s.Provider == nil {
+		return ProviderStatus{}, ErrProviderUnavailable
+	}
+	st, ok := s.Provider.(interface {
+		Status(context.Context) (ProviderStatus, error)
+	})
+	if !ok {
+		return ProviderStatus{}, ErrProviderUnavailable
+	}
+	return st.Status(ctx)
+}
+
 func (s *Service) emitEvent(ctx context.Context, ev EvolutionEvent) {
 	if s.Events != nil {
 		_ = s.Events.Append(ctx, ev)

@@ -18,6 +18,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dashimaki/garden/internal/evolution/hubtest"
 )
 
 const (
@@ -323,6 +325,96 @@ func pollIngestion(t *testing.T, client *http.Client, baseURL, id string) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	t.Fatal("ingestion did not complete")
+}
+
+// TestGardenEvoMapEndToEnd runs the shipped Garden executable against a
+// hermetic mock of the EvoMap hub (GEP-A2A, ADR-0010): startup wiring
+// (auto-registration), a full evolution run round trip over HTTP, and the
+// hub status endpoint. The live hub is never touched.
+func TestGardenEvoMapEndToEnd(t *testing.T) {
+	tempDir := t.TempDir()
+	hub := hubtest.New()
+	defer hub.Close()
+
+	address := freeAddress(t)
+	binary := filepath.Join(tempDir, "garden")
+	if runtime.GOOS == "windows" {
+		binary += ".exe"
+	}
+	build := exec.Command(goTool(), "build", "-o", binary, ".")
+	build.Dir = projectRoot(t)
+	build.Env = append(os.Environ(), "GOSUMDB=off")
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build garden: %v\n%s", err, output)
+	}
+
+	cmd := exec.Command(binary)
+	cmd.Env = append(os.Environ(),
+		"GARDEN_ADDR="+address,
+		"GARDEN_GOVERNANCE_DIR="+filepath.Join(tempDir, "governance"),
+		"GARDEN_LOG_DIR="+filepath.Join(tempDir, "logs"),
+		"GARDEN_STATE_DB="+filepath.Join(tempDir, "garden.db"),
+		"GARDEN_COGNITIVE_DIR="+filepath.Join(tempDir, "cognitive"),
+		"GARDEN_EVOMAP_HUB_URL="+hub.URL,
+		"GARDEN_EVOMAP_CREDS="+filepath.Join(tempDir, "evomap", "node.json"),
+	)
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start garden: %v", err)
+	}
+	t.Cleanup(func() {
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		_ = cmd.Wait()
+	})
+
+	client := &http.Client{Timeout: requestTimeout}
+	baseURL := "http://" + address
+	waitForHealth(t, client, baseURL)
+
+	var health struct {
+		Components map[string]string `json:"components"`
+	}
+	writeJSON(t, client, http.MethodGet, baseURL+"/health", nil, http.StatusOK, &health)
+	if health.Components["evolution"] != "ok" {
+		t.Fatalf("evolution component=%q, want ok (mock hub + auto-register)", health.Components["evolution"])
+	}
+
+	var run struct {
+		RunID    string `json:"run_id"`
+		Status   string `json:"status"`
+		Provider string `json:"provider"`
+	}
+	writeJSON(t, client, http.MethodPost, baseURL+"/v2/evolution/runs", map[string]any{
+		"trigger":       "e2e discovery run",
+		"outcome":       "garden e2e verifies the evomap provider round trip",
+		"trace_ref":     "e2e_trace",
+		"evidence_refs": []string{"e2e_trace"},
+		"policy":        map[string]any{"publication_allowed": false},
+	}, http.StatusAccepted, &run)
+	if run.RunID == "" || run.Provider != "evomap" {
+		t.Fatalf("run=%+v", run)
+	}
+
+	var got struct {
+		Status string `json:"status"`
+	}
+	writeJSON(t, client, http.MethodGet, baseURL+"/v2/evolution/runs/"+run.RunID, nil, http.StatusOK, &got)
+	if got.Status != "completed" {
+		t.Fatalf("run status=%q, want completed", got.Status)
+	}
+
+	var hubStatus struct {
+		NodeID         string  `json:"node_id"`
+		SurvivalStatus string  `json:"survival_status"`
+		CreditBalance  float64 `json:"credit_balance"`
+	}
+	writeJSON(t, client, http.MethodGet, baseURL+"/v2/evolution/hub/status", nil, http.StatusOK, &hubStatus)
+	if hubStatus.NodeID != "node_test_abcd" || hubStatus.SurvivalStatus != "alive" || hubStatus.CreditBalance != 100 {
+		t.Fatalf("hub status=%+v", hubStatus)
+	}
 }
 
 func projectRoot(t *testing.T) string {

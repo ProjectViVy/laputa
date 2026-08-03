@@ -92,6 +92,7 @@ POST   /v2/governance/proposals   # Create or review proposals
 POST   /v2/evolution/runs         # Start evolution run
 POST   /v2/evolution/proposals    # Submit evolution proposal
 GET    /v2/evolution/proposals/{id} # Retrieve proposal details
+GET    /v2/evolution/hub/status   # EvoMap provider liveness (ADR-0010)
 
 GET    /v2/reports                # Report history (daily/weekly/monthly)
 GET    /v2/reports/latest         # Latest artifact; lazy generation on miss
@@ -173,8 +174,16 @@ Garden uses environment variables and optional YAML config:
 | `GARDEN_RAG_API_KEY` | API key for LLM planner | (optional) |
 | `GARDEN_RAG_MODEL` | Model name for planner | (optional) |
 | `GARDEN_LOG_PATH` | Log file path | `~/.garden/garden.log` |
+| `GARDEN_EVOMAP_HUB_URL` | EvoMap hub base URL (GEP-A2A) | `https://evomap.ai` |
+| `GARDEN_EVOMAP_CREDS` | Node credentials file (0600, never commit) | `~/.evomap/node.json` |
+| `GARDEN_EVOMAP_HUB_PUBLISH` | Master switch for publish-mode runs (`1` to enable) | `0` |
+| `GARDEN_EVOMAP_AUTO_REGISTER` | Auto-`hello` when no credentials exist (`0` to disable) | `1` |
 
 Without LLM env vars, Garden uses deterministic planner and reports degradation without failing.
+
+### Evolution Provider (ADR-0010)
+
+The `EvoMapProvider` is the in-process GEP-A2A hub transport. A provider run is a local record of one hub round trip: publish-mode (`GARDEN_EVOMAP_HUB_PUBLISH=1` **and** bundle `policy.publication_allowed=true`) publishes a bounded Gene+Capsule evidence pair; discovery-mode (default) searches the hub by bundle trigger (free tier). Outbound payloads always pass the mechanical privacy gate (`CheckOutbound`, ADR-0007 §4); the provider never calls session-only endpoints (`revoke`/`decision`). Missing credentials or an unreachable hub keep `components["evolution"]="degraded"` — no fatal, no impact on other modules. Manual ops live in `cmd/evomap` (the only path to the paid `fetch` tier).
 
 ### Pipeline Configuration (YAML)
 
@@ -314,7 +323,7 @@ Garden is staged across 7 waves. Current status:
 | 3 | STM Runtime and session semantics | ✓ Complete |
 | 4 | Governance application boundary | ✓ Complete |
 | 5 | Deep Recall and logical arbiter | ✓ Active |
-| 6 | EvoMap/Evolver adapter | Planned |
+| 6 | EvoMap/Evolver adapter | Partial — hub transport provider shipped (ADR-0010); sidecar Evolver still planned |
 | 7 | Host adapters and release hardening | Planned |
 
 ---
