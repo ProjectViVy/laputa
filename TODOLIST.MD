@@ -1,7 +1,7 @@
 # TODOLIST — Garden MemoryOS
 
 > **Last updated:** 2026-08-03  
-> **Current focus:** Gate G complete — ADR-0010 accepted and executed: `evomap-demo` promoted to the formal in-process `EvoMapProvider` (`garden/internal/evolution`), GEP-A2A hub transport with publish/discovery dual-mode runs, mechanical privacy gate, secret redaction, hub-status endpoint, `cmd/evomap` ops CLI, hermetic mock-hub tests + e2e. Next = candidate batches: Obsidian adapter runtime (ADR-0006 §4), publish EvolutionEvent third element, semantic privacy review (ADR-0007), sidecar Evolver, host adapters (Wave 7).  
+> **Current focus:** Gate H complete — comprehensive console API audit (14 frontend endpoints verified, 4 defects fixed incl. live-found module `created_at` bug) + Evolution panel (`/evolution` page with hub status, runs, proposals; new read-only `GET /v2/evolution/runs|proposals`). Audit record: `docs/dev/reference/2026-08-03-console-api-audit.md`. Next = candidate batches: Obsidian adapter runtime (ADR-0006 §4), publish EvolutionEvent third element, semantic privacy review (ADR-0007), mailbox/memories/governance console UI, sidecar Evolver, host adapters (Wave 7).  
 > **Architecture source:** [0001 MemoryOS vNext Architecture](docs/architecture/0001-memoryos-vnext-architecture.md) + [ADR-0002 Cognitive Partition](docs/architecture/0002-laputa-cognitive-partition-decision.md) + [ADR-0004 Cognitive Files Migration](docs/architecture/0004-cognitive-files-migration.md) + [ADR-0005 Report System Design](docs/architecture/0005-report-system-design.md) + [ADR-0006 Semantic Ingestion](docs/architecture/0006-semantic-ingestion-and-obsidian-adapter.md) + [ADR-0007 EvoMap Mailbox](docs/architecture/0007-evomap-mailbox.md) + [ADR-0008 Legacy Compatibility Removal](docs/architecture/0008-legacy-compatibility-removal.md) + [ADR-0009 AMBITION / USER SUGGESTIONS Modules](docs/architecture/0009-ambition-user-suggestions-modules.md) + [ADR-0010 EvoMap Hub Transport Provider](docs/architecture/0010-evomap-hub-transport-provider.md)  
 > This file tracks execution status only. It must not restate design contracts.
 
@@ -156,6 +156,23 @@ Archived pre-vNext docs and established active documentation navigation. The act
 **Status:** Complete. ADR-0010 accepted; full verification green (garden internal 13 pkgs, e2e 13.8s, live `cmd/evomap heartbeat` against evomap.ai OK; laputa/mentle regression untouched).
 
 **Exit:** ADR-0010 §6 test strategy all pass; degradation paths verified; live-hub verification recorded in the research doc §10.
+
+---
+
+### ✅ Gate H — Console API audit + Evolution panel
+
+**Goal:** comprehensive front/back API cross-audit to make the Operations Console fully usable; surface Gate F/G results in the console.
+
+- [x] `[G]` Audit matrix: all 14 frontend-called endpoints verified against backend contracts; SPA fallback, CORS posture, degradation table recorded in `docs/dev/reference/2026-08-03-console-api-audit.md`.
+- [x] `[G]` Frontend fixes: ModulesPage dismiss/reactivate `disabled={busy}` race; `client.ts` empty-body guard; missing `--ink-1` CSS token.
+- [x] `[G]` Backend bug (found live): `UpdateModule` returned zero `created_at` — fixed + regression test.
+- [x] `[G]` New read-only endpoints: `GET /v2/evolution/runs` and `GET /v2/evolution/proposals` (store `ListRuns`/`ListProposals`, limit 1–100), coexisting with the by-id routes.
+- [x] `[G]` Console `/evolution` page: hub status card (claim link, credits, heartbeat), runs list + start-run form + candidate → proposal flow, proposals list + leakage report + two-step approve/reject; zh/en i18n.
+- [x] `[G]` Docs: removed nonexistent `POST /v2/governance/proposals` from root and garden AGENTS.md; list endpoints added to all endpoint tables.
+
+**Status:** Complete. Full verification green (internal all pkgs, e2e 10.9s, `tsc -b` clean); live-server pass: 13 GET endpoints 200, discovery run 202→completed, no-creds instance degrades to 503 while lists/admin stay 200; module `created_at` fix re-verified live.
+
+**Exit:** audit doc §6 verification table complete; honest note — no browser automation in this environment, frontend verified via tsc + bundle assertions + curl shapes.
 
 ---
 

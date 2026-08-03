@@ -3,9 +3,57 @@ package server
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/dashimaki/garden/internal/evolution"
 )
+
+func (s *Server) evolutionListLimit(w http.ResponseWriter, r *http.Request) (int, bool) {
+	limit := 20
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 100 {
+			writeError(w, http.StatusBadRequest, errors.New("limit must be between 1 and 100"))
+			return 0, false
+		}
+		limit = parsed
+	}
+	return limit, true
+}
+
+func (s *Server) handleEvolutionListRuns(w http.ResponseWriter, r *http.Request) {
+	if s.Evolution == nil {
+		writeError(w, http.StatusServiceUnavailable, errors.New("evolution service unavailable"))
+		return
+	}
+	limit, ok := s.evolutionListLimit(w, r)
+	if !ok {
+		return
+	}
+	runs, err := s.Evolution.ListRuns(r.Context(), limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": runs, "count": len(runs)})
+}
+
+func (s *Server) handleEvolutionListProposals(w http.ResponseWriter, r *http.Request) {
+	if s.Evolution == nil {
+		writeError(w, http.StatusServiceUnavailable, errors.New("evolution service unavailable"))
+		return
+	}
+	limit, ok := s.evolutionListLimit(w, r)
+	if !ok {
+		return
+	}
+	proposals, err := s.Evolution.ListProposals(r.Context(), limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": proposals, "count": len(proposals)})
+}
 
 func (s *Server) handleEvolutionStartRun(w http.ResponseWriter, r *http.Request) {
 	if s.Evolution == nil {

@@ -62,6 +62,10 @@ func (s *Service) GetRun(ctx context.Context, runID string) (EvolutionRun, error
 	return run, nil
 }
 
+func (s *Service) ListRuns(ctx context.Context, limit int) ([]EvolutionRun, error) {
+	return s.Store.ListRuns(ctx, limit)
+}
+
 func (s *Service) GetCandidate(ctx context.Context, candidateID string) (GeneCandidate, error) {
 	return s.Store.GetCandidate(ctx, candidateID)
 }
@@ -102,6 +106,10 @@ func (s *Service) CreateProposal(ctx context.Context, runID, candidateID, actor 
 
 func (s *Service) GetProposal(ctx context.Context, proposalID string) (EvolutionProposal, error) {
 	return s.Store.GetProposal(ctx, proposalID)
+}
+
+func (s *Service) ListProposals(ctx context.Context, limit int) ([]EvolutionProposal, error) {
+	return s.Store.ListProposals(ctx, limit)
 }
 
 func (s *Service) ReviewProposal(ctx context.Context, proposalID, decision, reviewer, note string) (EvolutionProposal, error) {

@@ -12,6 +12,7 @@
     "trace": "Recall Trace",
     "reports": "报告系统",
     "modules": "志向与建议",
+    "evolution": "演化中枢",
     "operations": "运行与审计",
     "library": "文档与架构",
     "settings": "设置"
@@ -219,6 +220,51 @@
     "statusActive": "生效",
     "statusDismissed": "已忽略",
     "created": "创建于 {{date}}"
+  },
+  "evolution": {
+    "title": "演化中枢",
+    "lede": "EvoMap GEP-A2A 传输层（ADR-0010）。run 是一次 Hub 往返的本地记录；discovery 模式只用免费 search，publish 默认关闭；所有出站内容先过机械隐私门。",
+    "hub": {
+      "title": "HUB 节点状态",
+      "degraded": "Evolution provider 不可用（无 EvoMap 凭据或 Hub 不可达）。其余模块不受影响。",
+      "nodeId": "节点 ID",
+      "claimed": "账户认领",
+      "claimedYes": "已认领",
+      "claimedNo": "未认领",
+      "claimLink": "去认领节点",
+      "credits": "Credit 余额",
+      "survival": "存活状态",
+      "heartbeat": "最近心跳"
+    },
+    "runs": {
+      "title": "RUNS",
+      "empty": "尚无 run。发起一个 discovery run 以搜索 Hub 上的相关资产。",
+      "start": "发起 Run",
+      "disabled": "Provider 降级中，无法发起 run。",
+      "triggerPlaceholder": "触发信号（必填），如 EVOMAP_CONNECTIVITY_PROBE",
+      "outcome": "期望结果（可选）",
+      "evidenceRefs": "证据引用，逗号分隔（可选）",
+      "traceRef": "Trace 引用（可选）"
+    },
+    "candidates": {
+      "empty": "该 run 暂无候选。",
+      "confidence": "置信度",
+      "propose": "生成提案",
+      "proposed": "已生成提案"
+    },
+    "proposals": {
+      "title": "提案",
+      "empty": "尚无提案。",
+      "leakage": "泄漏检查",
+      "clean": "通过",
+      "violated": "有违规",
+      "checkedRefs": "已检查引用数",
+      "approve": "批准",
+      "reject": "拒绝",
+      "confirmApprove": "确认批准？",
+      "confirmReject": "确认拒绝？",
+      "reviewedBy": "审阅人"
+    }
   },
   "placeholder": {
     "title": "已接受设计——尚未实现",

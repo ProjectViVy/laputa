@@ -87,10 +87,13 @@ POST   /v2/activity/events        # Normalized activity events
 GET    /v2/activity/sessions/{id} # Session activity history
 
 POST   /v2/governance/projection  # Read GovernanceProjection
-POST   /v2/governance/proposals   # Create or review proposals
+POST   /v2/governance/mutations   # Governed authority mutation
+GET    /v2/governance/audit       # Recent governance audit entries
 
 POST   /v2/evolution/runs         # Start evolution run
+GET    /v2/evolution/runs         # List evolution runs (newest first)
 POST   /v2/evolution/proposals    # Submit evolution proposal
+GET    /v2/evolution/proposals    # List evolution proposals (newest first)
 GET    /v2/evolution/proposals/{id} # Retrieve proposal details
 GET    /v2/evolution/hub/status   # EvoMap provider liveness (ADR-0010)
 

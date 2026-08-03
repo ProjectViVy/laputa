@@ -60,6 +60,9 @@ func TestModuleCRUD(t *testing.T) {
 	if updated.Content != "become the best gardener in the world" {
 		t.Fatalf("updated=%+v", updated)
 	}
+	if !updated.CreatedAt.Equal(amb.CreatedAt) {
+		t.Fatalf("update lost created_at: got %v, want %v", updated.CreatedAt, amb.CreatedAt)
+	}
 	got, err := svc.ListModules(ctx, ModuleKindAmbition, "all")
 	if err != nil || len(got) != 1 || got[0].Content != "become the best gardener in the world" {
 		t.Fatalf("got=%v err=%v", got, err)

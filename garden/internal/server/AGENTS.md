@@ -56,6 +56,8 @@ POST   /v2/governance/projection  # Read governance
 POST   /v2/governance/mutations   # Governed mutation (audited)
 GET    /v2/governance/audit       # Audit trail
 POST   /v2/evolution/runs         # Evolution run
+GET    /v2/evolution/runs         # List runs (newest first, read-only)
+GET    /v2/evolution/proposals    # List proposals (newest first, read-only)
 GET    /v2/evolution/hub/status   # EvoMap provider liveness (ADR-0010)
 GET    /v2/mailbox/inbox          # EvoMap inbox
 GET    /v2/mailbox/outbox         # EvoMap outbox

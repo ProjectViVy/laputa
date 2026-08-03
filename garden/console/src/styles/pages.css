@@ -1219,6 +1219,101 @@
   gap: 8px;
 }
 
+/* ============ evolution hub panel ============ */
+
+.evolution-hub {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+
+.evolution-hub-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.evolution-hub-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--ink-1);
+}
+
+.evolution-hub-key {
+  min-width: 110px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+}
+
+.evolution-claim-link {
+  color: var(--info);
+  font-size: 12px;
+}
+
+.evolution-item {
+  cursor: pointer;
+}
+
+.evolution-item.selected {
+  border-color: var(--line-strong);
+}
+
+.evolution-detail {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: default;
+}
+
+.evolution-candidate {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.evolution-candidate-name {
+  font-size: 12px;
+  color: var(--ink-1);
+}
+
+.evolution-leak-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.modules-badge.running {
+  color: var(--info);
+  border-color: var(--info);
+}
+
+.modules-badge.completed,
+.modules-badge.approved {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.modules-badge.failed,
+.modules-badge.rejected {
+  color: var(--down);
+  border-color: var(--down);
+}
+
+.modules-badge.pending {
+  color: var(--degraded);
+  border-color: var(--degraded);
+}
+
 /* ============ design-preview mode ============ */
 .preview-mode .shell-main {
   border-top: 2px dashed var(--info);

@@ -2,8 +2,10 @@ package evolution
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 type mockProvider struct {
@@ -184,5 +186,84 @@ func TestNormalizeCleanCandidate(t *testing.T) {
 	}
 	if !report.Clean {
 		t.Fatalf("report=%+v", report)
+	}
+}
+
+func TestListRunsOrderAndLimit(t *testing.T) {
+	svc := testService(t, nil)
+	ctx := context.Background()
+	base := time.Now().UTC()
+	for i := 0; i < 3; i++ {
+		run := EvolutionRun{
+			RunID:     fmt.Sprintf("run_%d", i),
+			Status:    "completed",
+			Provider:  "mock",
+			StartedAt: base.Add(time.Duration(i) * time.Second),
+		}
+		if err := svc.Store.SaveRun(ctx, run); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runs, err := svc.ListRuns(ctx, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 2 {
+		t.Fatalf("len=%d, want 2", len(runs))
+	}
+	if runs[0].RunID != "run_2" || runs[1].RunID != "run_1" {
+		t.Fatalf("order=%s,%s; want run_2,run_1 (DESC)", runs[0].RunID, runs[1].RunID)
+	}
+	all, err := svc.ListRuns(ctx, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("len=%d, want 3", len(all))
+	}
+}
+
+func TestListRunsEmptyStore(t *testing.T) {
+	svc := testService(t, nil)
+	runs, err := svc.ListRuns(context.Background(), 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runs == nil || len(runs) != 0 {
+		t.Fatalf("runs=%v, want non-nil empty slice", runs)
+	}
+}
+
+func TestListProposalsOrderAndLimit(t *testing.T) {
+	svc := testService(t, nil)
+	ctx := context.Background()
+	base := time.Now().UTC()
+	for i := 0; i < 3; i++ {
+		p := EvolutionProposal{
+			ProposalID: fmt.Sprintf("prop_%d", i),
+			RunID:      "run_x",
+			Status:     "pending",
+			CreatedAt:  base.Add(time.Duration(i) * time.Second),
+		}
+		if err := svc.Store.SaveProposal(ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	proposals, err := svc.ListProposals(ctx, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(proposals) != 2 {
+		t.Fatalf("len=%d, want 2", len(proposals))
+	}
+	if proposals[0].ProposalID != "prop_2" || proposals[1].ProposalID != "prop_1" {
+		t.Fatalf("order=%s,%s; want prop_2,prop_1 (DESC)", proposals[0].ProposalID, proposals[1].ProposalID)
+	}
+	empty, err := testService(t, nil).ListProposals(ctx, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if empty == nil || len(empty) != 0 {
+		t.Fatalf("empty=%v, want non-nil empty slice", empty)
 	}
 }

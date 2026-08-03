@@ -106,14 +106,15 @@ func (s *Service) ListModules(ctx context.Context, kind, status string) ([]Modul
 
 func (s *Service) UpdateModule(ctx context.Context, id, content, status string) (Module, error) {
 	var m Module
-	var created, updated string
-	err := s.db.QueryRowContext(ctx, `SELECT id,kind,content,status,created_at,updated_at FROM human_modules WHERE id=?`, id).Scan(&m.ID, &m.Kind, &m.Content, &m.Status, &created, &updated)
+	var created string
+	err := s.db.QueryRowContext(ctx, `SELECT id,kind,content,status,created_at FROM human_modules WHERE id=?`, id).Scan(&m.ID, &m.Kind, &m.Content, &m.Status, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Module{}, ErrNotFound
 	}
 	if err != nil {
 		return Module{}, err
 	}
+	m.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
 	if content == "" && status == "" {
 		return Module{}, ErrNoModuleChange
 	}

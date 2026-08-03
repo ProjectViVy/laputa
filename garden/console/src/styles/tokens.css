@@ -10,6 +10,7 @@
 
   /* ---- text ---- */
   --ink: #e8f2f3;
+  --ink-1: var(--ink);
   --ink-2: #a9c0c7;
   --ink-3: #6d8791;
   --ink-faint: #47606a;

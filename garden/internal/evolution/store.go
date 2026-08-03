@@ -84,6 +84,33 @@ func (s *Store) GetRun(_ context.Context, runID string) (EvolutionRun, error) {
 	return run, nil
 }
 
+func (s *Store) ListRuns(_ context.Context, limit int) ([]EvolutionRun, error) {
+	rows, err := s.db.Query(
+		`SELECT run_id, status, provider, candidates_json, error, started_at, completed_at FROM evolution_runs ORDER BY started_at DESC, run_id DESC LIMIT ?`, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	runs := []EvolutionRun{}
+	for rows.Next() {
+		var run EvolutionRun
+		var candidatesJSON, startedAt string
+		var completedAt sql.NullString
+		if err := rows.Scan(&run.RunID, &run.Status, &run.Provider, &candidatesJSON, &run.Error, &startedAt, &completedAt); err != nil {
+			return nil, err
+		}
+		_ = json.Unmarshal([]byte(candidatesJSON), &run.Candidates)
+		run.StartedAt, _ = time.Parse(time.RFC3339Nano, startedAt)
+		if completedAt.Valid {
+			t, _ := time.Parse(time.RFC3339Nano, completedAt.String)
+			run.CompletedAt = &t
+		}
+		runs = append(runs, run)
+	}
+	return runs, rows.Err()
+}
+
 // HubRun is the provider-local record of one EvoMap hub round trip
 // (ADR-0010 §2.1). The hub has no run lifecycle; this is Garden's own
 // bookkeeping for publish-mode and discovery-mode runs.
@@ -202,6 +229,33 @@ func (s *Store) GetProposal(_ context.Context, proposalID string) (EvolutionProp
 		p.ReviewedAt = &t
 	}
 	return p, nil
+}
+
+func (s *Store) ListProposals(_ context.Context, limit int) ([]EvolutionProposal, error) {
+	rows, err := s.db.Query(
+		`SELECT proposal_id, run_id, candidate_id, kind, status, summary, leakage_json, reviewer, review_note, reviewed_at, created_at FROM evolution_proposals ORDER BY created_at DESC, proposal_id DESC LIMIT ?`, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	proposals := []EvolutionProposal{}
+	for rows.Next() {
+		var p EvolutionProposal
+		var leakageJSON, createdAt string
+		var reviewedAt sql.NullString
+		if err := rows.Scan(&p.ProposalID, &p.RunID, &p.CandidateID, &p.Kind, &p.Status, &p.Summary, &leakageJSON, &p.Reviewer, &p.ReviewNote, &reviewedAt, &createdAt); err != nil {
+			return nil, err
+		}
+		_ = json.Unmarshal([]byte(leakageJSON), &p.LeakageReport)
+		p.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
+		if reviewedAt.Valid {
+			t, _ := time.Parse(time.RFC3339Nano, reviewedAt.String)
+			p.ReviewedAt = &t
+		}
+		proposals = append(proposals, p)
+	}
+	return proposals, rows.Err()
 }
 
 func (s *Store) UpdateProposalReview(_ context.Context, proposalID, status, reviewer, note string) error {

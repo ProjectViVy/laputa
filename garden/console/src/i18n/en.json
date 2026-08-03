@@ -12,6 +12,7 @@
     "trace": "Recall Trace",
     "reports": "Reports",
     "modules": "Ambitions & Suggestions",
+    "evolution": "Evolution Hub",
     "operations": "Operations",
     "library": "Architecture Library",
     "settings": "Settings"
@@ -219,6 +220,51 @@
     "statusActive": "active",
     "statusDismissed": "dismissed",
     "created": "Created {{date}}"
+  },
+  "evolution": {
+    "title": "Evolution Hub",
+    "lede": "EvoMap GEP-A2A transport (ADR-0010). A run is a local record of one hub round trip; discovery mode uses the free search endpoint only, hub publish is disabled by default, and all outbound content passes the mechanical privacy gate first.",
+    "hub": {
+      "title": "HUB NODE STATUS",
+      "degraded": "Evolution provider unavailable (no EvoMap credentials or hub unreachable). Other modules are unaffected.",
+      "nodeId": "Node ID",
+      "claimed": "Account claim",
+      "claimedYes": "Claimed",
+      "claimedNo": "Unclaimed",
+      "claimLink": "Claim this node",
+      "credits": "Credit balance",
+      "survival": "Survival status",
+      "heartbeat": "Last heartbeat"
+    },
+    "runs": {
+      "title": "RUNS",
+      "empty": "No runs yet. Start a discovery run to search the hub for related assets.",
+      "start": "Start run",
+      "disabled": "Provider degraded — cannot start runs.",
+      "triggerPlaceholder": "Trigger signal (required), e.g. EVOMAP_CONNECTIVITY_PROBE",
+      "outcome": "Desired outcome (optional)",
+      "evidenceRefs": "Evidence refs, comma-separated (optional)",
+      "traceRef": "Trace ref (optional)"
+    },
+    "candidates": {
+      "empty": "No candidates for this run.",
+      "confidence": "confidence",
+      "propose": "Create proposal",
+      "proposed": "Proposal created"
+    },
+    "proposals": {
+      "title": "PROPOSALS",
+      "empty": "No proposals yet.",
+      "leakage": "Leakage check",
+      "clean": "clean",
+      "violated": "violations",
+      "checkedRefs": "checked refs",
+      "approve": "Approve",
+      "reject": "Reject",
+      "confirmApprove": "Confirm approve?",
+      "confirmReject": "Confirm reject?",
+      "reviewedBy": "Reviewed by"
+    }
   },
   "placeholder": {
     "title": "Accepted design — not yet implemented",

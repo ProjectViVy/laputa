@@ -151,11 +151,19 @@ function ModuleColumn({ kind }: { kind: ModuleKind }) {
                     {t("modules.edit")}
                   </button>
                   {m.status === "active" ? (
-                    <button className="modules-btn" onClick={() => setStatus(m, "dismissed")}>
+                    <button
+                      className="modules-btn"
+                      onClick={() => setStatus(m, "dismissed")}
+                      disabled={busy}
+                    >
                       {t("modules.dismiss")}
                     </button>
                   ) : (
-                    <button className="modules-btn" onClick={() => setStatus(m, "active")}>
+                    <button
+                      className="modules-btn"
+                      onClick={() => setStatus(m, "active")}
+                      disabled={busy}
+                    >
                       {t("modules.reactivate")}
                     </button>
                   )}

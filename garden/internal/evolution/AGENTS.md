@@ -11,8 +11,8 @@
 
 The `evolution/` package owns the bounded Evolver integration:
 
-- **Run lifecycle** — `Service.StartRun/GetRun` over an `EvolverProvider`, run store, event chain
-- **Proposals** — candidate → `NormalizeCandidate` leakage gate → user review
+- **Run lifecycle** — `Service.StartRun/GetRun/ListRuns` over an `EvolverProvider`, run store, event chain
+- **Proposals** — candidate → `NormalizeCandidate` leakage gate → user review; `ListProposals` for console enumeration
 - **Hub transport (ADR-0010)** — `HubClient` (GEP-A2A v1.0.0) + `EvoMapProvider`, the in-process hub I/O layer
 - **Policy** — `HubPolicy` (hub publish disabled by default), `CheckOutbound` mechanical privacy gate (ADR-0007 §4)
 

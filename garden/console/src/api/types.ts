@@ -236,3 +236,70 @@ export interface ModulesListResponse {
   items: HumanModule[];
   count: number;
 }
+
+// ============ Evolution (EvoMap hub transport, ADR-0010) ============
+
+export interface ProviderStatus {
+  node_id: string;
+  claimed: boolean;
+  claim_url?: string;
+  credit_balance?: number;
+  has_credit_balance: boolean;
+  survival_status: string;
+  last_heartbeat: string;
+}
+
+export interface EvolutionRun {
+  run_id: string;
+  status: string;
+  bundle_id: string;
+  provider: string;
+  candidates?: string[];
+  error?: string;
+  started_at: string;
+  completed_at?: string;
+}
+
+export interface RunsListResponse {
+  items: EvolutionRun[];
+  count: number;
+}
+
+export interface GeneCandidate {
+  candidate_id: string;
+  run_id: string;
+  kind: string;
+  name: string;
+  description: string;
+  payload: Record<string, unknown>;
+  evidence_refs: string[];
+  trace_ref: string;
+  confidence: number;
+  created_at: string;
+}
+
+export interface LeakageReport {
+  clean: boolean;
+  violations?: string[];
+  warnings?: string[];
+  checked_refs: number;
+}
+
+export interface EvolutionProposal {
+  proposal_id: string;
+  run_id: string;
+  candidate_id: string;
+  kind: string;
+  status: string;
+  summary: string;
+  leakage_report: LeakageReport;
+  reviewer?: string;
+  review_note?: string;
+  reviewed_at?: string;
+  created_at: string;
+}
+
+export interface ProposalsListResponse {
+  items: EvolutionProposal[];
+  count: number;
+}
