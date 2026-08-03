@@ -77,6 +77,9 @@ func (s *DeepService) Recall(ctx context.Context, req DeepRequest) (DeepResponse
 		tb.trace.SourceSet = append(tb.trace.SourceSet, "timeline")
 	}
 	tb.trace.SourceSet = append(tb.trace.SourceSet, "cards", "governance")
+	if s.Fast != nil && s.Fast.World != nil {
+		tb.trace.SourceSet = append(tb.trace.SourceSet, "world")
+	}
 
 	seedStart := time.Now()
 	seed, err := s.Fast.Recall(ctx, FastRequest{
@@ -104,6 +107,13 @@ func (s *DeepService) Recall(ctx context.Context, req DeepRequest) (DeepResponse
 		}, nil
 	}
 	tb.step("fast_seed", "ok", time.Since(seedStart), "")
+	if s.Fast != nil && s.Fast.World != nil {
+		status := "ok"
+		if len(seed.World) == 0 {
+			status = "empty"
+		}
+		tb.step("world_projection", status, 0, "")
+	}
 	for _, card := range seed.Cards {
 		tb.trace.CandidateIDs = append(tb.trace.CandidateIDs, card.ID)
 	}

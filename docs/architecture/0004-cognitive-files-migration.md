@@ -1,6 +1,6 @@
 # ADR-0004: Cognitive Files & Compatibility Migration
 
-**Status:** proposed  
+**Status:** accepted  
 **Date:** 2026-08-03  
 **Supersedes:** none  
 **Depends on:** ADR-0002 (Laputa Cognitive Partition)
@@ -215,6 +215,8 @@ func LoadWorld(path string) (*WorldStore, error)
 func (w *WorldStore) Project(scopes []string, budgetChars int) ([]WorldClaim, error)
 func (w *WorldStore) Save(actor string) error
 ```
+
+> Errata (2026-08-03): the implemented signature is `Project(scopes []string, budgetChars int) []WorldClaim` — no error return; projection never fails, it only filters and truncates. Code is authoritative.
 
 ---
 

@@ -6,6 +6,7 @@ import Operations from "./pages/Operations";
 import RecallTrace from "./pages/RecallTrace";
 import ArchitectureLibrary from "./pages/ArchitectureLibrary";
 import MaterialsPage from "./pages/MaterialsPage";
+import ReportsPage from "./pages/ReportsPage";
 import Placeholder from "./pages/Placeholder";
 
 export default function App() {
@@ -19,7 +20,7 @@ export default function App() {
         <Route path="/library" element={<ArchitectureLibrary />} />
         <Route path="/work" element={<Placeholder titleKey="nav.work" />} />
         <Route path="/materials" element={<MaterialsPage />} />
-        <Route path="/reports" element={<Placeholder titleKey="nav.reports" />} />
+        <Route path="/reports" element={<ReportsPage />} />
         <Route path="/settings" element={<Placeholder titleKey="nav.settings" />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

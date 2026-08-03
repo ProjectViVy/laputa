@@ -147,7 +147,7 @@ func TestSectionRegistry(t *testing.T) {
 		if info.Name != section {
 			t.Errorf("registry name mismatch for %s", section)
 		}
-		if info.Status != "stable" && info.Status != "tbd" {
+		if info.Status != "stable" && info.Status != "tbd" && info.Status != "compat" {
 			t.Errorf("section %s has invalid status: %s", section, info.Status)
 		}
 	}

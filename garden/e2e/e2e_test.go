@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -49,6 +50,25 @@ func TestGardenEndToEnd(t *testing.T) {
 		t.Fatalf("build garden: %v\n%s", err, output)
 	}
 
+	cognitiveDir := filepath.Join(tempDir, "cognitive")
+	if err := os.MkdirAll(cognitiveDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	worldSeed := `# WORLD
+
+## [environment] E2E machine
+- status: confirmed
+- confidence: high
+- scope: e2e
+- source: user
+- updated: 2026-08-03T00:00:00Z
+
+E2E_WORLD_MARKER machine description for the end-to-end test.
+`
+	if err := os.WriteFile(filepath.Join(cognitiveDir, "WORLD.MD"), []byte(worldSeed), 0644); err != nil {
+		t.Fatal(err)
+	}
+
 	cmd := exec.Command(binary)
 	cmd.Env = append(os.Environ(),
 		"GARDEN_ADDR="+address,
@@ -56,6 +76,7 @@ func TestGardenEndToEnd(t *testing.T) {
 		"GARDEN_LOG_DIR="+filepath.Join(tempDir, "logs"),
 		"GARDEN_MENTLE_CONFIG_DIR="+mentleConfig,
 		"GARDEN_STATE_DB="+filepath.Join(tempDir, "garden.db"),
+		"GARDEN_COGNITIVE_DIR="+cognitiveDir,
 	)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
@@ -137,6 +158,44 @@ func TestGardenEndToEnd(t *testing.T) {
 		t.Fatalf("bootstrap=%+v", bootstrap)
 	}
 
+	var worldProj struct {
+		Claims    []map[string]any `json:"claims"`
+		Total     int              `json:"total"`
+		Projected int              `json:"projected"`
+	}
+	writeJSON(t, client, http.MethodGet, baseURL+"/v2/cognitive/world?scope=e2e", nil, http.StatusOK, &worldProj)
+	if worldProj.Total != 1 || worldProj.Projected != 1 {
+		t.Fatalf("world projection=%+v, want the seeded e2e claim", worldProj)
+	}
+
+	memrulesData, err := os.ReadFile(filepath.Join(cognitiveDir, "MEMRULES.MD"))
+	if err != nil {
+		t.Fatalf("boot did not create default MEMRULES.MD: %v", err)
+	}
+	for _, id := range []string{"## R1", "## R7"} {
+		if !strings.Contains(string(memrulesData), id) {
+			t.Errorf("default MEMRULES.MD missing %q", id)
+		}
+	}
+	worldData, err := os.ReadFile(filepath.Join(cognitiveDir, "WORLD.MD"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(worldData), "E2E_WORLD_MARKER") {
+		t.Error("seeded WORLD.MD was overwritten at boot")
+	}
+
+	var scopedFast struct {
+		Context string `json:"context"`
+	}
+	writeJSON(t, client, http.MethodPost, baseURL+"/v2/recall/fast", map[string]any{"query": "machine", "scope": "e2e", "budget_chars": 4000}, http.StatusOK, &scopedFast)
+	if !strings.Contains(scopedFast.Context, "E2E_WORLD_MARKER") {
+		t.Errorf("fast recall context missing scoped world claim: %q", scopedFast.Context)
+	}
+	if strings.Contains(scopedFast.Context, "primary source of truth") || strings.Contains(scopedFast.Context, "## R") {
+		t.Errorf("MEMRULES text leaked into recall context: %q", scopedFast.Context)
+	}
+
 	var created struct {
 		ID      string `json:"id"`
 		Version int    `json:"version"`
@@ -179,6 +238,33 @@ func TestGardenEndToEnd(t *testing.T) {
 	if daily.Cadence != "daily" || len(daily.SourceIDs) == 0 {
 		t.Fatalf("daily=%+v", daily)
 	}
+	var listResp struct {
+		Cadence string `json:"cadence"`
+		Count   int    `json:"count"`
+	}
+	writeJSON(t, client, http.MethodGet, baseURL+"/v2/reports?cadence=daily", nil, http.StatusOK, &listResp)
+	if listResp.Cadence != "daily" || listResp.Count == 0 {
+		t.Fatalf("v2 report list=%+v", listResp)
+	}
+	var latestV2 struct {
+		Cadence   string `json:"cadence"`
+		Generator string `json:"generator"`
+		Revision  int    `json:"revision"`
+		Scope     string `json:"scope"`
+	}
+	writeJSON(t, client, http.MethodGet, baseURL+"/v2/reports/latest?cadence=daily", nil, http.StatusOK, &latestV2)
+	if latestV2.Cadence != "daily" || latestV2.Generator == "" {
+		t.Fatalf("v2 latest=%+v", latestV2)
+	}
+	var orientation struct {
+		Note     string   `json:"note"`
+		Budget   int      `json:"budget_chars"`
+		Warnings []string `json:"warnings"`
+	}
+	writeJSON(t, client, http.MethodGet, baseURL+"/v2/reports/orientation?budget=1500", nil, http.StatusOK, &orientation)
+	if orientation.Note != "orientation only; does not replace transient spool recovery" {
+		t.Fatalf("orientation note=%q", orientation.Note)
+	}
 	var deleted struct {
 		Deleted bool `json:"deleted"`
 	}
@@ -196,7 +282,7 @@ func TestGardenEndToEnd(t *testing.T) {
 	}
 
 	var deepResp struct {
-		Mode       string `json:"mode"`
+		Mode        string `json:"mode"`
 		RecallTrace struct {
 			TraceID       string `json:"trace_id"`
 			TriggerReason string `json:"trigger_reason"`

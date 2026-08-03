@@ -9,6 +9,7 @@ import (
 
 	"github.com/dashimaki/garden/internal/activity"
 	"github.com/dashimaki/garden/internal/authority"
+	"github.com/dashimaki/laputa/governance/cognitive"
 	"github.com/dashimaki/mentle/facade"
 )
 
@@ -17,10 +18,17 @@ type CardSearcher interface {
 	ReadEvidence(context.Context, facade.EvidenceQuery) ([]facade.EvidenceFragment, error)
 }
 
+// WorldProjector returns a scope- and budget-bounded slice of WORLD claims.
+// Implemented by *cognitive.WorldStore; nil means WORLD projection is off.
+type WorldProjector interface {
+	Project(scopes []string, budgetChars int) []cognitive.WorldClaim
+}
+
 type FastService struct {
 	Gov      authority.GovernanceReader
 	Searcher CardSearcher
 	WS       *activity.WorkingSet
+	World    WorldProjector
 }
 
 type FastRequest struct {
@@ -37,6 +45,7 @@ type ContextView struct {
 	Governance    authority.GovernanceProjection `json:"governance"`
 	Cards         []facade.MemoryCard            `json:"cards"`
 	Evidence      []facade.EvidenceFragment      `json:"evidence"`
+	World         []cognitive.WorldClaim         `json:"world,omitempty"`
 	Context       string                         `json:"context"`
 	BudgetChars   int                            `json:"budget_chars"`
 	Degraded      bool                           `json:"degraded"`
@@ -45,11 +54,12 @@ type ContextView struct {
 }
 
 const (
-	defaultBudget = 6000
-	minBudget     = 256
-	maxBudget     = 64000
-	maxCards      = 12
-	cardLimit     = 20
+	defaultBudget       = 6000
+	minBudget           = 256
+	maxBudget           = 64000
+	maxCards            = 12
+	cardLimit           = 20
+	worldProjectionBudget = 4000
 )
 
 func (s *FastService) Recall(ctx context.Context, req FastRequest) (ContextView, error) {
@@ -81,10 +91,16 @@ func (s *FastService) Recall(ctx context.Context, req FastRequest) (ContextView,
 	}
 	view.Governance = proj
 
+	worldBudget := req.BudgetChars
+	if worldBudget > worldProjectionBudget {
+		worldBudget = worldProjectionBudget
+	}
+	view.World = s.projectWorld(req.Scope, worldBudget)
+
 	if s.Searcher == nil {
 		view.Degraded = true
 		view.Warnings = append(view.Warnings, "mentle unavailable; governance-only context")
-		view.Context = governanceContext(proj, req.BudgetChars)
+		view.Context = assembleDegradedContext(view.World, proj, req.BudgetChars)
 		return view, nil
 	}
 
@@ -92,7 +108,7 @@ func (s *FastService) Recall(ctx context.Context, req FastRequest) (ContextView,
 	if err != nil {
 		view.Degraded = true
 		view.Warnings = append(view.Warnings, "mentle search failed; governance-only context")
-		view.Context = governanceContext(proj, req.BudgetChars)
+		view.Context = assembleDegradedContext(view.World, proj, req.BudgetChars)
 		return view, nil
 	}
 
@@ -134,7 +150,24 @@ func (s *FastService) Recall(ctx context.Context, req FastRequest) (ContextView,
 		s.WS.Update(req.Scope, cardIDs, evRefs)
 	}
 
-	view.Context = assembleContext(view.Evidence, proj, req.BudgetChars)
+	view.Context = assembleContext(view.Evidence, view.World, proj, req.BudgetChars)
 	return view, nil
+}
+
+func (s *FastService) projectWorld(scope string, budget int) []cognitive.WorldClaim {
+	if s.World == nil {
+		return nil
+	}
+	return s.World.Project(splitScopes(scope), budget)
+}
+
+func splitScopes(scope string) []string {
+	var scopes []string
+	for _, part := range strings.Split(scope, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			scopes = append(scopes, p)
+		}
+	}
+	return scopes
 }
 

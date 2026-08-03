@@ -55,6 +55,21 @@ func (g *EinoGenerator) Generate(ctx context.Context, kind RhythmKind, prompt st
 	return &result, nil
 }
 
+// GenerateArtifact calls the LLM and parses artifact enrichment fields.
+func (g *EinoGenerator) GenerateArtifact(ctx context.Context, kind RhythmKind, prompt string) (*ArtifactResult, error) {
+	resp, err := g.chatModel.Generate(ctx, []*schema.Message{
+		{Role: schema.User, Content: prompt},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("llm generate artifact: %w", err)
+	}
+	var result ArtifactResult
+	if err := json.Unmarshal([]byte(resp.Content), &result); err != nil {
+		return nil, fmt.Errorf("parse artifact: %w", err)
+	}
+	return &result, nil
+}
+
 // MockGenerator is a deterministic generator for tests.
 type MockGenerator struct {
 	Result *ReportResult

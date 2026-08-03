@@ -71,6 +71,10 @@ func (s *Server) HTTPHandler() http.Handler {
 	mux.HandleFunc("POST /v1/context/resolve", s.handleResolveContext)
 	mux.HandleFunc("POST /v1/context/bootstrap", s.handleBootstrap)
 	mux.HandleFunc("GET /v1/reports/latest", s.handleLatestReport)
+	mux.HandleFunc("GET /v2/reports", s.handleReportsList)
+	mux.HandleFunc("GET /v2/reports/latest", s.handleLatestReport)
+	mux.HandleFunc("POST /v2/reports/generate", s.handleReportGenerate)
+	mux.HandleFunc("GET /v2/reports/orientation", s.handleReportOrientation)
 	mux.HandleFunc("GET /v1/pipelines", s.handlePipelines)
 	mux.HandleFunc("GET /v1/pipelines/{name}", s.handlePipeline)
 	mux.HandleFunc("GET /v1/pipelines/{name}/runs", s.handlePipelineRuns)
@@ -509,6 +513,8 @@ func writeError(w http.ResponseWriter, status int, err error) {
 		code = "version_conflict"
 	case http.StatusRequestEntityTooLarge:
 		code = "payload_too_large"
+	case http.StatusGone:
+		code = "compat_read_only"
 	case http.StatusTooManyRequests:
 		code = "busy"
 		retryable = true

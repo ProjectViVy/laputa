@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -33,6 +35,7 @@ type WorldClaim struct {
 }
 
 type WorldStore struct {
+	mu     sync.RWMutex
 	Path   string
 	Claims []WorldClaim
 }
@@ -47,13 +50,32 @@ func LoadWorld(path string) (*WorldStore, error) {
 	return w, nil
 }
 
+func (w *WorldStore) Total() int {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return len(w.Claims)
+}
+
+var confidenceRank = map[string]int{"high": 3, "medium": 2, "low": 1}
+
 func (w *WorldStore) Project(scopes []string, budgetChars int) []WorldClaim {
 	if budgetChars <= 0 {
 		budgetChars = 4000
 	}
-	var result []WorldClaim
+	w.mu.RLock()
+	snapshot := make([]WorldClaim, len(w.Claims))
+	copy(snapshot, w.Claims)
+	w.mu.RUnlock()
+
+	if len(scopes) == 0 {
+		sort.SliceStable(snapshot, func(i, j int) bool {
+			return confidenceRank[snapshot[i].Confidence] > confidenceRank[snapshot[j].Confidence]
+		})
+	}
+
+	result := []WorldClaim{}
 	used := 0
-	for _, claim := range w.Claims {
+	for _, claim := range snapshot {
 		if len(scopes) > 0 && !claim.matchesScope(scopes) {
 			continue
 		}
@@ -68,6 +90,8 @@ func (w *WorldStore) Project(scopes []string, budgetChars int) []WorldClaim {
 }
 
 func (w *WorldStore) Save(actor string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if actor != "user" {
 		for _, claim := range w.Claims {
 			if claim.Status == ClaimConfirmed && claim.Source == "user" {

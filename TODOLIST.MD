@@ -1,8 +1,8 @@
 # TODOLIST — Garden MemoryOS
 
 > **Last updated:** 2026-08-03  
-> **Current focus:** Gate A — Cognitive files: ADR-0004 written, `cognitive` package scaffolded (MemRules + WorldStore), compat write-blocking on 06/13/14, `/v2/cognitive/world` endpoint live. Next = Phase 2 integration (MEMRULES enforcement in recall, WORLD projection in Fast/Deep, audit rotation, Context Plane tests).  
-> **Architecture source:** [0001 MemoryOS vNext Architecture](docs/architecture/0001-memoryos-vnext-architecture.md) + [ADR-0002 Cognitive Partition](docs/architecture/0002-laputa-cognitive-partition-decision.md) + [ADR-0004 Cognitive Files Migration](docs/architecture/0004-cognitive-files-migration.md)  
+> **Current focus:** Gate B complete — ADR-0005 accepted; report artifact contract + SQLite migration, dual-write publisher to 07/08/09 (report_system actor), optional LLM enrichment, v2 report endpoints (list/latest/generate/orientation), Console Reports page, 13-report_indexes retired to compat. AMBITION / USER SUGGESTIONS spec-only in ADR-0005, implementation deferred. Next = Gate C semantic ingestion & EvoMap mailbox design. Known issue: pre-existing e2e ingestion hang (fails on HEAD too, unrelated to Gates A/B).  
+> **Architecture source:** [0001 MemoryOS vNext Architecture](docs/architecture/0001-memoryos-vnext-architecture.md) + [ADR-0002 Cognitive Partition](docs/architecture/0002-laputa-cognitive-partition-decision.md) + [ADR-0004 Cognitive Files Migration](docs/architecture/0004-cognitive-files-migration.md) + [ADR-0005 Report System Design](docs/architecture/0005-report-system-design.md)  
 > This file tracks execution status only. It must not restate design contracts.
 
 **Legend:** ✅ done · 🚧 active · ⬜ planned · ⛔ blocked  
@@ -56,7 +56,7 @@ Archived pre-vNext docs and established active documentation navigation. The act
 
 > The older Wave 1–7 implementation checklist is superseded as an execution plan where it assumes LTM promotion, `LONGMEM.MD`, legacy section semantics, or reuse of `proposal_inbox`. Retain it only as historical design input until the tasks below are approved and decomposed.
 
-### 🚧 Gate A — Cognitive files and compatibility migration design
+### ✅ Gate A — Cognitive files and compatibility migration design
 
 **Goal:** specify physical representations, validation, migration/no-data-loss policy and host projections before implementation.
 
@@ -65,19 +65,23 @@ Archived pre-vNext docs and established active documentation navigation. The act
 - [x] `[L]` Map legacy `06-history_md` and the 14-section registry to compatibility-only behavior; define read-only/data-preservation migration.
 - [x] `[L]` Define append-only change/audit log backend and retention; exclude ordinary STM edits and raw Mentle ingest.
 - [x] `[G]` Define Context Plane test matrix: Frozen Core + STM + scoped WORLD, excluding full WORLD/MEMRULES/reports/raw material.
+- [x] `[L][G]` **Phase 1:** ADR-0004 written; `cognitive` package scaffolded; compat write-blocking (410); `/v2/cognitive/world` endpoint.
+- [x] `[L][G]` **Phase 2:** default `MEMRULES.MD`/`WORLD.MD` creation (`GARDEN_COGNITIVE_DIR`), main.go wiring (endpoint live), MEMRULES load + builtin fallback + manual-edit audit, WORLD projection in Fast/Deep Recall (incl. degraded path), audit rotation (`GARDEN_AUDIT_MAX_AGE_DAYS`/`GARDEN_AUDIT_MAX_SIZE_MB`), Context Plane matrix tests (8/8), compat 410 on `/v2/governance/mutations`.
 
 **Exit:** architecture review accepts a concrete migration ADR and test plan. No registry rename/delete before this gate.
 
-**Status:** ADR-0004 written, Phase 1 scaffolding implemented (cognitive package, compat blocking, endpoint). Phase 2 integration pending.
+**Status:** Complete. ADR-0004 accepted; Phase 1 + Phase 2 implemented and tested. Physical registry rename/delete still requires a separate execution PR.
 
-### ⬜ Gate B — Report-system expansion design
+### ✅ Gate B — Report-system expansion design
 
 **Goal:** make reports human-facing and add optional monthly modules without turning them into authority or default context.
 
-- [ ] `[R]` Specify daily/weekly/monthly report catalog and readable artifact contract.
-- [ ] `[R]` Specify monthly-only `AMBITION` and `USER SUGGESTIONS` modules, including non-binding language and user controls.
-- [ ] `[R][G]` Define bounded Mentle-outage orientation read; reports must never replace raw transient-spool recovery.
-- [ ] `[L]` Retire `13-report_indexes` from the target model; locate report metadata inside the report subsystem.
+- [x] `[R]` Specify daily/weekly/monthly report catalog and readable artifact contract.
+- [x] `[R]` Specify monthly-only `AMBITION` and `USER SUGGESTIONS` modules, including non-binding language and user controls.
+- [x] `[R][G]` Define bounded Mentle-outage orientation read; reports must never replace raw transient-spool recovery.
+- [x] `[L]` Retire `13-report_indexes` from the target model; locate report metadata inside the report subsystem.
+
+**Status:** Complete. ADR-0005 accepted; artifact contract + SQLite migration, dual-write publisher (07/08/09, report_system actor), optional LLM enrichment, v2 endpoints (list/latest/generate/orientation), Console Reports page shipped. AMBITION / USER SUGGESTIONS modules specified in ADR-0005 only; implementation deferred to a later batch.
 
 **Exit:** report data model and acceptance tests approved.
 

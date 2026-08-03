@@ -186,3 +186,32 @@ export interface CollectionsResponse {
   collections: CollectionInfo[];
   source: Source;
 }
+
+// ============ Reports ============
+
+export interface ReportItem {
+  cadence: string;
+  window_start: string;
+  window_end: string;
+  source_ids: string[];
+  source_hash: string;
+  title: string;
+  summary: string;
+  highlights: string[];
+  open_questions: string[];
+  generated_at: string;
+  scope: string;
+  goals: string[];
+  completed: string[];
+  decisions: string[];
+  open_loops: string[];
+  source_refs: string[];
+  revision: number;
+  generator: string;
+}
+
+export interface ReportsListResponse {
+  cadence: string;
+  items: ReportItem[];
+  count: number;
+}

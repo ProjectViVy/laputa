@@ -34,7 +34,7 @@ func (s *Server) handleCognitiveWorld(w http.ResponseWriter, r *http.Request) {
 	claims := s.Cognitive.Project(scopes, budget)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"claims":       claims,
-		"total":        len(s.Cognitive.Claims),
+		"total":        s.Cognitive.Total(),
 		"projected":    len(claims),
 		"budget_chars": budget,
 		"source":       "live",

@@ -65,7 +65,7 @@ type SectionInfo struct {
 	Name        SectionName
 	WriteAuth   WriteAuthority
 	SchemaOwner string
-	Status      string // "stable" or "tbd"
+	Status      string // "stable", "tbd", or "compat" (retired read-only legacy)
 	Compat      bool   // true = read-only legacy section, writes blocked
 	Frozen      bool   // true = Frozen Core, cached at session bootstrap
 }
@@ -84,7 +84,7 @@ var SectionRegistry = map[SectionName]SectionInfo{
 	SectionJournalReflective: {Name: SectionJournalReflective, WriteAuth: AuthorityTBD, SchemaOwner: "tbd", Status: "tbd"},
 	SectionProposalInbox:     {Name: SectionProposalInbox, WriteAuth: AuthorityTBD, SchemaOwner: "tbd", Status: "tbd"},
 	SectionChangelog:         {Name: SectionChangelog, WriteAuth: AuthorityTBD, SchemaOwner: "tbd", Status: "tbd"},
-	SectionReportIndexes:     {Name: SectionReportIndexes, WriteAuth: AuthorityTBD, SchemaOwner: "tbd", Status: "tbd", Compat: true},
+	SectionReportIndexes:     {Name: SectionReportIndexes, WriteAuth: AuthorityTBD, SchemaOwner: "tbd", Status: "compat", Compat: true},
 	SectionAAAKSummaries:     {Name: SectionAAAKSummaries, WriteAuth: AuthorityTBD, SchemaOwner: "tbd", Status: "tbd", Compat: true},
 }
 

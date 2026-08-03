@@ -1,6 +1,9 @@
 package rhythm
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // RhythmKind represents the reporting cadence.
 type RhythmKind string
@@ -25,4 +28,19 @@ type Config struct {
 	BaseURL string
 	APIKey  string
 	Model   string
+}
+
+// ArtifactResult is the optional LLM enrichment of a report artifact
+// (ADR-0005 §5): the four narrative fields a deterministic generator
+// cannot derive on its own.
+type ArtifactResult struct {
+	Goals     []string `json:"goals"`
+	Completed []string `json:"completed"`
+	Decisions []string `json:"decisions"`
+	OpenLoops []string `json:"open_loops"`
+}
+
+// ArtifactGenerator enriches a report prompt into artifact fields.
+type ArtifactGenerator interface {
+	GenerateArtifact(ctx context.Context, kind RhythmKind, prompt string) (*ArtifactResult, error)
 }

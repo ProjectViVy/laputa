@@ -195,3 +195,134 @@ func TestWorldStoreSerializeRoundTrip(t *testing.T) {
 		t.Errorf("round-trip updated = %v", w2.Claims[0].Updated)
 	}
 }
+
+func TestDefaultMemRulesParse(t *testing.T) {
+	m := DefaultMemRules()
+	if len(m.Rules) != 7 {
+		t.Fatalf("got %d rules, want 7", len(m.Rules))
+	}
+	for i, want := range []string{"R1", "R2", "R3", "R4", "R5", "R6", "R7"} {
+		if m.Rules[i].ID != want {
+			t.Errorf("rules[%d].ID = %q, want %q", i, m.Rules[i].ID, want)
+		}
+		if m.Rules[i].Text == "" {
+			t.Errorf("rules[%d].Text empty", i)
+		}
+	}
+	if m.Version != "1" {
+		t.Errorf("version = %q, want 1", m.Version)
+	}
+}
+
+func TestInitializeDirCreatesDefaults(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "cognitive")
+	if err := InitializeDir(dir); err != nil {
+		t.Fatalf("InitializeDir: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, MemRulesFileName))
+	if err != nil {
+		t.Fatalf("MEMRULES.MD not created: %v", err)
+	}
+	if string(data) != DefaultMemRulesText {
+		t.Errorf("MEMRULES.MD content mismatch")
+	}
+	data, err = os.ReadFile(filepath.Join(dir, WorldFileName))
+	if err != nil {
+		t.Fatalf("WORLD.MD not created: %v", err)
+	}
+	if string(data) != DefaultWorldText {
+		t.Errorf("WORLD.MD content mismatch")
+	}
+}
+
+func TestInitializeDirIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	customRules := "# Memory Rules\n\n## R1 — Custom\nUser edit.\n"
+	customWorld := "# WORLD\n\nuser content\n"
+	if err := os.WriteFile(filepath.Join(dir, MemRulesFileName), []byte(customRules), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, WorldFileName), []byte(customWorld), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := InitializeDir(dir); err != nil {
+		t.Fatalf("InitializeDir: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dir, MemRulesFileName))
+	if string(data) != customRules {
+		t.Errorf("MEMRULES.MD was overwritten")
+	}
+	data, _ = os.ReadFile(filepath.Join(dir, WorldFileName))
+	if string(data) != customWorld {
+		t.Errorf("WORLD.MD was overwritten")
+	}
+}
+
+func TestWorldStoreProjectConfidenceOrder(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "WORLD.MD")
+	if err := os.WriteFile(path, []byte(testWorld), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	w, err := LoadWorld(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	claims := w.Project(nil, 10000)
+	if len(claims) != 3 {
+		t.Fatalf("got %d claims, want 3", len(claims))
+	}
+	wantOrder := []string{"high", "medium", "low"}
+	for i, want := range wantOrder {
+		if claims[i].Confidence != want {
+			t.Errorf("claims[%d].Confidence = %q, want %q", i, claims[i].Confidence, want)
+		}
+	}
+
+	// Budget that only fits the highest-confidence claim.
+	tight := w.Project(nil, 40)
+	if len(tight) != 1 || tight[0].Confidence != "high" {
+		t.Errorf("tight budget: got %d claims, want the single high-confidence claim", len(tight))
+	}
+}
+
+func TestWorldStoreConcurrentProjectSave(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "WORLD.MD")
+	if err := os.WriteFile(path, []byte(testWorld), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	w, err := LoadWorld(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Total() != 3 {
+		t.Fatalf("Total() = %d, want 3", w.Total())
+	}
+
+	done := make(chan struct{})
+	for i := 0; i < 4; i++ {
+		go func() {
+			defer func() { done <- struct{}{} }()
+			for j := 0; j < 50; j++ {
+				w.Project([]string{"dev"}, 1000)
+				w.Project(nil, 1000)
+			}
+		}()
+	}
+	for i := 0; i < 2; i++ {
+		go func() {
+			defer func() { done <- struct{}{} }()
+			for j := 0; j < 10; j++ {
+				_ = w.Save("user")
+			}
+		}()
+	}
+	for i := 0; i < 6; i++ {
+		<-done
+	}
+}

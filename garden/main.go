@@ -5,11 +5,14 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dashimaki/garden/internal/activity"
 	"github.com/dashimaki/garden/internal/arbiter"
 	"github.com/dashimaki/garden/internal/authority"
+	gardencog "github.com/dashimaki/garden/internal/cognitive"
 	"github.com/dashimaki/garden/internal/crud"
 	"github.com/dashimaki/garden/internal/evolution"
 	"github.com/dashimaki/garden/internal/ingest"
@@ -21,6 +24,8 @@ import (
 	"github.com/dashimaki/garden/internal/router"
 	"github.com/dashimaki/garden/internal/server"
 	"github.com/dashimaki/laputa/governance"
+	"github.com/dashimaki/laputa/governance/cognitive"
+	"github.com/dashimaki/laputa/governance/rhythm"
 	"github.com/dashimaki/mentle/facade"
 )
 
@@ -41,7 +46,7 @@ func main() {
 		log.Fatalf("governance init: %v", err)
 	}
 
-	auditLog, err := governance.NewFileAuditLog(storeDir)
+	auditLog, err := governance.NewFileAuditLogWithRotation(storeDir, auditRotationConfig())
 	if err != nil {
 		log.Fatalf("audit log: %v", err)
 	}
@@ -66,7 +71,38 @@ func main() {
 		components["mentle"] = "ok"
 	}
 
-	fastRecall := &recall.FastService{Gov: gov}
+	cognitiveDir := expandHome(os.Getenv("GARDEN_COGNITIVE_DIR"))
+	if cognitiveDir == "" {
+		cognitiveDir = expandHome("~/.laputa/cognitive")
+	}
+	components["cognitive"] = "ok"
+	if err := cognitive.InitializeDir(cognitiveDir); err != nil {
+		log.Printf("cognitive init: %v", err)
+		components["cognitive"] = "degraded"
+	}
+	worldPath := filepath.Join(cognitiveDir, cognitive.WorldFileName)
+	worldStore, worldErr := cognitive.LoadWorld(worldPath)
+	if worldErr != nil {
+		log.Printf("world load: %v", worldErr)
+		worldStore = &cognitive.WorldStore{Path: worldPath}
+		components["cognitive"] = "degraded"
+	}
+	rules, rulesErr := gardencog.Load(filepath.Join(cognitiveDir, cognitive.MemRulesFileName))
+	if rulesErr != nil {
+		log.Printf("memrules load: %v", rulesErr)
+		components["cognitive"] = "degraded"
+	} else if !rules.MatchesDefault() {
+		_ = auditLog.Append(ctx, governance.AuditEntry{
+			Section:     "memrules",
+			Action:      "manual_edit",
+			Actor:       "user",
+			Reason:      "MEMRULES manual edit detected at reload",
+			RollbackRef: rules.HashPrefix(),
+			Timestamp:   time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+
+	fastRecall := &recall.FastService{Gov: gov, World: worldStore}
 	if mem != nil {
 		fastRecall.Searcher = mem
 	}
@@ -125,7 +161,15 @@ func main() {
 		log.Fatalf("ingestion store: %v", err)
 	}
 	defer ingestions.Close()
-	reports, err := report.Open(stateDB, memoryLister)
+	var enricher report.Enricher
+	if baseURL, apiKey, model := os.Getenv("GARDEN_RAG_BASE_URL"), os.Getenv("GARDEN_RAG_API_KEY"), os.Getenv("GARDEN_RAG_MODEL"); baseURL != "" && apiKey != "" && model != "" {
+		if gen, genErr := rhythm.NewOpenAIGenerator(ctx, baseURL, apiKey, model); genErr != nil {
+			log.Printf("report enricher unavailable: %v", genErr)
+		} else {
+			enricher = &report.LLMEnricher{Gen: gen}
+		}
+	}
+	reports, err := report.Open(stateDB, memoryLister, &report.GovernedPublisher{Gov: governed}, enricher)
 	if err != nil {
 		log.Fatalf("report store: %v", err)
 	}
@@ -199,7 +243,7 @@ func main() {
 	if mem != nil {
 		materialsProvider = mem
 	}
-	srv := &server.Server{Handler: h, Resolver: resolver, FastRecall: fastRecall, DeepRecall: deepRecall, TraceStore: traceStore, Evolution: evoService, Activity: activityStore, Checkpointer: checkpointer, Pipelines: manager, Ingestions: ingestions, Reports: reports, Governed: governed, GovernedWriter: &authority.GovernedWriter{Gov: governed}, Materials: materialsProvider, Components: components, Addr: addr}
+	srv := &server.Server{Handler: h, Resolver: resolver, FastRecall: fastRecall, DeepRecall: deepRecall, TraceStore: traceStore, Evolution: evoService, Activity: activityStore, Checkpointer: checkpointer, Pipelines: manager, Ingestions: ingestions, Reports: reports, Governed: governed, GovernedWriter: &authority.GovernedWriter{Gov: governed}, Materials: materialsProvider, Cognitive: worldStore, Components: components, Addr: addr}
 	if err := lifecycle.Run(ctx, srv); err != nil {
 		log.Fatalf("lifecycle: %v", err)
 	}
@@ -213,6 +257,25 @@ func configuredPlanner() rag.Planner {
 		return rag.RulePlanner{}
 	}
 	return rag.FallbackPlanner{Primary: &rag.OpenAIPlanner{BaseURL: baseURL, APIKey: apiKey, Model: model}, Fallback: rag.RulePlanner{}}
+}
+
+func auditRotationConfig() governance.RotationConfig {
+	cfg := governance.DefaultRotationConfig()
+	if v := os.Getenv("GARDEN_AUDIT_MAX_AGE_DAYS"); v != "" {
+		if days, err := strconv.Atoi(v); err == nil && days > 0 {
+			cfg.MaxAgeDays = days
+		} else {
+			log.Printf("ignoring invalid GARDEN_AUDIT_MAX_AGE_DAYS %q", v)
+		}
+	}
+	if v := os.Getenv("GARDEN_AUDIT_MAX_SIZE_MB"); v != "" {
+		if mb, err := strconv.Atoi(v); err == nil && mb > 0 {
+			cfg.MaxSizeBytes = int64(mb) << 20
+		} else {
+			log.Printf("ignoring invalid GARDEN_AUDIT_MAX_SIZE_MB %q", v)
+		}
+	}
+	return cfg
 }
 
 func listenAddr() string {

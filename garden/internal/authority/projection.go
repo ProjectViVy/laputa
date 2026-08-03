@@ -10,15 +10,16 @@ import (
 )
 
 type GovernanceProjection struct {
-	IdentityRef       string   `json:"identity_ref"`
-	Scope             string   `json:"scope"`
-	AllowedSources    []string `json:"allowed_sources"`
-	DeniedSources     []string `json:"denied_sources"`
-	AllowedKinds      []string `json:"allowed_kinds"`
-	ActiveLTMRefs     []string `json:"active_ltm_refs"`
-	WorkingSetRefs    []string `json:"working_set_refs"`
-	PolicyRevision    string   `json:"policy_revision"`
-	ProjectionVersion string   `json:"projection_version"`
+	IdentityRef       string            `json:"identity_ref"`
+	Scope             string            `json:"scope"`
+	AllowedSources    []string          `json:"allowed_sources"`
+	DeniedSources     []string          `json:"denied_sources"`
+	AllowedKinds      []string          `json:"allowed_kinds"`
+	ActiveLTMRefs     []string          `json:"active_ltm_refs"`
+	WorkingSetRefs    []string          `json:"working_set_refs"`
+	FrozenRefs        map[string]string `json:"frozen_refs,omitempty"`
+	PolicyRevision    string            `json:"policy_revision"`
+	ProjectionVersion string            `json:"projection_version"`
 }
 
 type GovernanceReader interface {
@@ -27,9 +28,17 @@ type GovernanceReader interface {
 
 var projectionSections = []governance.SectionName{
 	governance.SectionIdentity,
+	governance.SectionRelationship,
 	governance.SectionCommitment,
 	governance.SectionPreferences,
 	governance.SectionMemoryMD,
+}
+
+var frozenSections = []governance.SectionName{
+	governance.SectionIdentity,
+	governance.SectionRelationship,
+	governance.SectionCommitment,
+	governance.SectionPreferences,
 }
 
 func BuildProjection(ctx context.Context, gov GovernanceReader) (GovernanceProjection, error) {
@@ -50,6 +59,10 @@ func BuildProjection(ctx context.Context, gov GovernanceReader) (GovernanceProje
 	proj.DeniedSources = deniedSources(sections["03-commitment"])
 	proj.AllowedKinds = allowedKinds(sections["01-identity"])
 	proj.WorkingSetRefs = refsFrom(sections["05-memory_md"])
+	proj.FrozenRefs = make(map[string]string, len(frozenSections))
+	for _, name := range frozenSections {
+		proj.FrozenRefs[string(name)] = identityRef(sections[string(name)])
+	}
 	proj.PolicyRevision = policyRevision(sections)
 	return proj, nil
 }
