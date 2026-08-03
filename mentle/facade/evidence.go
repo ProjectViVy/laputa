@@ -63,20 +63,38 @@ func (s *Service) ReadEvidence(ctx context.Context, q EvidenceQuery) ([]Evidence
 		if remaining := total - used; remaining < budget {
 			budget = remaining
 		}
-		excerpt := truncateRunes(memory.Content, budget)
-		hash := sha256.Sum256([]byte(memory.Content))
-		sourceURI := ""
-		if v, ok := memory.Metadata["source_uri"].(string); ok {
-			sourceURI = v
+		var excerpt string
+		startOffset, endOffset := 0, 0
+		var hash [sha256.Size]byte
+		if start, end, ok := provenanceOffsets(memory.Metadata); ok && start >= 0 && end > start && end <= len(memory.Content) {
+			segment := memory.Content[start:end]
+			excerpt = truncateRunes(segment, budget)
+			startOffset = start
+			endOffset = start + len([]byte(excerpt))
+			hash = sha256.Sum256([]byte(excerpt))
+		} else {
+			excerpt = truncateRunes(memory.Content, budget)
+			endOffset = len([]rune(excerpt))
+			hash = sha256.Sum256([]byte(memory.Content))
+		}
+		sourceURI := memory.Source.URI
+		if sourceURI == "" {
+			if v, ok := memory.Metadata["source_uri"].(string); ok {
+				sourceURI = v
+			}
+		}
+		sourceRev := memory.Source.Revision
+		if sourceRev == "" {
+			sourceRev = fmt.Sprintf("%d", memory.Version)
 		}
 		fragments = append(fragments, EvidenceFragment{
 			CardID:       memory.ID,
 			MaterialRef:  fmt.Sprintf("mem://%s@v%d", memory.ID, memory.Version),
 			SourceURI:    sourceURI,
-			SourceRev:    fmt.Sprintf("%d", memory.Version),
+			SourceRev:    sourceRev,
 			Excerpt:      excerpt,
-			StartOffset:  0,
-			EndOffset:    len([]rune(excerpt)),
+			StartOffset:  startOffset,
+			EndOffset:    endOffset,
 			ContentHash:  hex.EncodeToString(hash[:]),
 			Validity:     evidenceValidity(memory, now),
 			EvidenceRefs: nonNil(memory.Supersedes),
@@ -84,6 +102,33 @@ func (s *Service) ReadEvidence(ctx context.Context, q EvidenceQuery) ([]Evidence
 		used += len([]rune(excerpt))
 	}
 	return fragments, nil
+}
+
+func provenanceOffsets(md map[string]any) (int, int, bool) {
+	startRaw, okStart := md["start_offset"]
+	endRaw, okEnd := md["end_offset"]
+	if !okStart || !okEnd {
+		return 0, 0, false
+	}
+	start, okS := toInt(startRaw)
+	end, okE := toInt(endRaw)
+	if !okS || !okE {
+		return 0, 0, false
+	}
+	return start, end, true
+}
+
+func toInt(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	case float64:
+		return int(n), true
+	default:
+		return 0, false
+	}
 }
 
 func evidenceValidity(m Memory, now time.Time) string {

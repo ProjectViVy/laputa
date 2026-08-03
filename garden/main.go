@@ -17,6 +17,7 @@ import (
 	"github.com/dashimaki/garden/internal/evolution"
 	"github.com/dashimaki/garden/internal/ingest"
 	"github.com/dashimaki/garden/internal/lifecycle"
+	"github.com/dashimaki/garden/internal/mailbox"
 	"github.com/dashimaki/garden/internal/pipeline"
 	"github.com/dashimaki/garden/internal/rag"
 	"github.com/dashimaki/garden/internal/recall"
@@ -235,6 +236,12 @@ func main() {
 	components["evolution"] = "degraded"
 	evoService := &evolution.Service{Provider: evoProvider, Store: evoStore, Events: evoEvents, Hub: evolution.DefaultHubPolicy()}
 
+	mailboxStore, err := mailbox.OpenStore(stateDB)
+	if err != nil {
+		log.Fatalf("mailbox store: %v", err)
+	}
+	defer mailboxStore.Close()
+
 	addr := listenAddr()
 	if !strings.HasPrefix(addr, "127.0.0.1:") && !strings.HasPrefix(addr, "localhost:") && !strings.HasPrefix(addr, "[::1]:") {
 		log.Printf("HIGH RISK: unauthenticated Garden API is configured on non-loopback address %q", addr)
@@ -243,7 +250,7 @@ func main() {
 	if mem != nil {
 		materialsProvider = mem
 	}
-	srv := &server.Server{Handler: h, Resolver: resolver, FastRecall: fastRecall, DeepRecall: deepRecall, TraceStore: traceStore, Evolution: evoService, Activity: activityStore, Checkpointer: checkpointer, Pipelines: manager, Ingestions: ingestions, Reports: reports, Governed: governed, GovernedWriter: &authority.GovernedWriter{Gov: governed}, Materials: materialsProvider, Cognitive: worldStore, Components: components, Addr: addr}
+	srv := &server.Server{Handler: h, Resolver: resolver, FastRecall: fastRecall, DeepRecall: deepRecall, TraceStore: traceStore, Evolution: evoService, Activity: activityStore, Checkpointer: checkpointer, Pipelines: manager, Ingestions: ingestions, Reports: reports, Governed: governed, GovernedWriter: &authority.GovernedWriter{Gov: governed}, Materials: materialsProvider, Cognitive: worldStore, Mailbox: mailboxStore, Components: components, Addr: addr}
 	if err := lifecycle.Run(ctx, srv); err != nil {
 		log.Fatalf("lifecycle: %v", err)
 	}

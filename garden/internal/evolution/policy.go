@@ -51,6 +51,24 @@ func ValidateBundleInput(bundle EvolutionEvidenceBundle) error {
 	return nil
 }
 
+// CheckOutbound runs the mechanical privacy gate over an outbound payload
+// and its evidence refs (ADR-0007 §4).
+func CheckOutbound(payload map[string]any, evidenceRefs []string) (LeakageReport, error) {
+	report := LeakageReport{Clean: true, CheckedRefs: len(evidenceRefs)}
+	if err := ValidateBundleInput(EvolutionEvidenceBundle{EvidenceRefs: evidenceRefs}); err != nil {
+		report.Clean = false
+		report.Violations = append(report.Violations, err.Error())
+	}
+	if containsProhibitedKeys(payload) {
+		report.Clean = false
+		report.Violations = append(report.Violations, "payload contains prohibited keys")
+	}
+	if !report.Clean {
+		return report, ErrLeakageDetected
+	}
+	return report, nil
+}
+
 func isProhibitedRef(ref string) bool {
 	lower := strings.ToLower(ref)
 	prohibited := []string{".env", "token", "secret", "personality", ".laputa/sections/01"}

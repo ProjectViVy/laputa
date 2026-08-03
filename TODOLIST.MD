@@ -1,8 +1,8 @@
 # TODOLIST — Garden MemoryOS
 
 > **Last updated:** 2026-08-03  
-> **Current focus:** Gate B complete — ADR-0005 accepted; report artifact contract + SQLite migration, dual-write publisher to 07/08/09 (report_system actor), optional LLM enrichment, v2 report endpoints (list/latest/generate/orientation), Console Reports page, 13-report_indexes retired to compat. AMBITION / USER SUGGESTIONS spec-only in ADR-0005, implementation deferred. Next = Gate C semantic ingestion & EvoMap mailbox design. Known issue: pre-existing e2e ingestion hang (fails on HEAD too, unrelated to Gates A/B).  
-> **Architecture source:** [0001 MemoryOS vNext Architecture](docs/architecture/0001-memoryos-vnext-architecture.md) + [ADR-0002 Cognitive Partition](docs/architecture/0002-laputa-cognitive-partition-decision.md) + [ADR-0004 Cognitive Files Migration](docs/architecture/0004-cognitive-files-migration.md) + [ADR-0005 Report System Design](docs/architecture/0005-report-system-design.md)  
+> **Current focus:** Gate C complete — ADR-0006 (semantic ingestion + Obsidian adapter spec) and ADR-0007 (EvoMap mailbox) accepted; `source_artifact`/`semantic_unit` kinds enabled in Mentle facade (fixes pre-existing e2e ingestion hang — e2e suite now green), provenance-preserving semantic-unit ingestion path (`IngestSemanticUnits`, real-offset bounded evidence read), mailbox package (inbox/outbox state machines, privacy gate, retry→dead-letter, Hub disabled by default) with read-only v2 endpoints. Next = separate physical migration plan for the legacy 14-section registry (Now section), then remaining Now items.  
+> **Architecture source:** [0001 MemoryOS vNext Architecture](docs/architecture/0001-memoryos-vnext-architecture.md) + [ADR-0002 Cognitive Partition](docs/architecture/0002-laputa-cognitive-partition-decision.md) + [ADR-0004 Cognitive Files Migration](docs/architecture/0004-cognitive-files-migration.md) + [ADR-0005 Report System Design](docs/architecture/0005-report-system-design.md) + [ADR-0006 Semantic Ingestion](docs/architecture/0006-semantic-ingestion-and-obsidian-adapter.md) + [ADR-0007 EvoMap Mailbox](docs/architecture/0007-evomap-mailbox.md)  
 > This file tracks execution status only. It must not restate design contracts.
 
 **Legend:** ✅ done · 🚧 active · ⬜ planned · ⛔ blocked  
@@ -85,14 +85,16 @@ Archived pre-vNext docs and established active documentation navigation. The act
 
 **Exit:** report data model and acceptance tests approved.
 
-### ⬜ Gate C — Mentle semantic ingestion and EvoMap mailbox design
+### ✅ Gate C — Mentle semantic ingestion and EvoMap mailbox design
 
 **Goal:** preserve AAAK's useful chunking lesson without retaining a Laputa AAAK section; isolate external evolution communication.
 
-- [ ] `[M]` Design Obsidian source adapter and provenance-preserving semantic units: source path, heading path, block offsets, hash, scope/tags and bounded evidence read.
-- [ ] `[M]` Verify that semantic-unit ingestion does not create a second summary authority.
-- [ ] `[G]` Design separate EvoMap mailbox: inbox/outbox, state machine, evidence refs, privacy gate, evaluation, approval/rejection, retry and dead letter.
-- [ ] `[G]` Keep EvoMap Hub disabled and prevent mailbox data from carrying private raw corpus/personality files.
+- [x] `[M]` Design Obsidian source adapter and provenance-preserving semantic units: source path, heading path, block offsets, hash, scope/tags and bounded evidence read.
+- [x] `[M]` Verify that semantic-unit ingestion does not create a second summary authority.
+- [x] `[G]` Design separate EvoMap mailbox: inbox/outbox, state machine, evidence refs, privacy gate, evaluation, approval/rejection, retry and dead letter.
+- [x] `[G]` Keep EvoMap Hub disabled and prevent mailbox data from carrying private raw corpus/personality files.
+
+**Status:** Complete. ADR-0006 + ADR-0007 accepted. Core implementation shipped: `source_artifact`/`semantic_unit` kinds in Mentle facade (also fixes the pre-existing e2e ingestion hang — e2e suite green 8.7s), provenance metadata + real-offset bounded evidence read, `IngestSemanticUnits` (idempotent, zero Laputa writes), `internal/mailbox` store + state machines + privacy gate (evolution.CheckOutbound) + retry→dead-letter, v2 read-only mailbox endpoints. Obsidian adapter runtime form intentionally design-only (ADR-0006 §2); Console mailbox/ingestion views deferred.
 
 **Exit:** mailbox and Obsidian-ingestion designs are approved independently.
 

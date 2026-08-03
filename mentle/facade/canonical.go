@@ -24,6 +24,8 @@ type MemorySource struct {
 	Type      string `json:"type"`
 	SessionID string `json:"session_id,omitempty"`
 	EventID   string `json:"event_id,omitempty"`
+	URI       string `json:"uri,omitempty"`
+	Revision  string `json:"revision,omitempty"`
 }
 
 type Memory struct {
@@ -137,7 +139,7 @@ func (s *Service) CreateMemory(ctx context.Context, req CreateMemoryRequest, ide
 	if req.Kind == "" {
 		req.Kind = "note"
 	}
-	if !allowed(req.Kind, "fact", "preference", "decision", "session_digest", "note") {
+	if !allowed(req.Kind, "fact", "preference", "decision", "session_digest", "note", "source_artifact", "semantic_unit") {
 		return Memory{}, errors.New("invalid memory kind")
 	}
 	if req.Source.Type == "" {

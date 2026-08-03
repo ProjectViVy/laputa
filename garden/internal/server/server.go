@@ -19,6 +19,7 @@ import (
 	"github.com/dashimaki/garden/internal/crud"
 	"github.com/dashimaki/garden/internal/evolution"
 	"github.com/dashimaki/garden/internal/ingest"
+	"github.com/dashimaki/garden/internal/mailbox"
 	"github.com/dashimaki/garden/internal/pipeline"
 	"github.com/dashimaki/garden/internal/rag"
 	"github.com/dashimaki/garden/internal/recall"
@@ -43,6 +44,7 @@ type Server struct {
 	Pipelines      *pipeline.Manager
 	Ingestions     *ingest.Service
 	Reports        *report.Service
+	Mailbox        *mailbox.Store
 	Governed       *governance.GovernedService
 	GovernedWriter *authority.GovernedWriter
 	Materials      MaterialsProvider
@@ -94,6 +96,11 @@ func (s *Server) HTTPHandler() http.Handler {
 	mux.HandleFunc("GET /v2/evolution/proposals/{proposal_id}", s.handleEvolutionGetProposal)
 	mux.HandleFunc("POST /v2/evolution/proposals/{proposal_id}/review", s.handleEvolutionReviewProposal)
 	mux.HandleFunc("GET /v2/evolution/events/{event_id}", s.handleEvolutionGetEvent)
+	mux.HandleFunc("GET /v2/mailbox/inbox", s.handleMailboxInbox)
+	mux.HandleFunc("GET /v2/mailbox/outbox", s.handleMailboxOutbox)
+	mux.HandleFunc("GET /v2/mailbox/dead-letter", s.handleMailboxDeadLetter)
+	mux.HandleFunc("POST /v2/mailbox/items/{id}/approve", s.handleMailboxApprove)
+	mux.HandleFunc("POST /v2/mailbox/items/{id}/reject", s.handleMailboxReject)
 	mux.HandleFunc("GET /v2/admin/overview", s.handleAdminOverview)
 	mux.HandleFunc("GET /v2/admin/components", s.handleAdminComponents)
 	mux.HandleFunc("GET /v2/admin/context-manifest/{trace_id}", s.handleAdminContextManifest)
@@ -538,8 +545,12 @@ func writeError(w http.ResponseWriter, status int, err error) {
 }
 
 func writeHandlerError(w http.ResponseWriter, err error) {
-	if errors.Is(err, facade.ErrMemoryNotFound) || errors.Is(err, ingest.ErrNotFound) || errors.Is(err, report.ErrNotFound) {
+	if errors.Is(err, facade.ErrMemoryNotFound) || errors.Is(err, ingest.ErrNotFound) || errors.Is(err, report.ErrNotFound) || errors.Is(err, mailbox.ErrNotFound) {
 		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	if errors.Is(err, mailbox.ErrIllegalTransition) {
+		writeError(w, http.StatusConflict, err)
 		return
 	}
 	if errors.Is(err, governance.ErrUnauthorized) {
