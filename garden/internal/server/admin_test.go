@@ -9,10 +9,8 @@ import (
 	"testing"
 
 	"github.com/dashimaki/garden/internal/activity"
-	"github.com/dashimaki/garden/internal/crud"
 	"github.com/dashimaki/garden/internal/ingest"
 	"github.com/dashimaki/garden/internal/recall"
-	"github.com/dashimaki/garden/internal/router"
 	"github.com/dashimaki/laputa/governance"
 )
 
@@ -51,14 +49,7 @@ func adminTestServer(t *testing.T) *Server {
 	t.Cleanup(func() { spool.Close() })
 	ingestions.Spool = spool
 
-	h := &crud.Handler{
-		Router: &router.Router{
-			Governance: router.NewGovernanceBackend(engine),
-			Mentle:     &mockBackend{name: "mentle"},
-		},
-	}
 	return &Server{
-		Handler:    h,
 		TraceStore: traceStore,
 		Ingestions: ingestions,
 		Governed:   governed,

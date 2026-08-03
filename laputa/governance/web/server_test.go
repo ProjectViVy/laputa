@@ -57,10 +57,13 @@ func TestServer_IndexPage_ListsSections(t *testing.T) {
 	if !strings.Contains(body, "Laputa Governance") {
 		t.Errorf("expected dashboard header")
 	}
-	for _, name := range []string{"01-identity", "07-daily", "14-aaak_summaries"} {
+	for _, name := range []string{"01-identity", "07-daily", "09-monthly"} {
 		if !strings.Contains(body, name) {
 			t.Errorf("expected section %s in dashboard", name)
 		}
+	}
+	if strings.Contains(body, "14-aaak_summaries") {
+		t.Errorf("legacy section must not appear in dashboard")
 	}
 	// Status styles should appear
 	if !strings.Contains(body, "status-stable") && !strings.Contains(body, "status-tbd") {
@@ -110,8 +113,8 @@ func TestServer_SectionsJSON(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if body.Count != 14 {
-		t.Errorf("expected 14 sections, got %d", body.Count)
+	if body.Count != len(laputa.AllSections) {
+		t.Errorf("expected %d sections, got %d", len(laputa.AllSections), body.Count)
 	}
 }
 

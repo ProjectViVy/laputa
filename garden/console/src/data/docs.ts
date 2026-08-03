@@ -76,13 +76,13 @@ export const DOCS: DocEntry[] = [
   {
     id: "http-contracts",
     role: "L3",
-    title: { en: "Garden HTTP API contracts (v1 + v2)", zh: "Garden HTTP API 契约(v1 + v2)" },
+    title: { en: "Garden HTTP API contracts (v2)", zh: "Garden HTTP API 契约(v2)" },
     path: "AGENTS.md §HTTP API Contracts · internal/server",
     status: "implemented",
     modules: ["Garden"],
     note: {
-      en: "v2 recall/activity/governance/evolution/admin routes; v1 legacy translator.",
-      zh: "v2 recall/activity/governance/evolution/admin 路由;v1 遗留翻译器。",
+      en: "v2 recall/ingest/memories/governance/evolution/admin routes; legacy v1 removed (ADR-0008).",
+      zh: "v2 recall/ingest/memories/governance/evolution/admin 路由;遗留 v1 已删除(ADR-0008)。",
     },
   },
   {

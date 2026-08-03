@@ -13,7 +13,6 @@ import (
 	"github.com/dashimaki/garden/internal/arbiter"
 	"github.com/dashimaki/garden/internal/authority"
 	gardencog "github.com/dashimaki/garden/internal/cognitive"
-	"github.com/dashimaki/garden/internal/crud"
 	"github.com/dashimaki/garden/internal/evolution"
 	"github.com/dashimaki/garden/internal/ingest"
 	"github.com/dashimaki/garden/internal/lifecycle"
@@ -22,7 +21,6 @@ import (
 	"github.com/dashimaki/garden/internal/rag"
 	"github.com/dashimaki/garden/internal/recall"
 	"github.com/dashimaki/garden/internal/report"
-	"github.com/dashimaki/garden/internal/router"
 	"github.com/dashimaki/garden/internal/server"
 	"github.com/dashimaki/laputa/governance"
 	"github.com/dashimaki/laputa/governance/cognitive"
@@ -63,8 +61,6 @@ func main() {
 		defer mem.Close()
 	}
 
-	h := crud.NewHandler(gov, mem)
-	h.Router.Governance.(*router.GovernanceBackend).Governed = governed
 	components := map[string]string{}
 	if mem == nil {
 		components["mentle"] = "degraded"
@@ -109,7 +105,6 @@ func main() {
 	}
 
 	var manager *pipeline.Manager
-	var resolver rag.Resolver
 	pipelinePath := expandHome(os.Getenv("GARDEN_PIPELINE_CONFIG"))
 	if pipelinePath == "" {
 		pipelinePath = expandHome("~/.garden/pipelines.yaml")
@@ -125,22 +120,10 @@ func main() {
 			components["pipeline"] = "degraded"
 		} else {
 			components["pipeline"] = "ok"
-			planner := configuredPlanner()
 			if os.Getenv("GARDEN_RAG_API_KEY") == "" {
 				components["planner"] = "degraded"
 			} else {
 				components["planner"] = "ok"
-			}
-			var retriever rag.Retriever
-			if mem != nil {
-				retriever = mem
-			}
-			ragService, ragErr := rag.NewService(manager, rag.PolicyResolver{Governance: gov}, retriever, planner)
-			if ragErr != nil {
-				log.Printf("agentic RAG unavailable: %v", ragErr)
-				components["pipeline"] = "degraded"
-			} else {
-				resolver = ragService
 			}
 		}
 	}
@@ -250,7 +233,7 @@ func main() {
 	if mem != nil {
 		materialsProvider = mem
 	}
-	srv := &server.Server{Handler: h, Resolver: resolver, FastRecall: fastRecall, DeepRecall: deepRecall, TraceStore: traceStore, Evolution: evoService, Activity: activityStore, Checkpointer: checkpointer, Pipelines: manager, Ingestions: ingestions, Reports: reports, Governed: governed, GovernedWriter: &authority.GovernedWriter{Gov: governed}, Materials: materialsProvider, Cognitive: worldStore, Mailbox: mailboxStore, Components: components, Addr: addr}
+	srv := &server.Server{Facade: mem, FastRecall: fastRecall, DeepRecall: deepRecall, TraceStore: traceStore, Evolution: evoService, Activity: activityStore, Checkpointer: checkpointer, Pipelines: manager, Ingestions: ingestions, Reports: reports, Governed: governed, GovernedWriter: &authority.GovernedWriter{Gov: governed}, Materials: materialsProvider, Cognitive: worldStore, Mailbox: mailboxStore, Components: components, Addr: addr}
 	if err := lifecycle.Run(ctx, srv); err != nil {
 		log.Fatalf("lifecycle: %v", err)
 	}

@@ -24,29 +24,29 @@ The `internal/` directory contains Garden's core business logic:
 
 ```
 internal/
-├── crud/                          # CRUD translator (v1 legacy compatibility)
-│   ├── crud.go                    # Handler interface and routing logic
-│   └── crud_test.go               # Unit tests for CRUD behavior
-├── lifecycle/                     # Session and event lifecycle
-│   ├── lifecycle.go               # Session creation, event ingestion, end
+├── activity/                       # STM runtime, spool, checkpoints
+├── arbiter/                        # Conflict arbitration (read-only)
+├── authority/                      # Governance projection and writer
+├── cognitive/                      # MEMRULES loading
+├── evolution/                      # EvoMap runs/proposals/events
+├── ingest/                         # Session ingestion and semantic units
+├── lifecycle/                      # Session and event lifecycle
+│   ├── lifecycle.go                # Session creation, event ingestion, end
 │   └── lifecycle_test.go
-├── pipeline/                      # Pipeline orchestration
-│   ├── pipeline.go                # Pipeline definition and execution
+├── mailbox/                        # EvoMap inbox/outbox
+├── pipeline/                       # Pipeline orchestration
+│   ├── pipeline.go                 # Pipeline definition and execution
 │   ├── pipeline_test.go
-│   └── config.go                  # Pipeline configuration parsing
-├── rag/                           # Agentic RAG (recall planning)
-│   ├── planner.go                 # Planner interface (deterministic + LLM)
+│   └── config.go                   # Pipeline configuration parsing
+├── rag/                            # Planner surface (deterministic + LLM)
+│   ├── planner.go                  # Planner interface (deterministic + LLM)
 │   ├── planner_test.go
-│   ├── openai.go                  # OpenAI-compatible LLM adapter
-│   ├── openai_test.go
-│   └── policy.go                  # Governance policy enforcement
-├── router/                        # HTTP request routing
-│   ├── router.go                  # Main router logic
-│   ├── router_test.go
-│   ├── governance.go              # Governance projection reading
-│   ├── mentle_adapter.go          # Mentle backend adapter
-│   └── mentle_adapter_test.go
-└── supervision/                   # Process supervision and logging
+│   ├── openai.go                   # OpenAI-compatible LLM adapter
+│   └── openai_test.go
+├── recall/                         # Fast/Deep recall and traces
+├── report/                         # Human-facing report system
+├── server/                         # HTTP handlers and routing
+└── supervision/                    # Process supervision and logging
     ├── supervision.go             # Shutdown, logging, metrics
     └── supervision_test.go
 ```
@@ -134,7 +134,7 @@ GOSUMDB=off go test ./internal/...
 ### Test (Specific Package)
 
 ```bash
-GOSUMDB=off go test -v ./internal/router/...
+GOSUMDB=off go test -v ./internal/server/...
 GOSUMDB=off go test -v ./internal/rag/...
 ```
 
@@ -142,16 +142,9 @@ GOSUMDB=off go test -v ./internal/rag/...
 
 ## Key Interfaces
 
-### Router Interface
+### Facade Interface (canonical memory)
 
-```go
-type Backend interface {
-    Write(ctx context.Context, key, value string, meta map[string]any) (string, error)
-    Read(ctx context.Context, key string) (map[string]any, error)
-    List(ctx context.Context, prefix string, limit int) ([]map[string]any, error)
-    Forget(ctx context.Context, key string) (bool, error)
-}
-```
+The server talks to Mentle through `facade.Service` (`/v2/memories`, cards, evidence). The legacy prefix router and `Backend` interface were removed (ADR-0008).
 
 ### Planner Interface
 

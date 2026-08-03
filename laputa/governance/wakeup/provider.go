@@ -3,8 +3,6 @@
 // It mirrors the agent-diva-core MemoryProvider contract in Go:
 //   - SystemPromptBlock (startup wakeup)
 //   - Prefetch          (intent-aware mid-turn recall)
-//   - SyncTurn          (post-turn durable write)
-//   - OnSessionEnd      (shutdown / session-end rhythm)
 //
 // The implementation is intentionally backend-agnostic: it consumes the
 // Laputa Engine snapshot and returns prompt-ready markdown blocks.
@@ -14,7 +12,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	laputa "github.com/dashimaki/laputa/governance"
 )
@@ -63,35 +60,6 @@ type PrefetchResponse struct {
 	PromptBlock *string
 }
 
-// SyncTurnStatus indicates the result of post-turn synchronization.
-type SyncTurnStatus string
-
-const (
-	SyncPersisted SyncTurnStatus = "persisted"
-	SyncNoop      SyncTurnStatus = "noop"
-	SyncFailed    SyncTurnStatus = "failed"
-)
-
-// SyncTurnResponse is the durable-write result.
-type SyncTurnResponse struct {
-	Status SyncTurnStatus
-}
-
-// SessionEndStatus indicates the result of the shutdown hook.
-type SessionEndStatus string
-
-const (
-	SessionTriggered      SessionEndStatus = "triggered"
-	SessionNoop           SessionEndStatus = "noop"
-	SessionAlreadyHandled SessionEndStatus = "already_handled"
-	SessionFailed         SessionEndStatus = "failed"
-)
-
-// SessionEndResponse is the shutdown result.
-type SessionEndResponse struct {
-	Status SessionEndStatus
-}
-
 // WakeupPackSummary is a structured wakeup summary.
 type WakeupPackSummary struct {
 	Identity          string
@@ -122,8 +90,6 @@ type StartupContextSnapshot struct {
 type Provider interface {
 	SystemPromptBlock(ctx context.Context, workspaceRoot string) (*SystemPromptResponse, error)
 	Prefetch(ctx context.Context, intent string, currentRoom *string, userMessage *string) (*PrefetchResponse, error)
-	SyncTurn(ctx context.Context, memoryUpdateMarkdown *string, historyEntry *string) (*SyncTurnResponse, error)
-	OnSessionEnd(ctx context.Context, sessionID *string) (*SessionEndResponse, error)
 }
 
 // Engine implements Provider by reading from a Laputa Engine.
@@ -194,59 +160,6 @@ func (e *Engine) Prefetch(ctx context.Context, intent string, currentRoom *strin
 	return &PrefetchResponse{Status: PrefetchReady, PromptBlock: &block}, nil
 }
 
-// SyncTurn persists a memory update and/or history entry into the history section.
-func (e *Engine) SyncTurn(ctx context.Context, memoryUpdateMarkdown *string, historyEntry *string) (*SyncTurnResponse, error) {
-	if memoryUpdateMarkdown == nil && historyEntry == nil {
-		return &SyncTurnResponse{Status: SyncNoop}, nil
-	}
-
-	entry := map[string]any{
-		"at": time.Now().UTC().Format(time.RFC3339),
-	}
-	if memoryUpdateMarkdown != nil {
-		entry["memory_update"] = *memoryUpdateMarkdown
-	}
-	if historyEntry != nil {
-		entry["history_entry"] = *historyEntry
-	}
-
-	section, err := e.laputa.GetSection(ctx, laputa.SectionHistoryMD)
-	if err != nil {
-		return &SyncTurnResponse{Status: SyncFailed}, fmt.Errorf("read history section: %w", err)
-	}
-	timeline, _ := section["timeline"].([]any)
-	section["timeline"] = append(timeline, entry)
-
-	if err := e.laputa.SetSection(ctx, laputa.SectionHistoryMD, section); err != nil {
-		return &SyncTurnResponse{Status: SyncFailed}, fmt.Errorf("write history section: %w", err)
-	}
-	return &SyncTurnResponse{Status: SyncPersisted}, nil
-}
-
-// OnSessionEnd triggers session-end rhythm work by recording a marker.
-func (e *Engine) OnSessionEnd(ctx context.Context, sessionID *string) (*SessionEndResponse, error) {
-	marker := map[string]any{
-		"at":     time.Now().UTC().Format(time.RFC3339),
-		"event":  "session_end",
-		"source": "wakeup",
-	}
-	if sessionID != nil {
-		marker["session_id"] = *sessionID
-	}
-
-	section, err := e.laputa.GetSection(ctx, laputa.SectionHistoryMD)
-	if err != nil {
-		return &SessionEndResponse{Status: SessionFailed}, fmt.Errorf("read history section: %w", err)
-	}
-	timeline, _ := section["timeline"].([]any)
-	section["timeline"] = append(timeline, marker)
-
-	if err := e.laputa.SetSection(ctx, laputa.SectionHistoryMD, section); err != nil {
-		return &SessionEndResponse{Status: SessionFailed}, fmt.Errorf("write history section: %w", err)
-	}
-	return &SessionEndResponse{Status: SessionTriggered}, nil
-}
-
 // ---- helpers ----
 
 func degradedResponse(reason string) *SystemPromptResponse {
@@ -254,7 +167,7 @@ func degradedResponse(reason string) *SystemPromptResponse {
 		Status: StartupDegraded,
 		Reason: reason,
 		PromptBlock: &SystemPromptBlock{
-			Shape: CompactRenderedMarkdown,
+			Shape:    CompactRenderedMarkdown,
 			Markdown: fmt.Sprintf("## Memory Startup Status\n- status: degraded\n- reason: %s\n", reason),
 		},
 	}

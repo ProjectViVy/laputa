@@ -128,10 +128,6 @@ func (s *Service) Init(ctx context.Context, opts Options) error {
 		return fmt.Errorf("canonical catalog: %w", err)
 	}
 	s.Catalog = catalog
-	if err := s.backfillCanonical(ctx); err != nil {
-		s.Close()
-		return fmt.Errorf("canonical backfill: %w", err)
-	}
 	if err := s.replayIndexJobs(ctx); err != nil {
 		s.Close()
 		return fmt.Errorf("canonical index recovery: %w", err)

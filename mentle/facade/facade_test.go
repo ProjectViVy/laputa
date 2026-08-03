@@ -135,17 +135,14 @@ func TestUninitializedServiceReportsUnavailable(t *testing.T) {
 	svc := &Service{}
 	ctx := context.Background()
 
-	if _, err := svc.Write(ctx, "memory:test", "hello", nil); err == nil {
-		t.Fatal("write should fail")
+	if _, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "hello"}, "", ""); err == nil {
+		t.Fatal("create should fail")
 	}
-	if _, err := svc.Read(ctx, "memory:test"); err == nil {
-		t.Fatal("read should fail")
+	if _, err := svc.GetMemory(ctx, "mem_1"); err == nil {
+		t.Fatal("get should fail")
 	}
-	if _, err := svc.List(ctx, "memory:", 10); err == nil {
+	if _, err := svc.ListMemories(ctx, ListMemoryOptions{Limit: 10}); err == nil {
 		t.Fatal("list should fail")
-	}
-	if _, err := svc.Forget(ctx, "memory:test"); err == nil {
-		t.Fatal("forget should fail")
 	}
 	if _, err := svc.Retrieve(ctx, RetrievalQuery{Text: "hello"}); err == nil {
 		t.Fatal("retrieve should fail")
@@ -164,25 +161,30 @@ func TestServiceRealCRUDAndRetrieval(t *testing.T) {
 	embedder := fakeEmbedder{}
 	vector := search.NewSearcher(store, embedder)
 	hybridSearcher := hybrid.NewSearcher(store, embedder, .7)
-	svc := &Service{Searcher: vector, Hybrid: hybridSearcher}
+	catalog, err := OpenCatalog(filepath.Join(t.TempDir(), "canonical.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer catalog.Close()
+	svc := &Service{Searcher: vector, Hybrid: hybridSearcher, Catalog: catalog}
 	ctx := context.Background()
-	id, err := svc.Write(ctx, "memory:test", "pipeline governance", map[string]any{"wing": "technical", "room": "architecture"})
+	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "pipeline governance", Kind: "decision", Tags: []string{"technical"}}, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if id != "memory:test" {
-		t.Fatalf("id=%q", id)
+	if created.ID == "" {
+		t.Fatalf("created=%+v", created)
 	}
-	record, err := svc.Read(ctx, "memory:test")
+	record, err := svc.GetMemory(ctx, created.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if record["value"] != "pipeline governance" {
+	if record.Content != "pipeline governance" {
 		t.Fatalf("record=%v", record)
 	}
-	records, err := svc.List(ctx, "memory:", 10)
-	if err != nil || len(records) != 1 {
-		t.Fatalf("records=%v err=%v", records, err)
+	page, err := svc.ListMemories(ctx, ListMemoryOptions{Limit: 10})
+	if err != nil || len(page.Items) != 1 {
+		t.Fatalf("page=%v err=%v", page, err)
 	}
 	hits, err := svc.Retrieve(ctx, RetrievalQuery{Text: "governance", Limit: 5})
 	if err != nil || len(hits) != 1 {
@@ -191,8 +193,8 @@ func TestServiceRealCRUDAndRetrieval(t *testing.T) {
 	if len(hits[0].Channels) != 2 {
 		t.Fatalf("channels=%v", hits[0].Channels)
 	}
-	ok, err := svc.Forget(ctx, "memory:test")
-	if err != nil || !ok {
-		t.Fatalf("forget=%v err=%v", ok, err)
+	deleted, err := svc.DeleteMemory(ctx, created.ID, "user_request", "test")
+	if err != nil || !deleted.Deleted {
+		t.Fatalf("delete=%v err=%v", deleted, err)
 	}
 }

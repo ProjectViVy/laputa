@@ -122,7 +122,7 @@ Architecture Decision Records (ADRs) follow a standard format:
 |---------|-------|-----------|
 | 1-3 | Vision & rationale | Governance, degradation, authority isolation |
 | 4-6 | Core concepts | MemoryCard, EvidenceFragment, ContextView, lifecycle |
-| 7-10 | Ownership & contracts | Module boundaries, HTTP v1/v2, authority rules |
+| 7-10 | Ownership & contracts | Module boundaries, HTTP v2 contracts, authority rules |
 | 11 | Migration waves | Wave 0-7 sequence, entry/exit gates, deliverables |
 | 12 | Performance | P95 latencies, LongMemEval results, targets |
 | 13 | Degradation | Mentle unavailable, LLM unavailable, graceful fallback |

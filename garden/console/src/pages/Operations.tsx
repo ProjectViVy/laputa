@@ -16,7 +16,7 @@ export default function Operations() {
   const { data: comps } = useApi<ComponentsResponse>("/v2/admin/components", { poll: 10000 });
   const { data: spool } = useApi<SpoolResponse>("/v2/admin/spool", { poll: 8000 });
   const { data: audit } = useApi<AuditResponse>("/v2/admin/audit?limit=20", { poll: 15000 });
-  const { data: pipes } = useApi<PipelinesResponse>("/v1/pipelines");
+  const { data: pipes } = useApi<PipelinesResponse>("/v2/pipelines");
   const { data: overview } = useApi<OverviewResponse>("/v2/admin/overview", { poll: 10000 });
   const ing = overview?.ingestion;
 

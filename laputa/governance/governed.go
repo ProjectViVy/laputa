@@ -10,7 +10,6 @@ import (
 )
 
 var ErrUnauthorized = errors.New("governance: unauthorized mutation")
-var ErrCompatReadOnly = errors.New("governance: section is compatibility-only and read-only")
 
 type ActorRole string
 
@@ -69,9 +68,6 @@ func (g *GovernedService) Mutate(ctx context.Context, req MutationRequest) error
 	info, ok := SectionRegistry[req.Section]
 	if !ok {
 		return fmt.Errorf("governance: unknown section %s", req.Section)
-	}
-	if info.Compat {
-		return ErrCompatReadOnly
 	}
 	if err := authorize(info.WriteAuth, req.Actor); err != nil {
 		return err
@@ -132,8 +128,6 @@ func authorize(auth WriteAuthority, actor ActorRole) error {
 		allowed = actor == ActorUser || actor == ActorAgent || actor == ActorSystem
 	case AuthorityReport:
 		allowed = actor == ActorUser || actor == ActorReportSystem
-	case AuthorityTBD:
-		allowed = actor == ActorUser
 	default:
 		allowed = false
 	}
@@ -149,8 +143,6 @@ func requiresAudit(section SectionName, actor ActorRole) bool {
 	}
 	switch section {
 	case SectionIdentity, SectionRelationship, SectionCommitment, SectionPreferences:
-		return true
-	case SectionJournalReflective, SectionProposalInbox, SectionReportIndexes, SectionAAAKSummaries:
 		return true
 	}
 	info := SectionRegistry[section]

@@ -13,13 +13,12 @@
 
 Garden is the unified HTTP entry point for Laputa governance and Mentle memory. It provides:
 
-- **HTTP API v1** — CRUD translator for legacy compatibility
-- **HTTP API v2** (vNext) — Fast/Deep recall, governance projection, activity events
+- **HTTP API v2** — canonical memory CRUD, ingest, Fast/Deep recall, governance, evolution, mailbox, admin
 - **Activity orchestration** — session lifecycle, event ingestion, recall traces
 - **Agentic RAG** — governed context resolution with optional LLM planner
 - **Degradation** — graceful fallback when Mentle or LLM is unavailable
 
-All routing is prefix-based (`section:` → Laputa, `memory:` → Mentle).
+The legacy v1 CRUD translator and prefix router were removed (ADR-0008); the HTTP surface is v2-only.
 
 ---
 
@@ -35,30 +34,20 @@ garden/
 │   └── external_e2e_test.go
 ├── fixtures/                     # Test data and fixtures
 ├── internal/
-│   ├── crud/                     # CRUD router (legacy and new)
-│   │   └── crud_test.go
+│   ├── activity/                 # STM runtime, spool, checkpoints
+│   ├── arbiter/                  # Conflict arbitration (read-only)
+│   ├── authority/                # Governance projection and writer
+│   ├── cognitive/                # MEMRULES loading
+│   ├── evolution/                # EvoMap runs/proposals/events
+│   ├── ingest/                   # Session ingestion and semantic units
 │   ├── lifecycle/                # Session lifecycle management
-│   │   ├── lifecycle.go
-│   │   └── lifecycle_test.go
+│   ├── mailbox/                  # EvoMap inbox/outbox
 │   ├── pipeline/                 # Pipeline orchestration
-│   │   ├── pipeline.go
-│   │   ├── pipeline_test.go
-│   │   └── config.go
-│   ├── rag/                      # Agentic RAG (recall planning)
-│   │   ├── planner.go            # Deterministic + LLM planner
-│   │   ├── planner_test.go
-│   │   ├── openai.go             # OpenAI-compatible LLM adapter
-│   │   ├── policy.go             # Governance policy enforcement
-│   │   └── openai_test.go
-│   ├── router/                   # HTTP request routing
-│   │   ├── router.go             # Main router logic
-│   │   ├── router_test.go
-│   │   ├── governance.go         # Governance projection
-│   │   ├── mentle_adapter.go     # Mentle backend adapter
-│   │   └── mentle_adapter_test.go
+│   ├── rag/                      # Planner surface (deterministic + LLM)
+│   ├── recall/                   # Fast/Deep recall and traces
+│   ├── report/                   # Human-facing report system
+│   ├── server/                   # HTTP handlers and routing
 │   └── supervision/              # Process supervision and logging
-│       ├── supervision.go
-│       └── supervision_test.go
 ├── main.go                       # HTTP server entry point
 ├── go.mod                        # Module: github.com/dashimaki/garden
 ├── go.sum
@@ -71,40 +60,25 @@ garden/
 
 Depth-2 AGENTS.md files exist for:
 
-- **[internal/AGENTS.md](./internal/AGENTS.md)** — router, CRUD, lifecycle, RAG, supervision
+- **[internal/AGENTS.md](./internal/AGENTS.md)** — server, recall, activity, ingest, evolution
 - **[e2e/AGENTS.md](./e2e/AGENTS.md)** — end-to-end tests and external verification
 
 ---
 
 ## Key Concepts
 
-### Unified Router
-
-Dispatches requests by key prefix:
-
-| Prefix | Backend | Route |
-|--------|---------|-------|
-| `section:` | Laputa governance | `/v1/memories` (legacy) or `/v2/governance/` (vNext) |
-| `memory:` | Mentle | `/v1/memories` (legacy) or `/v2/recall/` (vNext) |
-
-### HTTP API Contract
-
-#### v1 (Legacy Compatibility)
+### HTTP API Contract (v2 only)
 
 ```http
-POST   /v1/memories               # Write (section: or memory:)
-GET    /v1/memories/{key}         # Read
-GET    /v1/memories?prefix=&limit= # List (default prefix: section:)
-DELETE /v1/memories/{key}         # Delete
-POST   /v1/context/resolve        # Fast or Deep recall
-POST   /v1/context/bootstrap      # Fast Recall bootstrap
-GET    /v1/pipelines              # Pipeline inspection
-GET    /health                    # Health check
-```
+POST   /v2/memories                # Canonical memory create
+GET    /v2/memories/{id}           # Canonical memory read
+GET    /v2/memories                # Canonical memory list
+PATCH  /v2/memories/{id}           # Canonical memory update
+DELETE /v2/memories/{id}           # Canonical memory delete
+POST   /v2/ingest/sessions         # Session-end ingestion
+GET    /v2/ingestions/{id}         # Ingestion status
+POST   /v2/recall/bootstrap        # Session bootstrap context
 
-#### v2 (vNext)
-
-```http
 POST   /v2/recall/fast            # Fast recall (deterministic, no LLM)
 POST   /v2/recall/deep            # Deep recall (explicit, with KG/graph)
 GET    /v2/recall/traces/{trace_id} # Retrieve recall trace
@@ -118,6 +92,9 @@ POST   /v2/governance/proposals   # Create or review proposals
 POST   /v2/evolution/runs         # Start evolution run
 POST   /v2/evolution/proposals    # Submit evolution proposal
 GET    /v2/evolution/proposals/{id} # Retrieve proposal details
+
+GET    /v2/pipelines              # Pipeline inspection
+GET    /health                    # Health check
 ```
 
 ### Agentic Recall
@@ -282,22 +259,27 @@ curl -s -X POST http://127.0.0.1:7373/v2/activity/events \
   }'
 ```
 
-### CRUD (v1 Legacy)
+### Canonical Memory CRUD (v2)
 
 ```bash
-# Write (Laputa section)
-curl -s -X POST http://127.0.0.1:7373/v1/memories \
+# Create
+curl -s -X POST http://127.0.0.1:7373/v2/memories \
   -H 'Content-Type: application/json' \
-  -d '{"key":"section:01-identity","value":"{\"agent\":\"matsumoto\"}"}'
+  -d '{"content":"decision text","kind":"decision","scope":"project:garden"}'
 
 # Read
-curl -s http://127.0.0.1:7373/v1/memories/section:01-identity
+curl -s http://127.0.0.1:7373/v2/memories/mem_<id>
 
-# List with prefix
-curl -s "http://127.0.0.1:7373/v1/memories?prefix=section:&limit=10"
+# List
+curl -s "http://127.0.0.1:7373/v2/memories?kind=decision&limit=10"
+
+# Update
+curl -s -X PATCH http://127.0.0.1:7373/v2/memories/mem_<id> \
+  -H 'Content-Type: application/json' \
+  -d '{"content":"updated text","expected_version":1}'
 
 # Delete
-curl -s -X DELETE http://127.0.0.1:7373/v1/memories/section:01-identity
+curl -s -X DELETE http://127.0.0.1:7373/v2/memories/mem_<id>
 ```
 
 ---

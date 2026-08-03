@@ -26,7 +26,6 @@ const EDGES: Edge[] = [
   { id: "host-garden", x1: 50, y1: 12.5, x2: 50, y2: 37.5, flows: ["context", "ingestion", "recall"] },
   { id: "garden-laputa", x1: 50, y1: 37.5, x2: 16.7, y2: 62.5, flows: ["context", "ingestion", "change"] },
   { id: "garden-mentle", x1: 50, y1: 37.5, x2: 50, y2: 62.5, flows: ["context", "ingestion", "recall"] },
-  { id: "garden-legacy", x1: 50, y1: 37.5, x2: 83.3, y2: 62.5, compat: true, flows: [] },
   { id: "laputa-ctx", x1: 16.7, y1: 62.5, x2: 50, y2: 87.5, flows: ["context", "recall"] },
   { id: "mentle-ctx", x1: 50, y1: 62.5, x2: 50, y2: 87.5, flows: ["context", "recall"] },
 ];

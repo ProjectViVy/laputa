@@ -12,24 +12,18 @@ import (
 	"github.com/gofrs/flock"
 )
 
-// SectionName represents one of the 14 governance sections.
+// SectionName represents one of the governance sections.
 type SectionName string
 
 const (
-	SectionIdentity          SectionName = "01-identity"
-	SectionRelationship      SectionName = "02-relationship"
-	SectionCommitment        SectionName = "03-commitment"
-	SectionPreferences       SectionName = "04-preferences"
-	SectionMemoryMD          SectionName = "05-memory_md"
-	SectionHistoryMD         SectionName = "06-history_md"
-	SectionDaily             SectionName = "07-daily"
-	SectionWeekly            SectionName = "08-weekly"
-	SectionMonthly           SectionName = "09-monthly"
-	SectionJournalReflective SectionName = "10-journal_reflective"
-	SectionProposalInbox     SectionName = "11-proposal_inbox"
-	SectionChangelog         SectionName = "12-changelog"
-	SectionReportIndexes     SectionName = "13-report_indexes"
-	SectionAAAKSummaries     SectionName = "14-aaak_summaries"
+	SectionIdentity     SectionName = "01-identity"
+	SectionRelationship SectionName = "02-relationship"
+	SectionCommitment   SectionName = "03-commitment"
+	SectionPreferences  SectionName = "04-preferences"
+	SectionMemoryMD     SectionName = "05-memory_md"
+	SectionDaily        SectionName = "07-daily"
+	SectionWeekly       SectionName = "08-weekly"
+	SectionMonthly      SectionName = "09-monthly"
 )
 
 // AllSections is the ordered list of all governance sections.
@@ -39,15 +33,9 @@ var AllSections = []SectionName{
 	SectionCommitment,
 	SectionPreferences,
 	SectionMemoryMD,
-	SectionHistoryMD,
 	SectionDaily,
 	SectionWeekly,
 	SectionMonthly,
-	SectionJournalReflective,
-	SectionProposalInbox,
-	SectionChangelog,
-	SectionReportIndexes,
-	SectionAAAKSummaries,
 }
 
 // WriteAuthority defines who may write to a section.
@@ -57,7 +45,6 @@ const (
 	AuthorityAgentSelf WriteAuthority = "agent_self"
 	AuthorityUserOnly  WriteAuthority = "user_only"
 	AuthorityReport    WriteAuthority = "report_system"
-	AuthorityTBD       WriteAuthority = "tbd"
 )
 
 // SectionInfo holds metadata for a governance section.
@@ -65,27 +52,20 @@ type SectionInfo struct {
 	Name        SectionName
 	WriteAuth   WriteAuthority
 	SchemaOwner string
-	Status      string // "stable", "tbd", or "compat" (retired read-only legacy)
-	Compat      bool   // true = read-only legacy section, writes blocked
+	Status      string // "stable"
 	Frozen      bool   // true = Frozen Core, cached at session bootstrap
 }
 
 // SectionRegistry maps section names to their metadata.
 var SectionRegistry = map[SectionName]SectionInfo{
-	SectionIdentity:          {Name: SectionIdentity, WriteAuth: AuthorityAgentSelf, SchemaOwner: "laputa", Status: "stable", Frozen: true},
-	SectionRelationship:      {Name: SectionRelationship, WriteAuth: AuthorityAgentSelf, SchemaOwner: "laputa", Status: "stable", Frozen: true},
-	SectionCommitment:        {Name: SectionCommitment, WriteAuth: AuthorityUserOnly, SchemaOwner: "laputa", Status: "stable", Frozen: true},
-	SectionPreferences:       {Name: SectionPreferences, WriteAuth: AuthorityAgentSelf, SchemaOwner: "laputa", Status: "stable", Frozen: true},
-	SectionMemoryMD:          {Name: SectionMemoryMD, WriteAuth: AuthorityAgentSelf, SchemaOwner: "laputa", Status: "stable"},
-	SectionHistoryMD:         {Name: SectionHistoryMD, WriteAuth: AuthorityAgentSelf, SchemaOwner: "laputa", Status: "stable", Compat: true},
-	SectionDaily:             {Name: SectionDaily, WriteAuth: AuthorityReport, SchemaOwner: "report_system", Status: "stable"},
-	SectionWeekly:            {Name: SectionWeekly, WriteAuth: AuthorityReport, SchemaOwner: "report_system", Status: "stable"},
-	SectionMonthly:           {Name: SectionMonthly, WriteAuth: AuthorityReport, SchemaOwner: "report_system", Status: "stable"},
-	SectionJournalReflective: {Name: SectionJournalReflective, WriteAuth: AuthorityTBD, SchemaOwner: "tbd", Status: "tbd"},
-	SectionProposalInbox:     {Name: SectionProposalInbox, WriteAuth: AuthorityTBD, SchemaOwner: "tbd", Status: "tbd"},
-	SectionChangelog:         {Name: SectionChangelog, WriteAuth: AuthorityTBD, SchemaOwner: "tbd", Status: "tbd"},
-	SectionReportIndexes:     {Name: SectionReportIndexes, WriteAuth: AuthorityTBD, SchemaOwner: "tbd", Status: "compat", Compat: true},
-	SectionAAAKSummaries:     {Name: SectionAAAKSummaries, WriteAuth: AuthorityTBD, SchemaOwner: "tbd", Status: "tbd", Compat: true},
+	SectionIdentity:     {Name: SectionIdentity, WriteAuth: AuthorityAgentSelf, SchemaOwner: "laputa", Status: "stable", Frozen: true},
+	SectionRelationship: {Name: SectionRelationship, WriteAuth: AuthorityAgentSelf, SchemaOwner: "laputa", Status: "stable", Frozen: true},
+	SectionCommitment:   {Name: SectionCommitment, WriteAuth: AuthorityUserOnly, SchemaOwner: "laputa", Status: "stable", Frozen: true},
+	SectionPreferences:  {Name: SectionPreferences, WriteAuth: AuthorityAgentSelf, SchemaOwner: "laputa", Status: "stable", Frozen: true},
+	SectionMemoryMD:     {Name: SectionMemoryMD, WriteAuth: AuthorityAgentSelf, SchemaOwner: "laputa", Status: "stable"},
+	SectionDaily:        {Name: SectionDaily, WriteAuth: AuthorityReport, SchemaOwner: "report_system", Status: "stable"},
+	SectionWeekly:       {Name: SectionWeekly, WriteAuth: AuthorityReport, SchemaOwner: "report_system", Status: "stable"},
+	SectionMonthly:      {Name: SectionMonthly, WriteAuth: AuthorityReport, SchemaOwner: "report_system", Status: "stable"},
 }
 
 // SectionStore is the interface for CRUD operations on governance sections.
@@ -416,7 +396,7 @@ func (e *Engine) ListSections(ctx context.Context) ([]SectionName, error) {
 	return e.store.List(ctx)
 }
 
-// Initialize creates all 14 sections with default templates.
+// Initialize creates all governance sections with default templates.
 func (e *Engine) Initialize(ctx context.Context) error {
 	for _, section := range AllSections {
 		exists, err := e.store.Exists(ctx, section)
@@ -433,7 +413,7 @@ func (e *Engine) Initialize(ctx context.Context) error {
 	return nil
 }
 
-// Snapshot returns the full Laputa state (all 14 sections).
+// Snapshot returns the full Laputa state (all sections).
 func (e *Engine) Snapshot(ctx context.Context) (map[string]any, error) {
 	state := make(map[string]any)
 	state["schema_version"] = "1.0.0"
@@ -494,10 +474,6 @@ func defaultSectionData(section SectionName) map[string]any {
 			"summary":    "",
 			"highlights": []map[string]any{},
 		}
-	case SectionHistoryMD:
-		return map[string]any{
-			"timeline": []map[string]any{},
-		}
 	case SectionDaily:
 		return map[string]any{
 			"reports": []map[string]any{},
@@ -509,31 +485,6 @@ func defaultSectionData(section SectionName) map[string]any {
 	case SectionMonthly:
 		return map[string]any{
 			"reports": []map[string]any{},
-		}
-	case SectionJournalReflective:
-		return map[string]any{
-			"entries": []map[string]any{},
-			"status":  "tbd",
-		}
-	case SectionProposalInbox:
-		return map[string]any{
-			"proposals": []map[string]any{},
-			"status":    "tbd",
-		}
-	case SectionChangelog:
-		return map[string]any{
-			"records": []map[string]any{},
-			"status":  "tbd",
-		}
-	case SectionReportIndexes:
-		return map[string]any{
-			"indexes": []map[string]any{},
-			"status":  "tbd",
-		}
-	case SectionAAAKSummaries:
-		return map[string]any{
-			"summaries": []map[string]any{},
-			"status":    "tbd",
 		}
 	default:
 		return map[string]any{}

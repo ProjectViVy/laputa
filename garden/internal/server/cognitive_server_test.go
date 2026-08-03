@@ -16,18 +16,61 @@ import (
 	"github.com/dashimaki/laputa/governance/cognitive"
 )
 
-func TestCompatWriteBlocked(t *testing.T) {
-	srv := governedTestServer(t)
-	for _, section := range []string{"06-history_md", "13-report_indexes", "14-aaak_summaries"} {
-		body := `{"section":"` + section + `","action":"write","reason":"legacy write","data":{"x":1}}`
-		req := httptest.NewRequest(http.MethodPost, "/v2/governance/mutations", bytes.NewBufferString(body))
-		req.Header.Set("X-Garden-Actor", "user_request")
-		rec := httptest.NewRecorder()
-		srv.HTTPHandler().ServeHTTP(rec, req)
-		if rec.Code != http.StatusGone {
-			t.Errorf("section %s: status=%d body=%s, want 410", section, rec.Code, rec.Body.String())
+func TestLegacySectionsNeverInContext(t *testing.T) {
+	dir := t.TempDir()
+	store, err := governance.NewFileStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := governance.NewEngine(store)
+	if err := engine.Initialize(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	markers := map[string]string{
+		"06-history_md":     "LEGACY_HISTORY_MARKER",
+		"13-report_indexes": "LEGACY_REPORT_INDEX_MARKER",
+		"14-aaak_summaries": "LEGACY_AAAK_MARKER",
+	}
+	for section, marker := range markers {
+		if err := engine.SetSection(ctx, governance.SectionName(section), map[string]any{"content": marker}); err != nil {
+			t.Fatalf("seed %s: %v", section, err)
 		}
 	}
+
+	srv := &Server{
+		FastRecall: &recall.FastService{Gov: engine},
+		Addr:       ":0",
+	}
+
+	fastReq := httptest.NewRequest(http.MethodPost, "/v2/recall/fast", bytes.NewBufferString(`{"query":"legacy data","budget_chars":6000}`))
+	rec := httptest.NewRecorder()
+	srv.HTTPHandler().ServeHTTP(rec, fastReq)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("fast recall status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); containsAny(body, markers) {
+		t.Errorf("legacy section data leaked into fast recall: %s", body)
+	}
+
+	bootReq := httptest.NewRequest(http.MethodPost, "/v2/recall/bootstrap", bytes.NewBufferString(`{"intent":"bootstrap","budget_chars":6000}`))
+	rec = httptest.NewRecorder()
+	srv.HTTPHandler().ServeHTTP(rec, bootReq)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("bootstrap status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); containsAny(body, markers) {
+		t.Errorf("legacy section data leaked into bootstrap: %s", body)
+	}
+}
+
+func containsAny(haystack string, markers map[string]string) bool {
+	for _, marker := range markers {
+		if strings.Contains(haystack, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestCognitiveWorldEndpoint(t *testing.T) {
@@ -68,64 +111,6 @@ func TestCognitiveWorldEndpoint(t *testing.T) {
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("nil Cognitive: status=%d, want 503", rec.Code)
 	}
-}
-
-func TestCompatNeverInContext(t *testing.T) {
-	dir := t.TempDir()
-	store, err := governance.NewFileStore(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	engine := governance.NewEngine(store)
-	if err := engine.Initialize(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	ctx := context.Background()
-	markers := map[governance.SectionName]string{
-		governance.SectionHistoryMD:      "COMPAT_HISTORY_MARKER",
-		governance.SectionReportIndexes:  "COMPAT_REPORT_INDEX_MARKER",
-		governance.SectionAAAKSummaries:  "COMPAT_AAAK_MARKER",
-	}
-	for section, marker := range markers {
-		if err := engine.SetSection(ctx, section, map[string]any{"content": marker}); err != nil {
-			t.Fatalf("seed %s: %v", section, err)
-		}
-	}
-
-	srv := &Server{
-		Handler:    testServer().Handler,
-		FastRecall: &recall.FastService{Gov: engine},
-		Addr:       ":0",
-	}
-
-	fastReq := httptest.NewRequest(http.MethodPost, "/v2/recall/fast", bytes.NewBufferString(`{"query":"legacy data","budget_chars":6000}`))
-	rec := httptest.NewRecorder()
-	srv.HTTPHandler().ServeHTTP(rec, fastReq)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("fast recall status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if body := rec.Body.String(); containsAny(body, markers) {
-		t.Errorf("compat section data leaked into fast recall: %s", body)
-	}
-
-	bootReq := httptest.NewRequest(http.MethodPost, "/v1/context/bootstrap", bytes.NewBufferString(`{"intent":"bootstrap","budget_chars":6000}`))
-	rec = httptest.NewRecorder()
-	srv.HTTPHandler().ServeHTTP(rec, bootReq)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("bootstrap status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if body := rec.Body.String(); containsAny(body, markers) {
-		t.Errorf("compat section data leaked into bootstrap: %s", body)
-	}
-}
-
-func containsAny(haystack string, markers map[governance.SectionName]string) bool {
-	for _, marker := range markers {
-		if strings.Contains(haystack, marker) {
-			return true
-		}
-	}
-	return false
 }
 
 func loadWorldFixture(t *testing.T) *cognitive.WorldStore {

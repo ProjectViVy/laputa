@@ -6,6 +6,49 @@ import (
 	"strings"
 )
 
+func extractiveContext(intent string, evidence []Evidence, maxTokens int) string {
+	var b strings.Builder
+	b.WriteString("Intent: " + intent + "\n\nRelevant evidence:\n")
+	limit := maxTokens * 4
+	for _, item := range evidence {
+		line := fmt.Sprintf("- [%s] (%s: %s) %s\n", item.ID, item.Source, item.Locator, item.Excerpt)
+		if b.Len()+len(line) > limit {
+			break
+		}
+		b.WriteString(line)
+	}
+	return b.String()
+}
+
+func validCitations(value string, evidence []Evidence) bool {
+	if len(evidence) == 0 {
+		return true
+	}
+	valid := map[string]bool{}
+	for _, item := range evidence {
+		valid[item.ID] = true
+	}
+	found := false
+	for start := 0; start < len(value); {
+		i := strings.Index(value[start:], "[ev_")
+		if i < 0 {
+			break
+		}
+		i += start
+		j := strings.Index(value[i:], "]")
+		if j < 0 {
+			return false
+		}
+		id := value[i+1 : i+j]
+		if !valid[id] {
+			return false
+		}
+		found = true
+		start = i + j + 1
+	}
+	return found
+}
+
 type RulePlanner struct{}
 
 func (RulePlanner) Plan(_ context.Context, input PlannerInput) (RetrievalPlan, error) {

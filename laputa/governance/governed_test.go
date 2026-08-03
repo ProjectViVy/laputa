@@ -3,6 +3,7 @@ package governance
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -80,16 +81,16 @@ func TestMutateReportSection(t *testing.T) {
 	}
 }
 
-func TestMutateTBDSection(t *testing.T) {
+func TestMutateUnknownSection(t *testing.T) {
 	g, _ := newTestGoverned(t)
 	err := g.Mutate(context.Background(), MutationRequest{
-		Section: SectionProposalInbox,
+		Section: "11-proposal_inbox",
 		Action:  "write",
 		Actor:   ActorAgent,
 		Data:    map[string]any{},
 	})
-	if !errors.Is(err, ErrUnauthorized) {
-		t.Fatalf("agent should not write tbd section: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "unknown section") {
+		t.Fatalf("deleted legacy section should be unknown: %v", err)
 	}
 }
 

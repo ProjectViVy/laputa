@@ -30,14 +30,12 @@ func main() {
 		baseURL       = flag.String("base-url", "https://api.openai.com/v1", "LLM base URL")
 		apiKey        = flag.String("api-key", os.Getenv("OPENAI_API_KEY"), "LLM API key")
 		model         = flag.String("model", "gpt-4o-mini", "LLM model")
-		wakeupAction  = flag.String("wakeup-action", "", "wakeup action: system-prompt|prefetch|sync-turn|session-end")
+		wakeupAction  = flag.String("wakeup-action", "", "wakeup action: system-prompt|prefetch")
 		wakeupIntent  = flag.String("wakeup-intent", "", "wakeup.prefetch intent")
 		wakeupRoom    = flag.String("wakeup-room", "", "wakeup.prefetch room")
-		wakeupSession = flag.String("wakeup-session", "", "wakeup.session_end session id")
-		wakeupHistory = flag.String("wakeup-history", "", "wakeup.sync_turn history entry")
 		daemonTick    = flag.Duration("daemon-tick", 60*time.Second, "daemon tick interval (when cmd=daemon)")
 		daemonDryRun  = flag.Bool("daemon-dry-run", false, "daemon dry-run (when cmd=daemon)")
-		daemonSession = flag.String("daemon-session", "laputa-daemon", "session id passed to wakeup.session_end on shutdown")
+		daemonSession = flag.String("daemon-session", "laputa-daemon", "session id used in daemon shutdown logs")
 		serveAddr     = flag.String("serve-addr", "127.0.0.1:7373", "http listen address (when cmd=serve)")
 	)
 	flag.Parse()
@@ -58,7 +56,7 @@ func main() {
 	case "rhythm":
 		runRhythm(ctx, engine, *kind, *baseURL, *apiKey, *model)
 	case "wakeup":
-		runWakeup(ctx, engine, *wakeupAction, *wakeupIntent, *wakeupRoom, *wakeupHistory, *wakeupSession)
+		runWakeup(ctx, engine, *wakeupAction, *wakeupIntent, *wakeupRoom)
 	case "daemon":
 		runDaemon(ctx, engine, *daemonTick, *daemonDryRun, *daemonSession, *baseURL, *apiKey, *model)
 	case "serve":
@@ -102,7 +100,7 @@ func runRhythm(ctx context.Context, engine *laputa.Engine, kind, baseURL, apiKey
 	fmt.Println("rhythm report generated")
 }
 
-func runWakeup(ctx context.Context, engine *laputa.Engine, action, intent, room, history, session string) {
+func runWakeup(ctx context.Context, engine *laputa.Engine, action, intent, room string) {
 	provider := wakeup.NewEngine(engine)
 
 	switch action {
@@ -132,30 +130,6 @@ func runWakeup(ctx context.Context, engine *laputa.Engine, action, intent, room,
 		if resp.PromptBlock != nil {
 			fmt.Println(*resp.PromptBlock)
 		}
-	case "sync-turn":
-		var histPtr *string
-		if history != "" {
-			h := history
-			histPtr = &h
-		}
-		resp, err := provider.SyncTurn(ctx, nil, histPtr)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "sync_turn: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("status=%s\n", resp.Status)
-	case "session-end":
-		var sessPtr *string
-		if session != "" {
-			s := session
-			sessPtr = &s
-		}
-		resp, err := provider.OnSessionEnd(ctx, sessPtr)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "session_end: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("status=%s\n", resp.Status)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown wakeup action: %s\n", action)
 		os.Exit(1)

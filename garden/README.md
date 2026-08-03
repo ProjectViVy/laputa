@@ -13,18 +13,30 @@ Depends on sibling modules via `go.mod` replace:
 - `../laputa` → `github.com/dashimaki/laputa/governance`
 - `../mentle` → `github.com/dashimaki/mentle/facade`
 
-## CRUD
+## HTTP API (v2)
 
-| Action | Key prefix | Backend |
-|--------|------------|---------|
-| write  | `section:` | governance |
-| read   | `section:` | governance |
-| list   | `section:` | governance |
-| forget | `section:` | governance |
-| write  | `memory:`  | mentle facade |
-| read   | `memory:`  | mentle facade |
-| list   | `memory:`  | mentle facade |
-| forget | `memory:`  | mentle facade |
+| Method | Route | Body / params |
+|--------|-------|---------------|
+| POST | `/v2/memories` | canonical `{"content","kind","scope",...}` |
+| GET | `/v2/memories/{id}` | — |
+| GET | `/v2/memories` | `?kind=&status=&limit=` |
+| PATCH | `/v2/memories/{id}` | `{"content","expected_version"}` |
+| DELETE | `/v2/memories/{id}` | — |
+| POST | `/v2/ingest/sessions` | session-end transcript |
+| GET | `/v2/ingestions/{id}` | ingestion status |
+| POST | `/v2/recall/bootstrap` | `{"intent","budget_chars"}` |
+| GET | `/health` | — |
+
+The legacy v1 CRUD translator was removed (ADR-0008); the HTTP surface is v2-only.
+
+```bash
+./garden.exe &
+curl -s -X POST http://127.0.0.1:7373/v2/memories \
+  -H 'Content-Type: application/json' \
+  -d '{"content":"decision text","kind":"decision","scope":"project:garden"}'
+curl -s http://127.0.0.1:7373/v2/memories
+curl -s http://127.0.0.1:7373/health
+```
 
 ## Build
 
@@ -35,37 +47,18 @@ go build -o garden.exe .
 go test ./internal/...
 ```
 
-## HTTP API
-
-| Method | Route | Body / params |
-|--------|-------|---------------|
-| POST | `/v1/memories` | `{"key","value","meta?"}` |
-| GET | `/v1/memories/{key}` | — |
-| GET | `/v1/memories` | `?prefix=&limit=` (default prefix `section:`) |
-| DELETE | `/v1/memories/{key}` | — |
-| GET | `/health` | — |
-
-```bash
-./garden.exe &
-curl -s -X POST http://127.0.0.1:7373/v1/memories \
-  -H 'Content-Type: application/json' \
-  -d '{"key":"section:01-identity","value":"{\"agent\":\"matsumoto\"}"}'
-curl -s http://127.0.0.1:7373/v1/memories/section:01-identity
-curl -s http://127.0.0.1:7373/health
-```
-
 ## Governed Agentic RAG
 
-Garden now runs `agentic_recall_v1` as a governed pipeline. Laputa supplies
+Garden runs Fast/Deep recall as governed pipelines. Laputa supplies
 read-only policy and governance evidence; Mentle supplies hybrid memory, KG,
 and timeline retrieval. The response is a compact, cited context package:
 
 ```bash
-curl -s -X POST http://127.0.0.1:7373/v1/context/resolve \
+curl -s -X POST http://127.0.0.1:7373/v2/recall/fast \
   -H "Content-Type: application/json" \
-  -d '{"intent":"What decisions constrain the current task?","session_id":"demo"}'
+  -d '{"query":"What decisions constrain the current task?","budget_chars":4000}'
 
-curl -s http://127.0.0.1:7373/v1/pipelines
+curl -s http://127.0.0.1:7373/v2/pipelines
 ```
 
 Optional OpenAI-compatible planning uses `GARDEN_RAG_BASE_URL`,

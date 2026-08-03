@@ -18,6 +18,7 @@ var (
 	ErrMemoryNotFound      = errors.New("memory not found")
 	ErrVersionConflict     = errors.New("version conflict")
 	ErrIdempotencyConflict = errors.New("idempotency conflict")
+	ErrUnavailable         = errors.New("mentle unavailable")
 )
 
 type MemorySource struct {
@@ -96,7 +97,7 @@ func OpenCatalog(path string) (*Catalog, error) {
 	}
 	schema := `
 CREATE TABLE IF NOT EXISTS memories (
- id TEXT PRIMARY KEY, legacy_key TEXT UNIQUE, kind TEXT NOT NULL, content TEXT NOT NULL,
+ id TEXT PRIMARY KEY, kind TEXT NOT NULL, content TEXT NOT NULL,
  status TEXT NOT NULL, version INTEGER NOT NULL, scope TEXT NOT NULL,
  tags_json TEXT NOT NULL, source_json TEXT NOT NULL, valid_from TEXT NOT NULL,
  valid_to TEXT, supersedes_json TEXT NOT NULL, superseded_by TEXT,
@@ -180,7 +181,7 @@ func (s *Service) CreateMemory(ctx context.Context, req CreateMemoryRequest, ide
 	if err != nil {
 		return Memory{}, err
 	}
-	if err = insertMemory(ctx, tx, m, ""); err == nil && idempotencyKey != "" {
+	if err = insertMemory(ctx, tx, m); err == nil && idempotencyKey != "" {
 		_, err = tx.ExecContext(ctx, `INSERT INTO idempotency(key,body_hash,memory_id,created_at) VALUES(?,?,?,?)`, idempotencyKey, bodyHash, m.ID, now.Format(time.RFC3339Nano))
 	}
 	if err == nil {
@@ -360,35 +361,6 @@ func (s *Service) ListMemories(ctx context.Context, opts ListMemoryOptions) (Mem
 	return MemoryPage{Items: items, NextCursor: next}, rows.Err()
 }
 
-func (s *Service) backfillCanonical(ctx context.Context) error {
-	if s.Catalog == nil || s.Searcher == nil {
-		return nil
-	}
-	drawers, err := s.Searcher.ListAll(ctx, 50000)
-	if err != nil {
-		return err
-	}
-	for _, d := range drawers {
-		if strings.HasPrefix(d.ID, "mem_") {
-			continue
-		}
-		legacy := "memory:" + d.ID
-		var exists int
-		if err := s.Catalog.db.QueryRowContext(ctx, `SELECT COUNT(1) FROM memories WHERE legacy_key=?`, legacy).Scan(&exists); err != nil {
-			return err
-		}
-		if exists > 0 {
-			continue
-		}
-		now := time.Now().UTC()
-		m := Memory{ID: canonicalID(), Kind: "note", Content: d.Content, Status: "active", Version: 1, Tags: []string{}, Source: MemorySource{Type: "import"}, ValidFrom: now, Supersedes: []string{}, CreatedAt: now, UpdatedAt: now, Metadata: map[string]any{"legacy_key": legacy}}
-		if _, err := s.Catalog.db.ExecContext(ctx, `INSERT INTO memories(id,legacy_key,kind,content,status,version,scope,tags_json,source_json,valid_from,valid_to,supersedes_json,superseded_by,created_at,updated_at,metadata_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, m.ID, legacy, m.Kind, m.Content, m.Status, m.Version, m.Scope, encode(m.Tags), encode(m.Source), now.Format(time.RFC3339Nano), nil, encode(m.Supersedes), nil, now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), encode(m.Metadata)); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (s *Service) replayIndexJobs(ctx context.Context) error {
 	if s.Catalog == nil {
 		return nil
@@ -489,8 +461,8 @@ func scanMemory(row scanner) (Memory, error) {
 	}
 	return m, nil
 }
-func insertMemory(ctx context.Context, tx *sql.Tx, m Memory, legacy string) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO memories(id,legacy_key,kind,content,status,version,scope,tags_json,source_json,valid_from,valid_to,supersedes_json,superseded_by,created_at,updated_at,metadata_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, m.ID, nullString(legacy), m.Kind, m.Content, m.Status, m.Version, m.Scope, encode(m.Tags), encode(m.Source), m.ValidFrom.Format(time.RFC3339Nano), nil, encode(m.Supersedes), nil, m.CreatedAt.Format(time.RFC3339Nano), m.UpdatedAt.Format(time.RFC3339Nano), encode(m.Metadata))
+func insertMemory(ctx context.Context, tx *sql.Tx, m Memory) error {
+	_, err := tx.ExecContext(ctx, `INSERT INTO memories(id,kind,content,status,version,scope,tags_json,source_json,valid_from,valid_to,supersedes_json,superseded_by,created_at,updated_at,metadata_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, m.ID, m.Kind, m.Content, m.Status, m.Version, m.Scope, encode(m.Tags), encode(m.Source), m.ValidFrom.Format(time.RFC3339Nano), nil, encode(m.Supersedes), nil, m.CreatedAt.Format(time.RFC3339Nano), m.UpdatedAt.Format(time.RFC3339Nano), encode(m.Metadata))
 	return err
 }
 func encode(v any) string { b, _ := json.Marshal(v); return string(b) }
@@ -503,12 +475,6 @@ func nonNil(v []string) []string {
 func nonNilMap(v map[string]any) map[string]any {
 	if v == nil {
 		return map[string]any{}
-	}
-	return v
-}
-func nullString(v string) any {
-	if v == "" {
-		return nil
 	}
 	return v
 }

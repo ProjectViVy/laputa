@@ -38,7 +38,7 @@ export const GOV_NODES: GovNode[] = [
     },
     inputs: { en: "ContextView, governance projection", zh: "ContextView、治理投影" },
     outputs: { en: "Activity events, session submissions", zh: "活动事件、会话提交" },
-    apis: ["POST /v2/recall/fast", "POST /v2/activity/events", "POST /v1/sessions"],
+    apis: ["POST /v2/recall/fast", "POST /v2/activity/events", "POST /v2/ingest/sessions"],
     rules: {
       en: "Host adapters receive only approved PortableSkill data (architecture §13).",
       zh: "Host 适配器仅接收已批准的 PortableSkill 数据(架构 §13)。",
@@ -68,7 +68,7 @@ export const GOV_NODES: GovNode[] = [
     },
     inputs: { en: "Host events, recall intents", zh: "Host 事件、召回意图" },
     outputs: { en: "ContextView, recall traces, admin overview", zh: "ContextView、召回 trace、管理概览" },
-    apis: ["POST /v2/recall/fast", "POST /v2/recall/deep", "GET /v2/admin/overview", "GET /v1/pipelines"],
+    apis: ["POST /v2/recall/fast", "POST /v2/recall/deep", "GET /v2/admin/overview", "GET /v2/pipelines"],
     rules: {
       en: "No silent high-impact mutation; Fast Recall never calls Planner/KG/graph by default.",
       zh: "无静默高影响变更;Fast Recall 默认绝不调用 Planner/KG/图谱。",
@@ -100,8 +100,8 @@ export const GOV_NODES: GovNode[] = [
     outputs: { en: "Governance projection, audit entries", zh: "治理投影、审计条目" },
     apis: ["POST /v2/governance/projection", "POST /v2/governance/mutations", "GET /v2/governance/audit"],
     rules: {
-      en: "Actor-aware authorization; append-only audit log; legacy 06/13/14 are compatibility-only.",
-      zh: "按执行者授权;仅追加审计日志;遗留 06/13/14 仅为兼容。",
+      en: "Actor-aware authorization; append-only audit log; legacy 14-section registry removed (ADR-0008).",
+      zh: "按执行者授权;仅追加审计日志;遗留 14 区段注册表已删除(ADR-0008)。",
     },
     limitations: {
       en: "MEMRULES.MD / WORLD.MD runtime not implemented (Gate A pending).",
@@ -140,36 +140,6 @@ export const GOV_NODES: GovNode[] = [
     governanceNote: { en: "material, not cognition", zh: "材料,非认知" },
     roadmapNote: { en: "implemented; /v2/materials/* accepted-design", zh: "已实现;/v2/materials/* 为已接受设计" },
     docs: ["0001"],
-  },
-  {
-    id: "legacy",
-    name: "Legacy 14-section registry",
-    tier: 2,
-    col: 2,
-    phase: "compat",
-    compat: true,
-    responsibility: {
-      en: "Pre-vNext 14-section Laputa registry. Retained as read-only compatibility evidence during migration.",
-      zh: "vNext 之前的 14 区段 Laputa 注册表。迁移期间保留为只读兼容证据。",
-    },
-    boundary: {
-      en: "No new target-architecture features. 06-history, 13-report_indexes, 14-aaak_summaries are frozen.",
-      zh: "不新增目标架构特性。06-history、13-report_indexes、14-aaak_summaries 已冻结。",
-    },
-    inputs: { en: "— (frozen)", zh: "—(已冻结)" },
-    outputs: { en: "Read-only legacy reads", zh: "只读遗留读取" },
-    apis: ["GET /v1/memories/{key} (compat)"],
-    rules: {
-      en: "ADR-0002 deletes 13/14 as target concepts; 06 excluded from projection.",
-      zh: "ADR-0002 将 13/14 从目标概念中删除;06 从投影中排除。",
-    },
-    limitations: {
-      en: "Compatibility-only; must not be presented as target architecture.",
-      zh: "仅兼容;不得呈现为目标架构。",
-    },
-    governanceNote: { en: "compatibility-only", zh: "仅兼容" },
-    roadmapNote: { en: "frozen — migration pending", zh: "冻结 — 迁移待定" },
-    docs: ["0002"],
   },
   {
     id: "contextview",

@@ -43,7 +43,7 @@ type Config struct {
 	Generator rhythm.Generator
 	// WorkspaceRoot is passed to wakeup.SystemPromptBlock.
 	WorkspaceRoot string
-	// SessionID is passed to wakeup.OnSessionEnd.
+	// SessionID identifies the daemon session in logs.
 	SessionID string
 	// Logger receives progress and error lines.
 	Logger *log.Logger
@@ -97,9 +97,6 @@ func (d *Daemon) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			d.cfg.Logger.Printf("laputa daemon: shutdown (session=%s)", d.cfg.SessionID)
-			if _, err := provider.OnSessionEnd(ctx, sessionPtr(d.cfg.SessionID)); err != nil {
-				d.cfg.Logger.Printf("session_end error: %v", err)
-			}
 			return ctx.Err()
 		case <-ticker.C:
 			d.tick(ctx, re, provider)
@@ -126,7 +123,7 @@ func (d *Daemon) tick(ctx context.Context, re *rhythm.Engine, provider *wakeup.E
 		}
 		d.markRun(kind, now)
 
-		// After rhythm completes, render wakeup summary and trigger session-end.
+		// After rhythm completes, render wakeup summary.
 		resp, err := provider.SystemPromptBlock(ctx, d.cfg.WorkspaceRoot)
 		if err != nil {
 			d.cfg.Logger.Printf("wakeup error: %v", err)
@@ -161,13 +158,6 @@ func (d *Daemon) markRun(kind Kind, t time.Time) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.lastRun[kind] = t
-}
-
-func sessionPtr(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
 }
 
 // LastRun returns the last run timestamp for each kind (read-only).

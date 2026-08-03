@@ -12,117 +12,14 @@ import (
 	"github.com/dashimaki/garden/internal/activity"
 	"github.com/dashimaki/garden/internal/arbiter"
 	"github.com/dashimaki/garden/internal/authority"
-	"github.com/dashimaki/garden/internal/crud"
 	"github.com/dashimaki/garden/internal/evolution"
-	"github.com/dashimaki/garden/internal/rag"
 	"github.com/dashimaki/garden/internal/recall"
-	"github.com/dashimaki/garden/internal/router"
 	"github.com/dashimaki/laputa/governance"
 	"github.com/dashimaki/mentle/facade"
 )
 
-type mockBackend struct {
-	name string
-}
-
-type mockResolver struct{}
-
-func (mockResolver) Resolve(_ context.Context, request rag.ResolveRequest) (rag.ContextPackage, error) {
-	return rag.ContextPackage{TraceID: "run_test", Context: request.Intent, Evidence: []rag.Evidence{}, Warnings: []string{}}, nil
-}
-
-func (m *mockBackend) Write(ctx context.Context, key, value string, meta map[string]any) (string, error) {
-	return key, nil
-}
-
-func (m *mockBackend) Read(ctx context.Context, key string) (map[string]any, error) {
-	return map[string]any{"key": key, "value": map[string]any{"agent": "matsumoto"}, "backend": m.name}, nil
-}
-
-func (m *mockBackend) List(ctx context.Context, prefix string, limit int) ([]map[string]any, error) {
-	return []map[string]any{{"key": prefix + "01-identity", "backend": m.name}}, nil
-}
-
-func (m *mockBackend) Forget(ctx context.Context, key string) (bool, error) {
-	return true, nil
-}
-
 func testServer() *Server {
-	h := &crud.Handler{
-		Router: &router.Router{
-			Governance: &mockBackend{name: "governance"},
-			Mentle:     &mockBackend{name: "mentle"},
-		},
-	}
-	return &Server{Handler: h, Addr: ":0"}
-}
-
-func TestHandleWrite(t *testing.T) {
-	srv := testServer()
-	body := `{"key":"section:01-identity","value":"{\"agent\":\"matsumoto\"}"}`
-	req := httptest.NewRequest(http.MethodPost, "/v1/memories", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-
-	srv.handleWrite(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d, body = %s", rec.Code, http.StatusOK, rec.Body.String())
-	}
-	var resp map[string]string
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if resp["id"] != "section:01-identity" {
-		t.Errorf("id = %q, want section:01-identity", resp["id"])
-	}
-}
-
-func TestHandleRead(t *testing.T) {
-	srv := testServer()
-	req := httptest.NewRequest(http.MethodGet, "/v1/memories/section:01-identity", nil)
-	req.SetPathValue("key", "section:01-identity")
-	rec := httptest.NewRecorder()
-
-	srv.handleRead(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-}
-
-func TestHandleListDefaultsToSectionPrefix(t *testing.T) {
-	srv := testServer()
-	req := httptest.NewRequest(http.MethodGet, "/v1/memories", nil)
-	rec := httptest.NewRecorder()
-
-	srv.handleList(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	var resp struct {
-		Records []map[string]any `json:"records"`
-	}
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if len(resp.Records) != 1 {
-		t.Fatalf("records = %v, want 1", resp.Records)
-	}
-}
-
-func TestHandleForget(t *testing.T) {
-	srv := testServer()
-	req := httptest.NewRequest(http.MethodDelete, "/v1/memories/section:01-identity", nil)
-	req.SetPathValue("key", "section:01-identity")
-	rec := httptest.NewRecorder()
-
-	srv.handleForget(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
+	return &Server{Addr: ":0"}
 }
 
 func TestHandleHealth(t *testing.T) {
@@ -139,7 +36,7 @@ func TestHandleHealth(t *testing.T) {
 
 func TestHTTPContractAddsRequestIDAndErrorEnvelope(t *testing.T) {
 	srv := testServer()
-	req := httptest.NewRequest(http.MethodPost, "/v1/memories", bytes.NewBufferString("not-json"))
+	req := httptest.NewRequest(http.MethodPost, "/v2/recall/bootstrap", bytes.NewBufferString("not-json"))
 	rec := httptest.NewRecorder()
 	srv.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest || rec.Header().Get("X-Garden-Request-ID") == "" {
@@ -171,47 +68,6 @@ func TestHealthAdvertisesFrozenContract(t *testing.T) {
 	}
 	if body["api_contract"] != "garden-hermes/1" {
 		t.Fatalf("body=%v", body)
-	}
-}
-
-func TestHandleWriteBadRequest(t *testing.T) {
-	srv := testServer()
-	req := httptest.NewRequest(http.MethodPost, "/v1/memories", bytes.NewBufferString("not-json"))
-	rec := httptest.NewRecorder()
-
-	srv.handleWrite(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
-	}
-}
-
-func TestHandleResolveContext(t *testing.T) {
-	srv := testServer()
-	srv.Resolver = mockResolver{}
-	req := httptest.NewRequest(http.MethodPost, "/v1/context/resolve", bytes.NewBufferString(`{"intent":"garden"}`))
-	rec := httptest.NewRecorder()
-	srv.handleResolveContext(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	var response rag.ContextPackage
-	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
-		t.Fatal(err)
-	}
-	if response.TraceID != "run_test" {
-		t.Fatalf("response=%+v", response)
-	}
-}
-
-func TestHandleResolveContextRequiresIntent(t *testing.T) {
-	srv := testServer()
-	srv.Resolver = mockResolver{}
-	req := httptest.NewRequest(http.MethodPost, "/v1/context/resolve", bytes.NewBufferString(`{}`))
-	rec := httptest.NewRecorder()
-	srv.handleResolveContext(rec, req)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status=%d", rec.Code)
 	}
 }
 
@@ -263,7 +119,7 @@ func TestFastRecallEndpointUnavailable(t *testing.T) {
 func TestBootstrapRoutesThroughFastRecall(t *testing.T) {
 	srv := testServer()
 	srv.FastRecall = &recall.FastService{Gov: fakeGovReader{}, Searcher: fakeCardSearcher{}}
-	req := httptest.NewRequest(http.MethodPost, "/v1/context/bootstrap", bytes.NewBufferString(`{"intent":"bootstrap","budget_chars":4000}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/recall/bootstrap", bytes.NewBufferString(`{"intent":"bootstrap","budget_chars":4000}`))
 	rec := httptest.NewRecorder()
 	srv.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -369,17 +225,7 @@ func governedTestServer(t *testing.T) *Server {
 		t.Fatal(err)
 	}
 	governed := governance.NewGovernedService(engine, audit)
-	govBackend := router.NewGovernanceBackend(engine)
-	govBackend.Governed = governed
-	h := &crud.Handler{
-		Gov: engine,
-		Router: &router.Router{
-			Governance: govBackend,
-			Mentle:     &mockBackend{name: "mentle"},
-		},
-	}
 	return &Server{
-		Handler:        h,
 		Governed:       governed,
 		GovernedWriter: &authority.GovernedWriter{Gov: governed},
 		Addr:           ":0",
@@ -456,15 +302,15 @@ func TestGovernanceAuditEndpoint(t *testing.T) {
 	}
 }
 
-func TestLegacyCRUDGovernanceBlocked(t *testing.T) {
+func TestLegacySectionMutationUnknown(t *testing.T) {
 	srv := governedTestServer(t)
-	body := `{"key":"section:03-commitment","value":"{\"red_lines\":[]}"}`
-	req := httptest.NewRequest(http.MethodPost, "/v1/memories", bytes.NewBufferString(body))
-	req.Header.Set("X-Garden-Actor", "agent")
+	body := `{"section":"06-history_md","action":"write","reason":"legacy write","data":{"x":1}}`
+	req := httptest.NewRequest(http.MethodPost, "/v2/governance/mutations", bytes.NewBufferString(body))
+	req.Header.Set("X-Garden-Actor", "user_request")
 	rec := httptest.NewRecorder()
 	srv.HTTPHandler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status=%d body=%s, want 403", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s, want 400 (legacy section removed)", rec.Code, rec.Body.String())
 	}
 }
 
@@ -503,14 +349,7 @@ func deepRecallTestServer(t *testing.T) *Server {
 		Arbiter: arbiter.New(),
 		Traces:  traceStore,
 	}
-	h := &crud.Handler{
-		Router: &router.Router{
-			Governance: router.NewGovernanceBackend(engine),
-			Mentle:     &mockBackend{name: "mentle"},
-		},
-	}
 	return &Server{
-		Handler:    h,
 		FastRecall: fast,
 		DeepRecall: deep,
 		TraceStore: traceStore,
@@ -641,14 +480,7 @@ func evolutionTestServer(t *testing.T) *Server {
 	t.Cleanup(func() { evoEvents.Close() })
 
 	evoService := &evolution.Service{Provider: nil, Store: evoStore, Events: evoEvents, Hub: evolution.DefaultHubPolicy()}
-	h := &crud.Handler{
-		Router: &router.Router{
-			Governance: router.NewGovernanceBackend(engine),
-			Mentle:     &mockBackend{name: "mentle"},
-		},
-	}
 	return &Server{
-		Handler:    h,
 		FastRecall: &recall.FastService{Gov: engine, Searcher: fakeCardSearcher{}},
 		Evolution:  evoService,
 		Addr:       ":0",

@@ -97,7 +97,7 @@ GOSUMDB=off go test -tags=e2e ./e2e/...
 |-------|---------|---|
 | Laputa | `cd laputa && GOSUMDB=off go test ./governance/...` | section, store, authority behavior |
 | Mentle | `cd mentle && GOSUMDB=off go test ./facade/...` | canonical, cards, evidence, lifecycle |
-| Garden unit | `cd garden && GOSUMDB=off go test ./internal/...` | recall, activity, server, compatibility |
+| Garden unit | `cd garden && GOSUMDB=off go test ./internal/...` | recall, activity, server, ingest, evolution |
 | Garden E2E | `GOSUMDB=off go test -tags=e2e ./e2e/...` | real process, HTTP, degradation |
 
 **Mandatory behavioral tests:**
@@ -153,6 +153,14 @@ Ordinary STM working-set/checkpoint edits are lightweight revisions, not high-im
 **New v2 endpoints (vNext):**
 
 ```http
+POST   /v2/memories                  # canonical memory create
+GET    /v2/memories/{id}             # canonical memory read
+GET    /v2/memories                  # canonical memory list
+PATCH  /v2/memories/{id}             # canonical memory update
+DELETE /v2/memories/{id}             # canonical memory delete
+POST   /v2/ingest/sessions           # session-end ingestion
+GET    /v2/ingestions/{id}           # ingestion status
+POST   /v2/recall/bootstrap          # session bootstrap context
 POST   /v2/recall/fast              # deterministic default recall
 POST   /v2/recall/deep              # explicit expensive recall
 GET    /v2/recall/traces/{trace_id} # retrieve recall trace
@@ -166,21 +174,11 @@ POST   /v2/governance/proposals     # create or review proposals
 POST   /v2/evolution/runs           # start evolution run
 POST   /v2/evolution/proposals      # submit evolution proposal
 GET    /v2/evolution/proposals/{id} # retrieve proposal details
+
+GET    /v2/pipelines                # read-only pipeline inspection
 ```
 
-**Legacy v1 routes (compatibility during migration):**
-
-```http
-POST   /v1/memories               # legacy CRUD translator
-GET    /v1/memories/{key}         # legacy read
-DELETE /v1/memories/{key}         # legacy delete
-POST   /v1/context/resolve        # Fast or Deep adapter
-POST   /v1/context/bootstrap      # Fast Recall bootstrap
-GET    /v1/pipelines              # read-only inspection
-GET    /health                    # health check
-```
-
-The translator must add deprecation metadata and must not expose new internal fields.
+The legacy v1 routes and CRUD translator were removed (ADR-0008); the HTTP surface is v2-only. `GET /health` remains.
 
 ---
 

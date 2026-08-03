@@ -122,7 +122,7 @@ func TestDaemon_DryRunSkipsGenerator(t *testing.T) {
 	}
 }
 
-func TestDaemon_ShutdownTriggersSessionEnd(t *testing.T) {
+func TestDaemon_ShutdownCleanly(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	engine := newTestEngine(t)
@@ -145,18 +145,5 @@ func TestDaemon_ShutdownTriggersSessionEnd(t *testing.T) {
 		// expected
 	case <-time.After(2 * time.Second):
 		t.Fatalf("daemon did not shut down")
-	}
-
-	history, _ := engine.GetSection(ctx, laputa.SectionHistoryMD)
-	timeline, _ := history["timeline"].([]any)
-	if len(timeline) == 0 {
-		t.Fatalf("expected history timeline entry from session-end")
-	}
-	last, _ := timeline[len(timeline)-1].(map[string]any)
-	if last["event"] != "session_end" {
-		t.Errorf("expected session_end event, got %v", last["event"])
-	}
-	if last["session_id"] != "session-daemon" {
-		t.Errorf("expected session_id=session-daemon, got %v", last["session_id"])
 	}
 }

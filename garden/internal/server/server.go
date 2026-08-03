@@ -16,15 +16,12 @@ import (
 	"github.com/dashimaki/garden/console"
 	"github.com/dashimaki/garden/internal/activity"
 	"github.com/dashimaki/garden/internal/authority"
-	"github.com/dashimaki/garden/internal/crud"
 	"github.com/dashimaki/garden/internal/evolution"
 	"github.com/dashimaki/garden/internal/ingest"
 	"github.com/dashimaki/garden/internal/mailbox"
 	"github.com/dashimaki/garden/internal/pipeline"
-	"github.com/dashimaki/garden/internal/rag"
 	"github.com/dashimaki/garden/internal/recall"
 	"github.com/dashimaki/garden/internal/report"
-	"github.com/dashimaki/garden/internal/router"
 	"github.com/dashimaki/laputa/governance"
 	"github.com/dashimaki/laputa/governance/cognitive"
 	"github.com/dashimaki/mentle/facade"
@@ -33,8 +30,7 @@ import (
 
 // Server exposes garden CRUD over HTTP.
 type Server struct {
-	Handler        *crud.Handler
-	Resolver       rag.Resolver
+	Facade         *facade.Service
 	FastRecall     *recall.FastService
 	DeepRecall     *recall.DeepService
 	TraceStore     *recall.TraceStore
@@ -62,25 +58,23 @@ func (s *Server) ListenAndServe() error {
 
 func (s *Server) HTTPHandler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /v1/memories", s.handleWrite)
-	mux.HandleFunc("GET /v1/memories/{key}", s.handleRead)
-	mux.HandleFunc("GET /v1/memories", s.handleList)
-	mux.HandleFunc("PATCH /v1/memories/{key}", s.handleUpdate)
-	mux.HandleFunc("DELETE /v1/memories/{key}", s.handleForget)
-	mux.HandleFunc("POST /v1/sessions", s.handleSessionSubmit)
-	mux.HandleFunc("GET /v1/ingestions/{id}", s.handleIngestionStatus)
 	mux.HandleFunc("GET /health", s.handleHealth)
-	mux.HandleFunc("POST /v1/context/resolve", s.handleResolveContext)
-	mux.HandleFunc("POST /v1/context/bootstrap", s.handleBootstrap)
-	mux.HandleFunc("GET /v1/reports/latest", s.handleLatestReport)
+	mux.HandleFunc("POST /v2/memories", s.handleCreateMemory)
+	mux.HandleFunc("GET /v2/memories/{id}", s.handleGetMemory)
+	mux.HandleFunc("GET /v2/memories", s.handleListMemories)
+	mux.HandleFunc("PATCH /v2/memories/{id}", s.handleUpdateMemory)
+	mux.HandleFunc("DELETE /v2/memories/{id}", s.handleDeleteMemory)
+	mux.HandleFunc("POST /v2/ingest/sessions", s.handleSessionSubmit)
+	mux.HandleFunc("GET /v2/ingestions/{id}", s.handleIngestionStatus)
+	mux.HandleFunc("POST /v2/recall/bootstrap", s.handleBootstrap)
 	mux.HandleFunc("GET /v2/reports", s.handleReportsList)
 	mux.HandleFunc("GET /v2/reports/latest", s.handleLatestReport)
 	mux.HandleFunc("POST /v2/reports/generate", s.handleReportGenerate)
 	mux.HandleFunc("GET /v2/reports/orientation", s.handleReportOrientation)
-	mux.HandleFunc("GET /v1/pipelines", s.handlePipelines)
-	mux.HandleFunc("GET /v1/pipelines/{name}", s.handlePipeline)
-	mux.HandleFunc("GET /v1/pipelines/{name}/runs", s.handlePipelineRuns)
-	mux.HandleFunc("GET /v1/pipelines/{name}/runs/{trace_id}", s.handlePipelineRun)
+	mux.HandleFunc("GET /v2/pipelines", s.handlePipelines)
+	mux.HandleFunc("GET /v2/pipelines/{name}", s.handlePipeline)
+	mux.HandleFunc("GET /v2/pipelines/{name}/runs", s.handlePipelineRuns)
+	mux.HandleFunc("GET /v2/pipelines/{name}/runs/{trace_id}", s.handlePipelineRun)
 	mux.HandleFunc("POST /v2/recall/fast", s.handleFastRecall)
 	mux.HandleFunc("POST /v2/recall/deep", s.handleDeepRecall)
 	mux.HandleFunc("GET /v2/recall/traces/{trace_id}", s.handleRecallTrace)
@@ -148,162 +142,100 @@ func (s *Server) spaHandler() http.HandlerFunc {
 	}
 }
 
-func (s *Server) handleWrite(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleCreateMemory(w http.ResponseWriter, r *http.Request) {
+	if s.Facade == nil {
+		writeError(w, http.StatusServiceUnavailable, facade.ErrUnavailable)
+		return
+	}
 	raw, err := readBody(w, r, 64<<10)
 	if err != nil {
 		writeRequestError(w, err)
 		return
 	}
-	var shape map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &shape); err != nil {
-		writeError(w, http.StatusBadRequest, err)
+	var body facade.CreateMemoryRequest
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		writeRequestError(w, err)
 		return
 	}
-	_, legacyKey := shape["key"]
-	_, legacyValue := shape["value"]
-	_, canonical := shape["content"]
-	if (legacyKey || legacyValue) && canonical {
-		writeError(w, http.StatusBadRequest, errors.New("canonical and legacy fields cannot be mixed"))
-		return
-	}
-	if canonical {
-		var body facade.CreateMemoryRequest
-		decoder := json.NewDecoder(bytes.NewReader(raw))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&body); err != nil {
-			writeRequestError(w, err)
-			return
-		}
-		body.Actor = auditActor(r)
-		body.RequestID = w.Header().Get("X-Garden-Request-ID")
-		hash := fmt.Sprintf("sha256:%x", sha256.Sum256(raw))
-		memory, err := s.Handler.CreateMemory(r.Context(), body, r.Header.Get("Idempotency-Key"), hash)
-		if err != nil {
-			writeHandlerError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, memory)
-		return
-	}
-	var body struct {
-		Key   string         `json:"key"`
-		Value string         `json:"value"`
-		Meta  map[string]any `json:"meta,omitempty"`
-	}
-	if err := json.Unmarshal(raw, &body); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	if body.Key == "" {
-		writeError(w, http.StatusBadRequest, errors.New("key is required"))
-		return
-	}
-
-	id, err := s.Handler.Write(router.WithActor(r.Context(), mapActorRole(auditActor(r))), body.Key, body.Value, body.Meta)
+	body.Actor = auditActor(r)
+	body.RequestID = w.Header().Get("X-Garden-Request-ID")
+	hash := fmt.Sprintf("sha256:%x", sha256.Sum256(raw))
+	memory, err := s.Facade.CreateMemory(r.Context(), body, r.Header.Get("Idempotency-Key"), hash)
 	if err != nil {
 		writeHandlerError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"id": id})
+	writeJSON(w, http.StatusCreated, memory)
 }
 
-func (s *Server) handleRead(w http.ResponseWriter, r *http.Request) {
-	key := r.PathValue("key")
-	if key == "" {
-		writeError(w, http.StatusBadRequest, errors.New("key is required"))
+func (s *Server) handleGetMemory(w http.ResponseWriter, r *http.Request) {
+	if s.Facade == nil {
+		writeError(w, http.StatusServiceUnavailable, facade.ErrUnavailable)
 		return
 	}
-
-	if strings.HasPrefix(key, "mem_") {
-		memory, err := s.Handler.GetMemory(r.Context(), key)
-		if err != nil {
-			writeHandlerError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, memory)
+	id := r.PathValue("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, errors.New("id is required"))
 		return
 	}
-	record, err := s.Handler.Read(r.Context(), key)
+	memory, err := s.Facade.GetMemory(r.Context(), id)
 	if err != nil {
 		writeHandlerError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, record)
+	writeJSON(w, http.StatusOK, memory)
 }
 
-func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Query().Get("view") == "canonical" {
-		limit := 50
-		if raw := r.URL.Query().Get("limit"); raw != "" {
-			parsed, err := strconv.Atoi(raw)
-			if err != nil || parsed < 1 || parsed > 200 {
-				writeError(w, http.StatusBadRequest, errors.New("limit must be between 1 and 200"))
-				return
-			}
-			limit = parsed
-		}
-		page, err := s.Handler.ListMemories(r.Context(), facade.ListMemoryOptions{Limit: limit, Cursor: r.URL.Query().Get("cursor"), Status: r.URL.Query().Get("status"), Kind: r.URL.Query().Get("kind")})
-		if err != nil {
-			writeHandlerError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, page)
+func (s *Server) handleListMemories(w http.ResponseWriter, r *http.Request) {
+	if s.Facade == nil {
+		writeError(w, http.StatusServiceUnavailable, facade.ErrUnavailable)
 		return
 	}
-	prefix := r.URL.Query().Get("prefix")
-	if prefix == "" {
-		prefix = "section:"
-	}
-
-	limit := 0
+	limit := 50
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		parsed, err := strconv.Atoi(raw)
-		if err != nil || parsed < 0 {
-			writeError(w, http.StatusBadRequest, errors.New("limit must be a non-negative integer"))
+		if err != nil || parsed < 1 || parsed > 200 {
+			writeError(w, http.StatusBadRequest, errors.New("limit must be between 1 and 200"))
 			return
 		}
 		limit = parsed
 	}
-
-	records, err := s.Handler.List(r.Context(), prefix, limit)
+	page, err := s.Facade.ListMemories(r.Context(), facade.ListMemoryOptions{Limit: limit, Cursor: r.URL.Query().Get("cursor"), Status: r.URL.Query().Get("status"), Kind: r.URL.Query().Get("kind")})
 	if err != nil {
 		writeHandlerError(w, err)
 		return
 	}
-	if records == nil {
-		records = []map[string]any{}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"records": records})
+	writeJSON(w, http.StatusOK, page)
 }
 
-func (s *Server) handleForget(w http.ResponseWriter, r *http.Request) {
-	key := r.PathValue("key")
-	if key == "" {
-		writeError(w, http.StatusBadRequest, errors.New("key is required"))
+func (s *Server) handleDeleteMemory(w http.ResponseWriter, r *http.Request) {
+	if s.Facade == nil {
+		writeError(w, http.StatusServiceUnavailable, facade.ErrUnavailable)
 		return
 	}
-
-	if strings.HasPrefix(key, "mem_") {
-		result, err := s.Handler.DeleteMemory(r.Context(), key, auditActor(r), w.Header().Get("X-Garden-Request-ID"))
-		if err != nil {
-			writeHandlerError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, result)
+	id := r.PathValue("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, errors.New("id is required"))
 		return
 	}
-	ok, err := s.Handler.Forget(router.WithActor(r.Context(), mapActorRole(auditActor(r))), key)
+	result, err := s.Facade.DeleteMemory(r.Context(), id, auditActor(r), w.Header().Get("X-Garden-Request-ID"))
 	if err != nil {
 		writeHandlerError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": ok})
+	writeJSON(w, http.StatusOK, result)
 }
 
-func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("key")
-	if !strings.HasPrefix(id, "mem_") {
-		writeError(w, http.StatusBadRequest, errors.New("PATCH requires a canonical memory id"))
+func (s *Server) handleUpdateMemory(w http.ResponseWriter, r *http.Request) {
+	if s.Facade == nil {
+		writeError(w, http.StatusServiceUnavailable, facade.ErrUnavailable)
+		return
+	}
+	id := r.PathValue("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, errors.New("id is required"))
 		return
 	}
 	var body facade.UpdateMemoryRequest
@@ -313,7 +245,7 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	body.Actor = auditActor(r)
 	body.RequestID = w.Header().Get("X-Garden-Request-ID")
-	memory, err := s.Handler.UpdateMemory(r.Context(), id, body)
+	memory, err := s.Facade.UpdateMemory(r.Context(), id, body)
 	if err != nil {
 		writeHandlerError(w, err)
 		return
@@ -394,21 +326,7 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"trace_id": view.TraceID, "context": view.Context, "evidence": view.Evidence, "degraded": view.Degraded, "warnings": view.Warnings})
 		return
 	}
-
-	if s.Resolver == nil {
-		writeError(w, http.StatusServiceUnavailable, errors.New("pipeline unavailable"))
-		return
-	}
-	result, err := s.Resolver.Resolve(r.Context(), rag.ResolveRequest{Intent: intent, SessionID: body.SessionID, Mode: "basic"})
-	if err != nil {
-		writeHandlerError(w, err)
-		return
-	}
-	runes := []rune(result.Context)
-	if len(runes) > body.BudgetChars {
-		result.Context = string(runes[:body.BudgetChars])
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"trace_id": result.TraceID, "context": result.Context, "evidence": result.Evidence, "degraded": result.Degraded, "warnings": result.Warnings})
+	writeError(w, http.StatusServiceUnavailable, errors.New("fast recall unavailable"))
 }
 func (s *Server) handleLatestReport(w http.ResponseWriter, r *http.Request) {
 	if s.Reports == nil {
@@ -425,30 +343,6 @@ func (s *Server) handleLatestReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, value)
-}
-
-func (s *Server) handleResolveContext(w http.ResponseWriter, r *http.Request) {
-	if s.Resolver == nil {
-		writeError(w, http.StatusServiceUnavailable, errors.New("agentic RAG unavailable"))
-		return
-	}
-	var request rag.ResolveRequest
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&request); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	if strings.TrimSpace(request.Intent) == "" {
-		writeError(w, http.StatusBadRequest, errors.New("intent is required"))
-		return
-	}
-	result, err := s.Resolver.Resolve(r.Context(), request)
-	if err != nil {
-		writeError(w, http.StatusServiceUnavailable, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
 }
 
 func (s *Server) handlePipelines(w http.ResponseWriter, r *http.Request) {
@@ -520,8 +414,6 @@ func writeError(w http.ResponseWriter, status int, err error) {
 		code = "version_conflict"
 	case http.StatusRequestEntityTooLarge:
 		code = "payload_too_large"
-	case http.StatusGone:
-		code = "compat_read_only"
 	case http.StatusTooManyRequests:
 		code = "busy"
 		retryable = true
@@ -555,10 +447,6 @@ func writeHandlerError(w http.ResponseWriter, err error) {
 	}
 	if errors.Is(err, governance.ErrUnauthorized) {
 		writeError(w, http.StatusForbidden, err)
-		return
-	}
-	if errors.Is(err, governance.ErrCompatReadOnly) {
-		writeError(w, http.StatusGone, err)
 		return
 	}
 	if errors.Is(err, facade.ErrVersionConflict) || errors.Is(err, facade.ErrIdempotencyConflict) || errors.Is(err, ingest.ErrEventConflict) {

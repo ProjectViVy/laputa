@@ -39,7 +39,7 @@ No module holds authority over the others. Each degrades gracefully.
 │  Garden — orchestration gateway                     │
 │  /v2/recall/fast · /v2/recall/deep                  │
 │  /v2/activity/*  · /v2/governance/*                 │
-│  /v2/evolution/* · /v1/* (compat)                   │
+│  /v2/evolution/* · /v2/mailbox/*                     │
 └───────┬─────────────────────────────┬───────────────┘
         │                             │
 ┌───────▼────────┐          ┌─────────▼──────────────┐

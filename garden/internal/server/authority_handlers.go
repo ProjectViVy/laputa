@@ -55,10 +55,6 @@ func (s *Server) handleGovernanceMutation(w http.ResponseWriter, r *http.Request
 			writeError(w, http.StatusForbidden, err)
 			return
 		}
-		if errors.Is(err, governance.ErrCompatReadOnly) {
-			writeError(w, http.StatusGone, err)
-			return
-		}
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}

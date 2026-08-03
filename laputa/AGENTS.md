@@ -13,7 +13,7 @@
 
 Laputa is a file-based governance substrate for AI agents. It provides:
 
-- **Legacy 14-section compatibility registry** stored in `.laputa/sections/*.json`; target cognitive partition is governed by `../docs/architecture/0002-laputa-cognitive-partition-decision.md`
+- **Governance section registry** (8 sections: Frozen Core 01–04, STM 05, reports 07–09) stored in `.laputa/sections/*.json`; the legacy 14-section registry was removed (ADR-0008); cognitive partition is governed by `../docs/architecture/0002-laputa-cognitive-partition-decision.md`
 - **Write authority registry** per section
 - **Atomic file operations** with cross-process safety
 - **Zero subprocesses** — no daemons, no sidecars

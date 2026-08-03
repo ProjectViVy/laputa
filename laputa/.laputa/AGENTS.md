@@ -28,15 +28,9 @@ The `.laputa/sections/` directory stores the complete governance state for Laput
     ├── 03-commitment.json         # Commitments and red lines
     ├── 04-preferences.json        # Agent preferences and settings
     ├── 05-memory_md.json          # Long-term memory summaries
-    ├── 06-history_md.json         # Historical event timeline
     ├── 07-daily.json              # Daily rhythm reports
     ├── 08-weekly.json             # Weekly rhythm reports
-    ├── 09-monthly.json            # Monthly rhythm reports
-    ├── 10-journal_reflective.json # Reflective journal entries
-    ├── 11-proposal_inbox.json     # Evolution proposals (pending review)
-    ├── 12-changelog.json          # Mutation audit log
-    ├── 13-report_indexes.json     # Report metadata and search indexes
-    └── 14-aaak_summaries.json     # AAAK dialect summaries
+    └── 09-monthly.json            # Monthly rhythm reports
 ```
 
 ### Subdirectories (Depth 2)
@@ -47,7 +41,9 @@ The `.laputa/sections/` directory stores the complete governance state for Laput
 
 ## Key Concepts
 
-### Governance Sections (14 Total)
+### Governance Sections (8 Total)
+
+The legacy 14-section registry was reduced to the target model by ADR-0008 (06-history_md, 10-journal_reflective, 11-proposal_inbox, 12-changelog, 13-report_indexes, 14-aaak_summaries removed).
 
 | # | Section | Purpose | Mutability |
 |---|---------|---------|-----------|
@@ -55,23 +51,17 @@ The `.laputa/sections/` directory stores the complete governance state for Laput
 | 02 | relationship | Relationships with other agents, resonance signals | explicit |
 | 03 | commitment | Commitments and red-line constraints | explicit |
 | 04 | preferences | Preference settings, mode selections | explicit |
-| 05 | memory_md | Long-term memory distillations | explicit |
-| 06 | history_md | Event timeline and historical context | explicit |
+| 05 | memory_md | STM summary and highlights | explicit |
 | 07 | daily | Daily rhythm reports (generated) | append-only |
 | 08 | weekly | Weekly rhythm reports (generated) | append-only |
 | 09 | monthly | Monthly rhythm reports (generated) | append-only |
-| 10 | journal_reflective | Agent reflections and journal entries | append-only |
-| 11 | proposal_inbox | Pending evolution proposals | explicit |
-| 12 | changelog | Audit log of all mutations | append-only |
-| 13 | report_indexes | Report metadata, search indexes | explicit |
-| 14 | aaak_summaries | AAAK dialect symbolic summaries | explicit |
 
 ### No Silent Durable Mutation
 
 Every change to governance state is:
 - **Explicit:** caller must invoke `SetSection()` with new data
-- **Audited:** change is logged to section 12 (changelog) with timestamp and authority
-- **Reversible:** prior state is retained in changelog for rollback
+- **Audited:** change is logged to `FileAuditLog` (ADR-0002; the legacy section-12 changelog is removed) with timestamp and authority
+- **Reversible:** prior state is retained in the audit log for rollback
 
 ### File Format
 

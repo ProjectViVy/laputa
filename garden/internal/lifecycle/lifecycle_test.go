@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dashimaki/garden/internal/crud"
 	"github.com/dashimaki/garden/internal/server"
 )
 
@@ -28,8 +27,7 @@ func TestSetupLoggingCreatesFile(t *testing.T) {
 }
 
 func TestRunGracefulShutdown(t *testing.T) {
-	h := crud.NewHandler(nil, nil)
-	srv := &server.Server{Handler: h, Addr: ":0"}
+	srv := &server.Server{Addr: ":0"}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)

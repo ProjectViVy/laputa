@@ -44,9 +44,9 @@ governance/
 
 ## Key Concepts
 
-### Governance Sections (legacy compatibility registry)
+### Governance Sections (target model)
 
-All are currently defined as constants in `engine.go`. This is not the target Garden cognitive partition: [ADR-0002](../../docs/architecture/0002-laputa-cognitive-partition-decision.md) removes target LTM/`LONGMEM.MD`, report-index and AAAK section semantics; introduces `MEMRULES.MD` and `WORLD.MD`; and requires a separate physical migration plan. Do not implement new features against the legacy meanings below.
+Defined as constants in `engine.go`. The legacy 14-section registry (06/10/11/12/13/14) was removed by [ADR-0008](../../docs/architecture/0008-legacy-compatibility-removal.md); `MEMRULES.MD` and `WORLD.MD` live outside the registry per [ADR-0002](../../docs/architecture/0002-laputa-cognitive-partition-decision.md).
 
 Current constants:
 
@@ -57,26 +57,19 @@ Current constants:
 | 03-commitment | Commitments, red lines, agentic RAG denied sources | user_only |
 | 04-preferences | Learning preferences and customization | agent_self |
 | 05-memory_md | STM summary and highlights (MEMORY.MD source) | agent_self |
-| 06-history_md | Timeline and history index (LONGMEM.MD source) | agent_self |
 | 07-daily | Daily reports from rhythm engine | report_system |
 | 08-weekly | Weekly reports from rhythm engine | report_system |
 | 09-monthly | Monthly reports from rhythm engine | report_system |
-| 10-journal_reflective | Reflective journal entries | tbd |
-| 11-proposal_inbox | Evolution proposals awaiting review | tbd |
-| 12-changelog | Durable mutation changelog | tbd |
-| 13-report_indexes | Report index metadata | tbd |
-| 14-aaak_summaries | AAAK dialect summaries (agent-specific) | tbd |
 
 Each section is stored as a JSON file in `.laputa/sections/` directory.
 
 ### Write Authority
 
-Four authority levels:
+Three authority levels:
 
 - **agent_self** — the agent process may write
 - **user_only** — user (human) must explicitly write
 - **report_system** — rhythm engine writes daily/weekly/monthly reports
-- **tbd** — future use, not yet implemented
 
 ### Rhythm Engine
 

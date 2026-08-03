@@ -1,8 +1,8 @@
 # TODOLIST — Garden MemoryOS
 
 > **Last updated:** 2026-08-03  
-> **Current focus:** Gate C complete — ADR-0006 (semantic ingestion + Obsidian adapter spec) and ADR-0007 (EvoMap mailbox) accepted; `source_artifact`/`semantic_unit` kinds enabled in Mentle facade (fixes pre-existing e2e ingestion hang — e2e suite now green), provenance-preserving semantic-unit ingestion path (`IngestSemanticUnits`, real-offset bounded evidence read), mailbox package (inbox/outbox state machines, privacy gate, retry→dead-letter, Hub disabled by default) with read-only v2 endpoints. Next = separate physical migration plan for the legacy 14-section registry (Now section), then remaining Now items.  
-> **Architecture source:** [0001 MemoryOS vNext Architecture](docs/architecture/0001-memoryos-vnext-architecture.md) + [ADR-0002 Cognitive Partition](docs/architecture/0002-laputa-cognitive-partition-decision.md) + [ADR-0004 Cognitive Files Migration](docs/architecture/0004-cognitive-files-migration.md) + [ADR-0005 Report System Design](docs/architecture/0005-report-system-design.md) + [ADR-0006 Semantic Ingestion](docs/architecture/0006-semantic-ingestion-and-obsidian-adapter.md) + [ADR-0007 EvoMap Mailbox](docs/architecture/0007-evomap-mailbox.md)  
+> **Current focus:** Gate E complete — ADR-0008 accepted and executed: all legacy compatibility removed (v1 routes + CRUD translator chain + `06/10/11/12/13/14` registry sections + 410 compat mechanism); target functionality promoted to v2 (`/v2/memories`, `/v2/ingest/sessions`, `/v2/ingestions/{id}`, `/v2/pipelines*`, `/v2/recall/bootstrap`); laputa registry converged to 01-05 + 07-09; e2e rewritten against v2. Next = remaining Now items (baseline test snapshot, doc-transition commit review).  
+> **Architecture source:** [0001 MemoryOS vNext Architecture](docs/architecture/0001-memoryos-vnext-architecture.md) + [ADR-0002 Cognitive Partition](docs/architecture/0002-laputa-cognitive-partition-decision.md) + [ADR-0004 Cognitive Files Migration](docs/architecture/0004-cognitive-files-migration.md) + [ADR-0005 Report System Design](docs/architecture/0005-report-system-design.md) + [ADR-0006 Semantic Ingestion](docs/architecture/0006-semantic-ingestion-and-obsidian-adapter.md) + [ADR-0007 EvoMap Mailbox](docs/architecture/0007-evomap-mailbox.md) + [ADR-0008 Legacy Compatibility Removal](docs/architecture/0008-legacy-compatibility-removal.md)  
 > This file tracks execution status only. It must not restate design contracts.
 
 **Legend:** ✅ done · 🚧 active · ⬜ planned · ⛔ blocked  
@@ -14,10 +14,10 @@
 
 - [ ] `[G]` Commit/record the existing documentation transition only after reviewing all pre-existing dirty worktrees.
 - [ ] Record a current baseline-test snapshot for Laputa governance, Mentle facade, Garden internal and Garden E2E suites.
-- [ ] Add this `TODOLIST.MD` to version control and retain links from root project guidance.
-- [ ] Produce a **separate, approved physical migration plan** before changing the legacy 14-section Go registry or persisted files.
+- [x] Add this `TODOLIST.MD` to version control and retain links from root project guidance.
+- [x] Produce a **separate, approved physical migration plan** before changing the legacy 14-section Go registry or persisted files (done: ADR-0008, executed in Gate E).
 
-**Guard:** `06-history_md`/LTM, `13-report_indexes`, and `14-aaak_summaries` must receive no new target-architecture features. Existing files/data remain read-only compatibility evidence until the migration plan exists.
+**Guard:** legacy sections `06-history_md`/LTM, `10-journal_reflective`, `11-proposal_inbox`, `12-changelog`, `13-report_indexes`, and `14-aaak_summaries` are deleted from the registry (ADR-0008). They must receive no new target-architecture features; writes to those names fail as unknown section.
 
 ---
 
@@ -70,7 +70,7 @@ Archived pre-vNext docs and established active documentation navigation. The act
 
 **Exit:** architecture review accepts a concrete migration ADR and test plan. No registry rename/delete before this gate.
 
-**Status:** Complete. ADR-0004 accepted; Phase 1 + Phase 2 implemented and tested. Physical registry rename/delete still requires a separate execution PR.
+**Status:** Complete. ADR-0004 accepted; Phase 1 + Phase 2 implemented and tested. Physical registry migration was executed in Gate E (ADR-0008).
 
 ### ✅ Gate B — Report-system expansion design
 
@@ -113,6 +113,19 @@ Archived pre-vNext docs and established active documentation navigation. The act
 - [x] `[G][F]` Safety banner reflects real degraded state (mentle/pipeline/planner, pending_mentle); loopback-only admin API.
 
 **Exit:** ADR-0003 acceptance criteria §9 all pass with real data; no write path in MVP-0.
+
+### ✅ Gate E — Legacy compatibility removal (ADR-0008)
+
+**Goal:** delete the entire legacy compatibility surface — v1 HTTP routes, CRUD translator chain, `06/10/11/12/13/14` registry sections, and the 410 compat mechanism — because no host uses the legacy Laputa runtime.
+
+- [x] `[G]` Promote v1-carried target functionality to v2: `/v2/memories` (canonical CRUD), `/v2/ingest/sessions`, `/v2/ingestions/{id}`, `/v2/pipelines*`, `/v2/recall/bootstrap`; delete all `/v1/*` routes.
+- [x] `[G][M]` Delete the CRUD translator chain: `internal/crud`, `internal/router`, `mentle/facade/crud.go`, `legacy_key`/`backfillCanonical`.
+- [x] `[L]` Converge the governance registry to 01-05 + 07-09; remove `Compat`/`tbd` machinery and the 410 mapping; delete repo section files for removed sections.
+- [x] `[G]` Remove wakeup `06-history_md` writes (`SyncTurn`/`OnSessionEnd` + CLI actions); converge `rag` to the planner surface; update console to v2; rewrite e2e against v2.
+
+**Status:** Complete. ADR-0008 accepted; full verification green (laputa governance, mentle facade, garden internal, e2e 5.3s). Legacy files on user machines are no longer created/read but are not actively deleted.
+
+**Exit:** physical migration plan approved and executed without data loss (inert legacy JSON files remain on disk, unreferenced).
 
 ---
 

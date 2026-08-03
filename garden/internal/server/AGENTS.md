@@ -32,18 +32,19 @@ server/
 
 ## Key Endpoints
 
-### v1 (Legacy Compatibility)
+### v2
 
 ```
-POST   /v1/memories               # CRUD write
-GET    /v1/memories/{key}         # CRUD read
-GET    /v1/memories?prefix=       # CRUD list
-DELETE /v1/memories/{key}         # CRUD delete
-POST   /v1/context/resolve        # Recall (adapter)
-GET    /health                    # Health check
+POST   /v2/memories                # Canonical memory create
+GET    /v2/memories/{id}           # Canonical memory read
+GET    /v2/memories                # Canonical memory list
+PATCH  /v2/memories/{id}           # Canonical memory update
+DELETE /v2/memories/{id}           # Canonical memory delete
+POST   /v2/ingest/sessions         # Session-end ingestion
+GET    /v2/ingestions/{id}         # Ingestion status
+POST   /v2/recall/bootstrap        # Session bootstrap context
+GET    /health                     # Health check
 ```
-
-### v2 (vNext)
 
 ```
 POST   /v2/recall/fast            # Fast recall
@@ -52,6 +53,14 @@ GET    /v2/recall/traces/{id}     # Retrieve trace
 POST   /v2/activity/events        # Ingest event
 GET    /v2/activity/sessions/{id} # Session history
 POST   /v2/governance/projection  # Read governance
+POST   /v2/governance/mutations   # Governed mutation (audited)
+GET    /v2/governance/audit       # Audit trail
+POST   /v2/evolution/runs         # Evolution run
+GET    /v2/mailbox/inbox          # EvoMap inbox
+GET    /v2/mailbox/outbox         # EvoMap outbox
+GET    /v2/admin/overview         # Admin overview
+GET    /v2/materials/cards        # Card discovery
+GET    /v2/cognitive/world        # WORLD projection
 ```
 
 ---
@@ -94,6 +103,6 @@ GOSUMDB=off go test -v ./internal/server/...
 
 ## MANUAL
 
-Keep server focused on HTTP mechanics. Business logic goes to router and other packages.
+Keep server focused on HTTP mechanics. Business logic goes to the service packages.
 
 Parent reference: ../AGENTS.md

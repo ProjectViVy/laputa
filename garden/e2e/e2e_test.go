@@ -101,62 +101,60 @@ E2E_WORLD_MARKER machine description for the end-to-end test.
 		t.Fatalf("api contract=%q", health.APIContract)
 	}
 
-	key := "section:01-identity"
-	value := `{"agent":"garden-e2e","role":"integration-test"}`
-	writeJSON(t, client, http.MethodPost, baseURL+"/v1/memories", map[string]any{
-		"key":   key,
-		"value": value,
-	}, http.StatusOK, nil)
-
-	var read struct {
-		Key   string         `json:"key"`
-		Value map[string]any `json:"value"`
+	var scopedFast struct {
+		Context string `json:"context"`
 	}
-	writeJSON(t, client, http.MethodGet, baseURL+"/v1/memories/"+key, nil, http.StatusOK, &read)
-	if read.Key != key || read.Value["agent"] != "garden-e2e" || read.Value["role"] != "integration-test" {
-		t.Fatalf("read response = %#v, want persisted section data", read)
+	writeJSON(t, client, http.MethodPost, baseURL+"/v2/recall/fast", map[string]any{"query": "machine", "scope": "e2e", "budget_chars": 4000}, http.StatusOK, &scopedFast)
+	if !strings.Contains(scopedFast.Context, "E2E_WORLD_MARKER") {
+		t.Errorf("fast recall context missing scoped world claim: %q", scopedFast.Context)
+	}
+	if strings.Contains(scopedFast.Context, "primary source of truth") || strings.Contains(scopedFast.Context, "## R") {
+		t.Errorf("MEMRULES text leaked into recall context: %q", scopedFast.Context)
 	}
 
-	var list struct {
-		Records []struct {
-			Key string `json:"key"`
-		} `json:"records"`
-	}
-	writeJSON(t, client, http.MethodGet, baseURL+"/v1/memories?prefix=section:01-identity", nil, http.StatusOK, &list)
-	if len(list.Records) != 1 || list.Records[0].Key != key {
-		t.Fatalf("list response = %#v, want one record for %q", list, key)
-	}
-
-	var contextPackage struct {
-		TraceID  string `json:"trace_id"`
-		Context  string `json:"context"`
-		Evidence []struct {
-			Source  string `json:"source"`
-			Locator string `json:"locator"`
-		} `json:"evidence"`
-		Degraded bool `json:"degraded"`
-	}
-	writeJSON(t, client, http.MethodPost, baseURL+"/v1/context/resolve", map[string]any{"intent": "What is this agent's role?", "session_id": "e2e", "mode": "basic"}, http.StatusOK, &contextPackage)
-	if contextPackage.TraceID == "" || contextPackage.Context == "" || len(contextPackage.Evidence) == 0 {
-		t.Fatalf("context response = %#v, want governed evidence", contextPackage)
-	}
-	foundGovernance := false
-	for _, evidence := range contextPackage.Evidence {
-		if evidence.Source == "governance" && evidence.Locator == "01-identity" {
-			foundGovernance = true
-		}
-	}
-	if !foundGovernance {
-		t.Fatalf("context evidence = %#v, want identity governance evidence", contextPackage.Evidence)
-	}
 	var bootstrap struct {
 		TraceID string `json:"trace_id"`
 		Context string `json:"context"`
 	}
-	writeJSON(t, client, http.MethodPost, baseURL+"/v1/context/bootstrap", map[string]any{"session_id": "e2e", "intent": "role", "budget_chars": 1000}, http.StatusOK, &bootstrap)
+	writeJSON(t, client, http.MethodPost, baseURL+"/v2/recall/bootstrap", map[string]any{"session_id": "e2e", "intent": "role", "budget_chars": 1000}, http.StatusOK, &bootstrap)
 	if bootstrap.TraceID == "" || bootstrap.Context == "" {
 		t.Fatalf("bootstrap=%+v", bootstrap)
 	}
+
+	var created struct {
+		ID      string `json:"id"`
+		Version int    `json:"version"`
+		Status  string `json:"status"`
+	}
+	writeJSON(t, client, http.MethodPost, baseURL+"/v2/memories", map[string]any{"content": "Garden API v2 contract accepted", "kind": "decision", "scope": "project:garden"}, http.StatusCreated, &created)
+	if created.ID == "" || created.Version != 1 || created.Status != "active" {
+		t.Fatalf("created=%+v", created)
+	}
+	var updated struct {
+		Version int    `json:"version"`
+		Content string `json:"content"`
+	}
+	writeJSON(t, client, http.MethodPatch, baseURL+"/v2/memories/"+created.ID, map[string]any{"content": "Garden API v2 contract implemented", "expected_version": 1}, http.StatusOK, &updated)
+	if updated.Version != 2 {
+		t.Fatalf("updated=%+v", updated)
+	}
+	var page struct {
+		Items []struct {
+			ID string `json:"id"`
+		} `json:"items"`
+	}
+	writeJSON(t, client, http.MethodGet, baseURL+"/v2/memories", nil, http.StatusOK, &page)
+	if len(page.Items) == 0 {
+		t.Fatal("canonical list is empty")
+	}
+
+	transcript := "The Garden API v2 implementation was completed in this session."
+	sum := sha256.Sum256([]byte(transcript))
+	var accepted struct {
+		IngestionID string `json:"ingestion_id"`
+	}
+	writeJSON(t, client, http.MethodPost, baseURL+"/v2/ingest/sessions", map[string]any{"session_id": "sess_e2e", "event_id": "evt_e2e", "phase": "session_end", "content": transcript, "content_hash": fmt.Sprintf("sha256:%x", sum)}, http.StatusAccepted, &accepted)
+	pollIngestion(t, client, baseURL, accepted.IngestionID)
 
 	var worldProj struct {
 		Claims    []map[string]any `json:"claims"`
@@ -185,67 +183,6 @@ E2E_WORLD_MARKER machine description for the end-to-end test.
 		t.Error("seeded WORLD.MD was overwritten at boot")
 	}
 
-	var scopedFast struct {
-		Context string `json:"context"`
-	}
-	writeJSON(t, client, http.MethodPost, baseURL+"/v2/recall/fast", map[string]any{"query": "machine", "scope": "e2e", "budget_chars": 4000}, http.StatusOK, &scopedFast)
-	if !strings.Contains(scopedFast.Context, "E2E_WORLD_MARKER") {
-		t.Errorf("fast recall context missing scoped world claim: %q", scopedFast.Context)
-	}
-	if strings.Contains(scopedFast.Context, "primary source of truth") || strings.Contains(scopedFast.Context, "## R") {
-		t.Errorf("MEMRULES text leaked into recall context: %q", scopedFast.Context)
-	}
-
-	var created struct {
-		ID      string `json:"id"`
-		Version int    `json:"version"`
-		Status  string `json:"status"`
-	}
-	writeJSON(t, client, http.MethodPost, baseURL+"/v1/memories", map[string]any{"content": "Garden API v1 contract accepted", "kind": "decision", "scope": "project:garden"}, http.StatusCreated, &created)
-	if created.ID == "" || created.Version != 1 || created.Status != "active" {
-		t.Fatalf("created=%+v", created)
-	}
-	var updated struct {
-		Version int    `json:"version"`
-		Content string `json:"content"`
-	}
-	writeJSON(t, client, http.MethodPatch, baseURL+"/v1/memories/"+created.ID, map[string]any{"content": "Garden API v1 contract implemented", "expected_version": 1}, http.StatusOK, &updated)
-	if updated.Version != 2 {
-		t.Fatalf("updated=%+v", updated)
-	}
-	var page struct {
-		Items []struct {
-			ID string `json:"id"`
-		} `json:"items"`
-	}
-	writeJSON(t, client, http.MethodGet, baseURL+"/v1/memories?view=canonical", nil, http.StatusOK, &page)
-	if len(page.Items) == 0 {
-		t.Fatal("canonical list is empty")
-	}
-
-	transcript := "The Garden API v1 implementation was completed in this session."
-	sum := sha256.Sum256([]byte(transcript))
-	var accepted struct {
-		IngestionID string `json:"ingestion_id"`
-	}
-	writeJSON(t, client, http.MethodPost, baseURL+"/v1/sessions", map[string]any{"session_id": "sess_e2e", "event_id": "evt_e2e", "phase": "session_end", "content": transcript, "content_hash": fmt.Sprintf("sha256:%x", sum)}, http.StatusAccepted, &accepted)
-	pollIngestion(t, client, baseURL, accepted.IngestionID)
-	var daily struct {
-		Cadence   string   `json:"cadence"`
-		SourceIDs []string `json:"source_ids"`
-	}
-	writeJSON(t, client, http.MethodGet, baseURL+"/v1/reports/latest?cadence=daily", nil, http.StatusOK, &daily)
-	if daily.Cadence != "daily" || len(daily.SourceIDs) == 0 {
-		t.Fatalf("daily=%+v", daily)
-	}
-	var listResp struct {
-		Cadence string `json:"cadence"`
-		Count   int    `json:"count"`
-	}
-	writeJSON(t, client, http.MethodGet, baseURL+"/v2/reports?cadence=daily", nil, http.StatusOK, &listResp)
-	if listResp.Cadence != "daily" || listResp.Count == 0 {
-		t.Fatalf("v2 report list=%+v", listResp)
-	}
 	var latestV2 struct {
 		Cadence   string `json:"cadence"`
 		Generator string `json:"generator"`
@@ -255,6 +192,14 @@ E2E_WORLD_MARKER machine description for the end-to-end test.
 	writeJSON(t, client, http.MethodGet, baseURL+"/v2/reports/latest?cadence=daily", nil, http.StatusOK, &latestV2)
 	if latestV2.Cadence != "daily" || latestV2.Generator == "" {
 		t.Fatalf("v2 latest=%+v", latestV2)
+	}
+	var listResp struct {
+		Cadence string `json:"cadence"`
+		Count   int    `json:"count"`
+	}
+	writeJSON(t, client, http.MethodGet, baseURL+"/v2/reports?cadence=daily", nil, http.StatusOK, &listResp)
+	if listResp.Cadence != "daily" || listResp.Count == 0 {
+		t.Fatalf("v2 report list=%+v", listResp)
 	}
 	var orientation struct {
 		Note     string   `json:"note"`
@@ -268,7 +213,7 @@ E2E_WORLD_MARKER machine description for the end-to-end test.
 	var deleted struct {
 		Deleted bool `json:"deleted"`
 	}
-	writeJSON(t, client, http.MethodDelete, baseURL+"/v1/memories/"+created.ID, nil, http.StatusOK, &deleted)
+	writeJSON(t, client, http.MethodDelete, baseURL+"/v2/memories/"+created.ID, nil, http.StatusOK, &deleted)
 	if !deleted.Deleted {
 		t.Fatal("canonical delete was not confirmed")
 	}
@@ -276,7 +221,7 @@ E2E_WORLD_MARKER machine description for the end-to-end test.
 	var pipelines struct {
 		Pipelines []map[string]any `json:"pipelines"`
 	}
-	writeJSON(t, client, http.MethodGet, baseURL+"/v1/pipelines", nil, http.StatusOK, &pipelines)
+	writeJSON(t, client, http.MethodGet, baseURL+"/v2/pipelines", nil, http.StatusOK, &pipelines)
 	if len(pipelines.Pipelines) == 0 {
 		t.Fatal("pipeline status returned no pipelines")
 	}
@@ -314,14 +259,6 @@ E2E_WORLD_MARKER machine description for the end-to-end test.
 	if fastResp["assertions"] != nil || fastResp["proposals"] != nil || fastResp["recall_trace"] != nil {
 		t.Fatal("fast recall must not contain deep recall fields")
 	}
-
-	var forgotten struct {
-		OK bool `json:"ok"`
-	}
-	writeJSON(t, client, http.MethodDelete, baseURL+"/v1/memories/"+key, nil, http.StatusOK, &forgotten)
-	if !forgotten.OK {
-		t.Fatal("forget response did not confirm success")
-	}
 }
 
 func pollIngestion(t *testing.T, client *http.Client, baseURL, id string) {
@@ -333,7 +270,7 @@ func pollIngestion(t *testing.T, client *http.Client, baseURL, id string) {
 			MemoryIDs []string `json:"memory_ids"`
 			Error     *string  `json:"error"`
 		}
-		writeJSON(t, client, http.MethodGet, baseURL+"/v1/ingestions/"+id, nil, http.StatusOK, &status)
+		writeJSON(t, client, http.MethodGet, baseURL+"/v2/ingestions/"+id, nil, http.StatusOK, &status)
 		if status.Status == "completed" || status.Status == "completed_degraded" {
 			if len(status.MemoryIDs) == 0 {
 				t.Fatalf("ingestion=%+v", status)
