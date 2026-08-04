@@ -9,6 +9,7 @@ import MaterialsPage from "./pages/MaterialsPage";
 import ReportsPage from "./pages/ReportsPage";
 import ModulesPage from "./pages/ModulesPage";
 import EvolutionPage from "./pages/EvolutionPage";
+import MailboxPage from "./pages/MailboxPage";
 import Placeholder from "./pages/Placeholder";
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/modules" element={<ModulesPage />} />
         <Route path="/evolution" element={<EvolutionPage />} />
+        <Route path="/mailbox" element={<MailboxPage />} />
         <Route path="/settings" element={<Placeholder titleKey="nav.settings" />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

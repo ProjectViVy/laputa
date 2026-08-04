@@ -1314,6 +1314,42 @@
   border-color: var(--degraded);
 }
 
+.modules-badge.received,
+.modules-badge.queued {
+  color: var(--degraded);
+  border-color: var(--degraded);
+}
+
+.modules-badge.evaluating,
+.modules-badge.sending {
+  color: var(--info);
+  border-color: var(--info);
+}
+
+.modules-badge.acked {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.modules-badge.dead_letter {
+  color: var(--down);
+  border-color: var(--down);
+}
+
+.mailbox-pre {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* ============ design-preview mode ============ */
 .preview-mode .shell-main {
   border-top: 2px dashed var(--info);

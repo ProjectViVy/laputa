@@ -179,6 +179,12 @@ GET    /v2/evolution/proposals      # list evolution proposals (newest first)
 GET    /v2/evolution/proposals/{id} # retrieve proposal details
 GET    /v2/evolution/hub/status     # EvoMap provider liveness (ADR-0010)
 
+GET    /v2/mailbox/inbox            # EvoMap inbox (signal review queue)
+GET    /v2/mailbox/outbox           # EvoMap outbox (delivery state)
+GET    /v2/mailbox/dead-letter      # Dead-lettered items (privacy gate / retries)
+POST   /v2/mailbox/items/{id}/approve # Approve inbox item (explicit review)
+POST   /v2/mailbox/items/{id}/reject  # Reject inbox item (explicit review)
+
 GET    /v2/pipelines                # read-only pipeline inspection
 ```
 

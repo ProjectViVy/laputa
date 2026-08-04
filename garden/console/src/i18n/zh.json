@@ -13,6 +13,7 @@
     "reports": "报告系统",
     "modules": "志向与建议",
     "evolution": "演化中枢",
+    "mailbox": "演化邮箱",
     "operations": "运行与审计",
     "library": "文档与架构",
     "settings": "设置"
@@ -264,6 +265,38 @@
       "confirmApprove": "确认批准？",
       "confirmReject": "确认拒绝？",
       "reviewedBy": "审阅人"
+    }
+  },
+  "mailbox": {
+    "title": "演化邮箱",
+    "lede": "EvoMap 信号邮箱（ADR-0007 §5）。inbox 是待审查的入站信号，可批准或拒绝；outbox 记录出站交付状态。当前仅 API 写入，本页为就绪面。",
+    "inbox": {
+      "title": "INBOX",
+      "empty": "暂无入站信号。"
+    },
+    "outbox": {
+      "title": "OUTBOX",
+      "empty": "暂无出站记录。"
+    },
+    "review": {
+      "approve": "批准",
+      "reject": "拒绝",
+      "confirmApprove": "确认批准？",
+      "confirmReject": "确认拒绝？",
+      "cancel": "取消",
+      "reasonPlaceholder": "审阅理由（可选）"
+    },
+    "detail": {
+      "payload": "载荷",
+      "evidence": "证据引用",
+      "leakage": "泄漏检查",
+      "clean": "通过",
+      "violated": "有违规",
+      "checkedRefs": "已检查引用数",
+      "reason": "理由",
+      "retryCount": "重试次数",
+      "created": "创建于 {{date}}",
+      "updated": "更新于 {{date}}"
     }
   },
   "placeholder": {

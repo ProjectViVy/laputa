@@ -78,7 +78,9 @@ Gate F/G 成果此前在 console 完全不可见：`/v2/evolution/*` 全部 8 �
 
 ## 5. 仍无 UI 的后端面（候选后续批次）
 
-`/v2/memories*`（CRUD）、`/v2/mailbox/*`（收件箱审批）、`/v2/governance/*`（projection/mutations/audit，GovernanceMap 目前只作文本展示）、`/v2/cognitive/world`、`/v2/pipelines/{name}/runs*`、`/v2/admin/context-manifest/{id}`、recall fast/deep 交互面。
+✅ **已交付（Gate I，2026-08-04）：`/v2/mailbox/*`** —— 新增 `/mailbox` 页面（inbox 审批 approve/reject + outbox 交付状态 + dead-letter leakage 展示），纯前端，范围经用户确认。
+
+其余候选：`/v2/memories*`（CRUD）、`/v2/governance/*`（projection/mutations/audit，GovernanceMap 目前只作文本展示）、`/v2/cognitive/world`、`/v2/pipelines/{name}/runs*`、`/v2/admin/context-manifest/{id}`、recall fast/deep 交互面。
 
 ## 6. 实机验证记录（2026-08-03，真实二进制 + 本机 EvoMap 凭据）
 

@@ -303,3 +303,24 @@ export interface ProposalsListResponse {
   items: EvolutionProposal[];
   count: number;
 }
+
+// ============ Mailbox (EvoMap signal mailbox, ADR-0007 §5) ============
+
+export interface MailboxItem {
+  id: string;
+  direction: string;
+  state: string;
+  payload: Record<string, unknown>;
+  evidence_refs: string[];
+  leakage?: LeakageReport;
+  reason?: string;
+  retry_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MailboxListResponse {
+  box: string;
+  items: MailboxItem[];
+  count: number;
+}

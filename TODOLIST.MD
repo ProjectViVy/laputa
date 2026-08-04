@@ -1,7 +1,7 @@
 # TODOLIST — Garden MemoryOS
 
-> **Last updated:** 2026-08-03  
-> **Current focus:** Gate H complete — comprehensive console API audit (14 frontend endpoints verified, 4 defects fixed incl. live-found module `created_at` bug) + Evolution panel (`/evolution` page with hub status, runs, proposals; new read-only `GET /v2/evolution/runs|proposals`). Audit record: `docs/dev/reference/2026-08-03-console-api-audit.md`. Next = candidate batches: Obsidian adapter runtime (ADR-0006 §4), publish EvolutionEvent third element, semantic privacy review (ADR-0007), mailbox/memories/governance console UI, sidecar Evolver, host adapters (Wave 7).  
+> **Last updated:** 2026-08-04  
+> **Current focus:** Gate I complete — console mailbox UI (`/mailbox` page: inbox review approve/reject + outbox delivery state, pure frontend per user scope; mailbox routes added to root AGENTS.md). Next = candidate batches: Obsidian adapter runtime (ADR-0006 §4), publish EvolutionEvent third element, semantic privacy review (ADR-0007), memories/governance/cognitive-world console UI, sidecar Evolver, host adapters (Wave 7).  
 > **Architecture source:** [0001 MemoryOS vNext Architecture](docs/architecture/0001-memoryos-vnext-architecture.md) + [ADR-0002 Cognitive Partition](docs/architecture/0002-laputa-cognitive-partition-decision.md) + [ADR-0004 Cognitive Files Migration](docs/architecture/0004-cognitive-files-migration.md) + [ADR-0005 Report System Design](docs/architecture/0005-report-system-design.md) + [ADR-0006 Semantic Ingestion](docs/architecture/0006-semantic-ingestion-and-obsidian-adapter.md) + [ADR-0007 EvoMap Mailbox](docs/architecture/0007-evomap-mailbox.md) + [ADR-0008 Legacy Compatibility Removal](docs/architecture/0008-legacy-compatibility-removal.md) + [ADR-0009 AMBITION / USER SUGGESTIONS Modules](docs/architecture/0009-ambition-user-suggestions-modules.md) + [ADR-0010 EvoMap Hub Transport Provider](docs/architecture/0010-evomap-hub-transport-provider.md)  
 > This file tracks execution status only. It must not restate design contracts.
 
@@ -173,6 +173,20 @@ Archived pre-vNext docs and established active documentation navigation. The act
 **Status:** Complete. Full verification green (internal all pkgs, e2e 10.9s, `tsc -b` clean); live-server pass: 13 GET endpoints 200, discovery run 202→completed, no-creds instance degrades to 503 while lists/admin stay 200; module `created_at` fix re-verified live.
 
 **Exit:** audit doc §6 verification table complete; honest note — no browser automation in this environment, frontend verified via tsc + bundle assertions + curl shapes.
+
+---
+
+### ✅ Gate I — Console mailbox UI (pure frontend)
+
+**Goal:** surface the EvoMap mailbox (ADR-0007 §5) in the console; scope confirmed with user — no backend changes (no outbox retry endpoint).
+
+- [x] `[G]` Console `/mailbox` page: inbox/outbox two-column layout (8s polling), expandable items with payload/evidence/facts, two-step approve/reject with optional reason for `received`/`evaluating` inbox items, dead-letter items shown with leakage report (violations/warnings/checked refs), zh/en i18n, sidebar nav + route + badge state colors.
+- [x] `[G]` Docs: mailbox routes added to root `AGENTS.md` API table (previously missing entirely); audit doc §5 marks mailbox UI delivered.
+- [x] `[G]` Verified: seeded SQLite via temporary `cmd/seedmailbox` (inbox received/approved/rejected; outbox queued/acked/dead-letter with `leakage.clean=false`), live server curls for three GETs + approve/reject 200/404/409, `tsc -b` clean, bundle assertions, `go test ./internal/...` green; seed tool removed after verification.
+
+**Status:** Complete. Verification green (internal all pkgs, `tsc -b` clean, live-server shape checks on seeded mailbox); honest note — no browser automation in this environment, frontend verified via tsc + bundle assertions + curl shapes.
+
+**Exit:** seeded mailbox live-verified end to end; user-confirmed scope (pure frontend) honored; seed tooling deleted.
 
 ---
 

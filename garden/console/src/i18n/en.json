@@ -13,6 +13,7 @@
     "reports": "Reports",
     "modules": "Ambitions & Suggestions",
     "evolution": "Evolution Hub",
+    "mailbox": "Mailbox",
     "operations": "Operations",
     "library": "Architecture Library",
     "settings": "Settings"
@@ -264,6 +265,38 @@
       "confirmApprove": "Confirm approve?",
       "confirmReject": "Confirm reject?",
       "reviewedBy": "Reviewed by"
+    }
+  },
+  "mailbox": {
+    "title": "EvoMap Mailbox",
+    "lede": "EvoMap signal mailbox (ADR-0007 §5). The inbox holds inbound signals awaiting review — approve or reject them; the outbox records outbound delivery state. Currently API-written only; this page is the readiness surface.",
+    "inbox": {
+      "title": "INBOX",
+      "empty": "No inbound signals yet."
+    },
+    "outbox": {
+      "title": "OUTBOX",
+      "empty": "No outbound records yet."
+    },
+    "review": {
+      "approve": "Approve",
+      "reject": "Reject",
+      "confirmApprove": "Confirm approve?",
+      "confirmReject": "Confirm reject?",
+      "cancel": "Cancel",
+      "reasonPlaceholder": "Review reason (optional)"
+    },
+    "detail": {
+      "payload": "Payload",
+      "evidence": "Evidence refs",
+      "leakage": "Leakage check",
+      "clean": "clean",
+      "violated": "violations",
+      "checkedRefs": "checked refs",
+      "reason": "Reason",
+      "retryCount": "Retry count",
+      "created": "Created {{date}}",
+      "updated": "Updated {{date}}"
     }
   },
   "placeholder": {
