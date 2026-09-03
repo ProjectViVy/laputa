@@ -32,11 +32,16 @@ func (l *Layer0) Render() (string, error) {
 }
 
 type Layer1 struct {
-	searcher *search.Searcher
+	searcher SearchReader
 	wing     string
 }
 
-func NewLayer1(searcher *search.Searcher) *Layer1 {
+// SearchReader is the read-only capability needed by runtime layers.
+type SearchReader interface {
+	Search(context.Context, string, string, string, int) ([]search.Drawer, error)
+}
+
+func NewLayer1(searcher SearchReader) *Layer1 {
 	return &Layer1{searcher: searcher}
 }
 
@@ -57,10 +62,10 @@ type MemoryStack struct {
 	cfg      *config.Config
 	l0       *Layer0
 	l1       *Layer1
-	searcher *search.Searcher
+	searcher SearchReader
 }
 
-func NewMemoryStack(cfg *config.Config, searcher *search.Searcher) *MemoryStack {
+func NewMemoryStack(cfg *config.Config, searcher SearchReader) *MemoryStack {
 	identityPath, _ := cfg.GetIdentityPath()
 	return &MemoryStack{
 		cfg:      cfg,

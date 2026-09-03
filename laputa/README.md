@@ -1,70 +1,34 @@
 # Laputa
 
-> Go implementation of the Laputa governance framework.
+This module is being replaced under [`../docs/architecture/0012-laputa-markdown-clean-break.md`](../docs/architecture/0012-laputa-markdown-clean-break.md).
 
-## What It Is
+## Target
 
-A pure file-based governance substrate for AI agents.
+Laputa will be a profile-level Markdown authority store with exactly:
 
-- **14 governance sections** in `.laputa/sections/*.json`
-- **Write authority registry** per section
-- **Atomic file operations** with cross-process safety in mind
-- **Zero subprocesses** — no daemons, no sidecars
-- **Mempalace is completely separate**
-
-## Quick Start
-
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    "github.com/dashimaki/laputa"
-)
-
-func main() {
-    ctx := context.Background()
-    store, _ := laputa.NewFileStore(".laputa")
-    engine := laputa.NewEngine(store)
-    _ = engine.Initialize(ctx)
-
-    snap, _ := engine.Snapshot(ctx)
-    fmt.Println(snap["schema_version"])
-}
+```text
+IDENTITY.MD      RELATIONSHIP.MD  REDLINE.MD  USER.MD
+DREAM.MD         DARK.MD          WORLD.MD
 ```
 
-## Build & Test
+It also defines `ACTMEM.MD` as a separate cross-session activity-memory file.
+
+The first six authority files provide bounded, session-frozen Frozen Core projections. `WORLD.MD` and `ACTMEM.MD` are explicit tool reads and must never be automatic context.
+
+## Retired
+
+The current JSON sections implementation is not a supported target model. Do not use or extend `.laputa/sections/*.json`, section numbering, `Commitment`, `Preferences`, `memory_md`, `MEMORY.MD`, JSON Patch, or generic governance mutation to build new behavior.
+
+There is no migration, compatibility mapping, dual read/write, or fallback route from those files to the Markdown authority model.
+
+## Boundaries
+
+Laputa owns personality authority, Persona review/history, and ACTMEM semantics. Mentle owns evidence and retrieval. Garden owns runtime orchestration. EvoMap owns every capability artifact lifecycle.
+
+## Verification
 
 ```bash
-go build ./...
-go test ./...
+GOSUMDB=off go test ./...
 ```
 
-## Rhythm Reports
-
-Generate periodic reports using an LLM:
-
-```bash
-# Mock generator (no API key)
-go run ./cmd/laputa -kind daily
-
-# Real LLM
-export OPENAI_API_KEY=*** run ./cmd/laputa -kind daily -api-key $OPENAI_API_KEY
-```
-
-Supported kinds: `daily`, `weekly`, `monthly`.
-
-## Design Basis
-
-This implementation follows:
-
-- `laputa-py/baseline/LAPUTA.md` v0.0.6 final
-- `laputa-py/baseline/MENTLE.md` v0.2
-- `laputa-work/DECISIONS.md`
-
-See `C:\Users\Administrator\Desktop\DIVA\docs\` for full design lineage.
-
-## License
-
-MIT
+The current tests validate the Markdown-first clean-break implementation and its deletion boundaries. Archived JSON-section tests are historical evidence only.

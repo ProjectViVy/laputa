@@ -19,39 +19,41 @@ The `vectorstore/` package defines the abstract interface:
 
 ## Structure
 
-```
+```text
 vectorstore/
-├── interface.go                     # VectorStore interface definition
-├── types.go                         # Result types
-└── (supporting utilities)
+└── vectorstore.go                     # Store interface, BackendType constants, Open() factory
 ```
 
----
+The package is a single file. It defines the unified `Store` interface plus an `Open(cfg)` factory that dispatches by `BackendType`. It does **not** declare `interface.go`/`types.go` (those names are historical documentation only).
 
 ## Interface
 
+The canonical interface is in `vectorstore.go` (see source for the authoritative definition):
+
 ```go
-type VectorStore interface {
-    Insert(ctx context.Context, id string, vector []float32) error
-    Search(ctx context.Context, query []float32, k int) ([]SearchResult, error)
-    Delete(ctx context.Context, id string) error
-    Close(ctx context.Context) error
+type Store interface {
+    Search(ctx, query []float32, limit int, filter map[string]any) ([]SearchResult, error)
+    Add(ctx, id string, vector []float32, payload map[string]any) error
+    AddBatch(ctx, points []Point) error
+    Delete(ctx, id string) error
+    ListAll(ctx, limit int) ([]SearchResult, error)
+    Close() error
 }
 
-type SearchResult struct {
-    ID        string
-    Score     float64  // normalized 0-1
-    Distance  float64
-}
+type BackendType string
+
+const (
+    BackendGoVector BackendType = "govector"   // active in production (facade)
+    BackendRedis    BackendType = "redis"
+    BackendQdrant   BackendType = "qdrant"     // NOT implemented — Open() returns error
+    BackendChroma   BackendType = "chroma"     // NOT implemented — Open() returns error
+    BackendLanceDB  BackendType = "lancedb"    // NOT implemented — Open() returns error
+)
 ```
-
----
 
 ## Implementing Backends
 
-Each backend (govector, redis, etc.) implements this interface.
-
-See parent [mentle/storage/AGENTS.md](../AGENTS.md) for usage.
+Only **govector** implements this interface today, and it does so via `storage/govector.Store` (constructed directly by `facade` — `vectorstore.Open(BackendGoVector)` deliberately tells you to use `govector.NewStore` directly). Redis has its own `palace.Drawer`-based API in `storage/redis` and is not wired through this interface. Qdrant/Chroma/LanceDB have no implementation.
 
 ---
 

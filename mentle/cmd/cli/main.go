@@ -4,19 +4,16 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 
+	"github.com/dashimaki/mentle/facade"
 	"github.com/dashimaki/mentle/internal/config"
 	"github.com/dashimaki/mentle/internal/embedder"
 	"github.com/dashimaki/mentle/internal/layers"
 	"github.com/dashimaki/mentle/internal/miner"
-	"github.com/dashimaki/mentle/internal/palace"
 	"github.com/dashimaki/mentle/internal/room"
 	"github.com/dashimaki/mentle/internal/search"
-	"github.com/dashimaki/mentle/pkg/wal"
 	govector "github.com/dashimaki/mentle/storage/govector"
 	"github.com/spf13/cobra"
 )
@@ -69,10 +66,8 @@ func newInitCmd() *cobra.Command {
 				palaceDir = palacePath
 			}
 
-			for _, dir := range []string{palaceDir, palaceDir + "/wal"} {
-				if err := os.MkdirAll(dir, 0755); err != nil {
-					return err
-				}
+			if err := os.MkdirAll(palaceDir, 0755); err != nil {
+				return err
 			}
 
 			// Embeddings use hugot with ONNX models
@@ -105,26 +100,19 @@ func newMineCmd() *cobra.Command {
 
 			ctx := context.Background()
 
-			emb, err := embedder.New("", cfg.GetModelsDir())
-			if err != nil {
-				return fmt.Errorf("embedder: %w", err)
-			}
-			defer emb.Close()
-
-			store, err := govector.NewStore(os.ExpandEnv(cfg.PalacePath)+"/vectors.db", 384)
-			if err != nil {
+			svc := &facade.Service{}
+			if err := svc.Init(ctx, facade.Options{}); err != nil {
 				return err
 			}
-
-			searcher := search.NewSearcher(store, emb)
+			defer svc.Close()
 
 			if mode == "convos" {
-				m := miner.NewMiner(searcher)
+				m := miner.NewMiner(svc)
 				cm := miner.NewConversationMiner(m)
 				return cm.MineConversations(ctx, args[0], "")
 			}
 
-			m := miner.NewMiner(searcher)
+			m := miner.NewMiner(svc)
 
 			roomDetector, err := room.NewConfigBasedRoomDetector(args[0])
 			if err != nil {
@@ -253,132 +241,24 @@ func newStatusCmd() *cobra.Command {
 func newRepairCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "repair",
-		Short: "Rebuild palace vector index",
-		Long:  "Scan stored drawer files and rebuild the vector index",
+		Short: "Rebuild disposable indexes from canonical memory",
+		Long:  "Build and verify derived vector/BM25 indexes from canonical SQLite without moving the authority database",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			ctx := context.Background()
+			svc := &facade.Service{}
+			if err := svc.Init(ctx, facade.Options{}); err != nil {
+				return err
+			}
+			defer svc.Close()
+			fmt.Printf("Rebuilding derived indexes from canonical SQLite at %s\n", svc.PalacePath)
+			if err := svc.RebuildDerivedIndexes(ctx); err != nil {
+				return err
+			}
+			health, err := svc.IndexHealth(ctx)
 			if err != nil {
 				return err
 			}
-
-			palaceDir := os.ExpandEnv(cfg.PalacePath)
-			fmt.Printf("Repairing palace at %s\n", palaceDir)
-
-			if _, err := os.Stat(palaceDir); os.IsNotExist(err) {
-				fmt.Printf("  No palace found at %s\n", palaceDir)
-				return nil
-			}
-
-			walDir := filepath.Join(palaceDir, "wal")
-			entries, err := os.ReadDir(walDir)
-			if err != nil {
-				if os.IsNotExist(err) {
-					fmt.Println("Nothing to repair - no wal directory found")
-					return nil
-				}
-				return fmt.Errorf("read wal dir: %w", err)
-			}
-
-			if len(entries) == 0 {
-				fmt.Println("Nothing to repair - wal directory is empty")
-				return nil
-			}
-
-			backupDir := palaceDir + ".backup"
-			if _, err := os.Stat(backupDir); err == nil {
-				fmt.Printf("Removing old backup at %s\n", backupDir)
-				os.RemoveAll(backupDir)
-			}
-			fmt.Printf("Creating backup at %s\n", backupDir)
-			if err := os.Rename(palaceDir, backupDir); err != nil {
-				return fmt.Errorf("create backup: %w", err)
-			}
-
-			os.MkdirAll(palaceDir, 0755)
-			os.MkdirAll(walDir, 0755)
-
-			vectorsPath := filepath.Join(palaceDir, "vectors.db")
-			store, err := govector.NewStore(vectorsPath, 1024)
-			if err != nil {
-				return fmt.Errorf("create new vector store: %w", err)
-			}
-			defer store.Close()
-
-			ctx := context.Background()
-			emb, err := embedder.New("", cfg.GetModelsDir())
-			if err != nil {
-				return fmt.Errorf("embedder: %w", err)
-			}
-			defer emb.Close()
-
-			searcher := search.NewSearcher(store, emb)
-
-			fmt.Printf("Re-indexing %d drawer files...\n", len(entries))
-
-			walNew, err := wal.NewWAL(palaceDir)
-			if err != nil {
-				return fmt.Errorf("create new WAL: %w", err)
-			}
-
-			newWalDir := filepath.Join(palaceDir, "wal")
-
-			indexed := 0
-			skipped := 0
-			for _, entry := range entries {
-				if entry.IsDir() {
-					continue
-				}
-				drawerPath := filepath.Join(walDir, entry.Name())
-				content, err := os.ReadFile(drawerPath)
-				if err != nil {
-					fmt.Printf("  Warning: failed to read %s: %v\n", entry.Name(), err)
-					skipped++
-					continue
-				}
-
-				var drawerEntry wal.Entry
-				if err := json.Unmarshal(content, &drawerEntry); err != nil {
-					drawerEntry = wal.Entry{
-						DrawerID: entry.Name(),
-						Content:  string(content),
-						Wing:     "default",
-						Room:     "general",
-					}
-				}
-
-				newDrawerPath := filepath.Join(newWalDir, entry.Name())
-				if err := os.WriteFile(newDrawerPath, content, 0644); err != nil {
-					fmt.Printf("  Warning: failed to write %s: %v\n", entry.Name(), err)
-					skipped++
-					continue
-				}
-
-				if err := walNew.LogAdd(drawerEntry); err != nil {
-					fmt.Printf("  Warning: failed to log %s: %v\n", entry.Name(), err)
-				}
-
-				drawer := palace.Drawer{
-					ID:         drawerEntry.DrawerID,
-					Content:    drawerEntry.Content,
-					Wing:       drawerEntry.Wing,
-					Room:       drawerEntry.Room,
-					SourceFile: drawerEntry.DrawerID,
-					AddedBy:    "mempalace-go-repair",
-				}
-				if err := searcher.Store(ctx, drawer); err != nil {
-					fmt.Printf("  Warning: failed to index %s: %v\n", entry.Name(), err)
-					skipped++
-					continue
-				}
-
-				indexed++
-				if indexed%100 == 0 {
-					fmt.Printf("  Indexed %d/%d...\n", indexed, len(entries))
-				}
-			}
-
-			fmt.Printf("\nRepair complete. %d drawers re-indexed, %d skipped.\n", indexed, skipped)
-			fmt.Printf("Backup saved at %s\n", backupDir)
+			fmt.Printf("Rebuild complete: %d active memories, vector=%d, bm25=%d\n", health.CanonicalActiveCount, health.VectorActiveCount, health.BM25Count)
 			return nil
 		},
 	}

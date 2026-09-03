@@ -16,7 +16,6 @@ import (
 	"github.com/dashimaki/mentle/internal/layers"
 	"github.com/dashimaki/mentle/internal/palace"
 	"github.com/dashimaki/mentle/internal/search"
-	"github.com/dashimaki/mentle/pkg/wal"
 	govector "github.com/dashimaki/mentle/storage/govector"
 )
 
@@ -27,18 +26,21 @@ type Options struct {
 
 // Service aggregates mentle internal components for garden and cmd/server.
 type Service struct {
-	Cfg         *config.Config
-	Embedder    *embedder.Embedder
-	Searcher    *search.Searcher
-	Hybrid      *hybrid.Searcher
-	Stack       *layers.MemoryStack
-	KG          *kg.KnowledgeGraph
-	WAL         *wal.WAL
-	PalaceGraph *palace.Graph
-	Diary       *diary.Diary
-	PalacePath  string
-	Catalog     *Catalog
-	mutationMu  sync.Mutex
+	Cfg      *config.Config
+	Embedder *embedder.Embedder
+	// EmbeddingIdentity is the authoritative runtime identity provider. It is
+	// injectable so canonical mutation and health tests can exercise identity
+	// drift without loading an ONNX model.
+	EmbeddingIdentity func() embedder.Identity
+	Searcher          *search.Searcher
+	Hybrid            *hybrid.Searcher
+	Stack             *layers.MemoryStack
+	KG                *kg.KnowledgeGraph
+	PalaceGraph       *palace.Graph
+	Diary             *diary.Diary
+	PalacePath        string
+	Catalog           *Catalog
+	mutationMu        sync.Mutex
 }
 
 // Init loads config and wires the same components as cmd/server.
@@ -74,19 +76,7 @@ func (s *Service) Init(ctx context.Context, opts Options) error {
 
 	searcher := search.NewSearcher(vectorDB, emb)
 	hybridSearcher := hybrid.NewSearcher(vectorDB, emb, 0.7)
-	if err := hybridSearcher.RebuildBM25Index(ctx); err != nil {
-		kgDB.Close()
-		emb.Close()
-		return fmt.Errorf("hybrid index: %w", err)
-	}
 	stack := layers.NewMemoryStack(cfg, searcher)
-
-	walInstance, err := wal.NewWAL(palacePath)
-	if err != nil {
-		kgDB.Close()
-		emb.Close()
-		return fmt.Errorf("wal: %w", err)
-	}
 
 	taxonomy, err := searcher.GetTaxonomy(ctx)
 	if err != nil {
@@ -114,11 +104,11 @@ func (s *Service) Init(ctx context.Context, opts Options) error {
 
 	s.Cfg = cfg
 	s.Embedder = emb
+	s.EmbeddingIdentity = emb.Identity
 	s.Searcher = searcher
 	s.Hybrid = hybridSearcher
 	s.Stack = stack
 	s.KG = kgDB
-	s.WAL = walInstance
 	s.PalaceGraph = palaceGraph
 	s.Diary = agentDiary
 	s.PalacePath = palacePath
@@ -128,6 +118,14 @@ func (s *Service) Init(ctx context.Context, opts Options) error {
 		return fmt.Errorf("canonical catalog: %w", err)
 	}
 	s.Catalog = catalog
+	// BM25 is disposable and must be rebuilt from canonical active/current
+	// memories, never from an arbitrary tombstone-bearing vector listing.
+	snapshot, err := s.readCanonicalSnapshot(ctx)
+	if err != nil {
+		s.Close()
+		return fmt.Errorf("canonical snapshot for lexical index: %w", err)
+	}
+	hybridSearcher.RebuildBM25FromDrawers(snapshot.Drawers)
 	if err := s.replayIndexJobs(ctx); err != nil {
 		s.Close()
 		return fmt.Errorf("canonical index recovery: %w", err)

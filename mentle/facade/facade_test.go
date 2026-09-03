@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/dashimaki/mentle/internal/hybrid"
@@ -12,7 +13,9 @@ import (
 )
 
 type fakeStore struct {
-	points map[string]govector.SearchResult
+	points    map[string]govector.SearchResult
+	addErr    error
+	deleteErr error
 }
 
 func TestCanonicalMemoryLifecycleAndIdempotency(t *testing.T) {
@@ -53,7 +56,7 @@ func TestCanonicalMemoryLifecycleAndIdempotency(t *testing.T) {
 	if err != nil || len(page.Items) != 1 {
 		t.Fatalf("page=%+v err=%v", page, err)
 	}
-	deleted, err := svc.DeleteMemory(ctx, created.ID, "user_request", "req_test")
+	deleted, err := svc.DeleteMemory(ctx, created.ID, updated.Version, "user_request", "req_test")
 	if err != nil || !deleted.Deleted {
 		t.Fatalf("deleted=%+v err=%v", deleted, err)
 	}
@@ -64,8 +67,8 @@ func TestCanonicalMemoryLifecycleAndIdempotency(t *testing.T) {
 	if err != nil || len(hits) != 0 {
 		t.Fatalf("deleted hits=%+v err=%v", hits, err)
 	}
-	if _, err := svc.DeleteMemory(ctx, created.ID, "user_request", "req_test2"); err != nil {
-		t.Fatalf("idempotent delete=%v", err)
+	if _, err := svc.DeleteMemory(ctx, created.ID, deleted.Version, "user_request", "req_test2"); !errors.Is(err, ErrMemoryNotFound) {
+		t.Fatalf("repeated delete=%v", err)
 	}
 	var audits int
 	if err := catalog.db.QueryRow(`SELECT COUNT(*) FROM audit_log WHERE memory_id=?`, created.ID).Scan(&audits); err != nil || audits != 3 {
@@ -93,6 +96,9 @@ func (f *fakeStore) Search(_ []float32, limit int, filter map[string]any) ([]gov
 	return out, nil
 }
 func (f *fakeStore) Add(id string, _ []float32, payload map[string]any) error {
+	if f.addErr != nil {
+		return f.addErr
+	}
 	if f.points == nil {
 		f.points = map[string]govector.SearchResult{}
 	}
@@ -101,11 +107,19 @@ func (f *fakeStore) Add(id string, _ []float32, payload map[string]any) error {
 }
 func (f *fakeStore) AddBatch(points []govector.Point) error {
 	for _, point := range points {
-		_ = f.Add(point.ID, point.Vector, point.Payload)
+		if err := f.Add(point.ID, point.Vector, point.Payload); err != nil {
+			return err
+		}
 	}
 	return nil
 }
-func (f *fakeStore) Delete(id string) error { delete(f.points, id); return nil }
+func (f *fakeStore) Delete(id string) error {
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
+	delete(f.points, id)
+	return nil
+}
 func (f *fakeStore) ListAll(limit int) ([]govector.SearchResult, error) {
 	out := []govector.SearchResult{}
 	for _, point := range f.points {
@@ -146,6 +160,79 @@ func TestUninitializedServiceReportsUnavailable(t *testing.T) {
 	}
 	if _, err := svc.Retrieve(ctx, RetrievalQuery{Text: "hello"}); err == nil {
 		t.Fatal("retrieve should fail")
+	}
+}
+
+func TestConcurrentUpdateUsesSingleVersionWinner(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "before", Kind: "fact"}, "cas-create", "cas-create-hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := created.Version
+	contents := []string{"winner-a", "winner-b"}
+	errs := make([]error, len(contents))
+	var wg sync.WaitGroup
+	for i := range contents {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			content := contents[i]
+			_, errs[i] = svc.UpdateMemory(ctx, created.ID, UpdateMemoryRequest{Content: &content, ExpectedVersion: &expected})
+		}(i)
+	}
+	wg.Wait()
+	winners := 0
+	conflicts := 0
+	for _, err := range errs {
+		if err == nil {
+			winners++
+		} else if errors.Is(err, ErrVersionConflict) {
+			conflicts++
+		} else {
+			t.Fatalf("unexpected concurrent update error: %v", err)
+		}
+	}
+	if winners != 1 || conflicts != 1 {
+		t.Fatalf("winners=%d conflicts=%d errors=%v", winners, conflicts, errs)
+	}
+	current, err := svc.GetMemory(ctx, created.ID)
+	if err != nil || current.Version != 2 {
+		t.Fatalf("current=%+v err=%v", current, err)
+	}
+}
+
+func TestCanonicalCommitSurvivesDerivedIndexFailureAndRecovery(t *testing.T) {
+	store := &fakeStore{points: map[string]govector.SearchResult{}, addErr: errors.New("vector backend unavailable")}
+	catalog, err := OpenCatalog(filepath.Join(t.TempDir(), "canonical.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer catalog.Close()
+	emb := fakeEmbedder{}
+	svc := &Service{Searcher: search.NewSearcher(store, emb), Hybrid: hybrid.NewSearcher(store, emb, .7), Catalog: catalog}
+	created, err := svc.CreateMemory(context.Background(), CreateMemoryRequest{Content: "durable before index"}, "", "")
+	if err != nil {
+		t.Fatalf("canonical mutation failed with derived failure: %v", err)
+	}
+	job, err := catalog.GetIndexJob(context.Background(), created.ID)
+	if err != nil || job == nil || job.Attempts != 1 || job.State != IndexJobRetry {
+		t.Fatalf("outbox=%+v err=%v", job, err)
+	}
+	if _, err := svc.GetMemory(context.Background(), created.ID); err != nil {
+		t.Fatal(err)
+	}
+	store.addErr = nil
+	if _, err := catalog.db.Exec(`UPDATE index_jobs SET next_attempt_at='' WHERE memory_id=?`, created.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.DrainIndexJobs(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	job, err = catalog.GetIndexJob(context.Background(), created.ID)
+	if err != nil || job != nil {
+		t.Fatalf("recovered job=%+v err=%v", job, err)
 	}
 }
 
@@ -193,7 +280,7 @@ func TestServiceRealCRUDAndRetrieval(t *testing.T) {
 	if len(hits[0].Channels) != 2 {
 		t.Fatalf("channels=%v", hits[0].Channels)
 	}
-	deleted, err := svc.DeleteMemory(ctx, created.ID, "user_request", "test")
+	deleted, err := svc.DeleteMemory(ctx, created.ID, created.Version, "user_request", "test")
 	if err != nil || !deleted.Deleted {
 		t.Fatalf("delete=%v err=%v", deleted, err)
 	}

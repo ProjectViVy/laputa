@@ -3,7 +3,6 @@ package integration
 import (
 	"os"
 	"os/exec"
-	"path/filepath"
 	"testing"
 )
 
@@ -19,12 +18,8 @@ func TestCLIInit(t *testing.T) {
 		t.Fatalf("init command failed: %v", err)
 	}
 
-	expectedDirs := []string{"wal"}
-	for _, dir := range expectedDirs {
-		path := filepath.Join(tmp, dir)
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			t.Errorf("expected directory %s to be created", dir)
-		}
+	if info, err := os.Stat(tmp); err != nil || !info.IsDir() {
+		t.Errorf("expected palace directory to be created: %v", err)
 	}
 }
 

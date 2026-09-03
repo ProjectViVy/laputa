@@ -1,5 +1,7 @@
 // Package vectorstore defines the common interface for all vector database backends.
-// Implementations include: govector (local HNSW), Redis, Qdrant, ChromaDB, LanceDB.
+// Production uses govector (local HNSW via bbolt). Redis has a separate
+// palace.Drawer-based implementation in storage/redis. Qdrant, Chroma, and
+// LanceDB are declared but NOT implemented — Open() returns "not yet implemented".
 package vectorstore
 
 import (

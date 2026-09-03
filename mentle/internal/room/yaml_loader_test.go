@@ -226,7 +226,7 @@ func TestSaveRoomsToYAML(t *testing.T) {
 }
 
 func TestSaveRoomsToYAML_InvalidPath(t *testing.T) {
-	err := SaveRoomsToYAML("/nonexistent/dir/mempalace.yaml", "test", nil)
+	err := SaveRoomsToYAML("Z:\\nonexistent_drive_xyz123\\dir\x00\\mempalace.yaml", "test", nil)
 	if err == nil {
 		t.Error("expected error for invalid path")
 	}

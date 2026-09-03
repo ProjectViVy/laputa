@@ -20,20 +20,18 @@ The `chroma/` subdirectory provides an alternative vector storage backend using 
 
 ## Status
 
-Currently not active in production. Offered as pluggable alternative to govector HNSW.
+**NOT IMPLEMENTED.** This directory contains documentation only — there is **no Go code**. `storage/vectorstore.Open(BackendChroma)` returns `"chroma: not yet implemented"`. The Chroma adapter is planned as an opt-in build-tag backend (ADR-0011 §2.4) so the default binary stays hermetic. Do not reference it as an available production backend.
 
 ---
 
 ## Structure
 
-```
+```text
 mentle/storage/chroma/
-└── (implementation files TBD)
-    ├── store.go              # Chroma vector store wrapper
-    ├── store_test.go
-    ├── config.go             # Chroma connection config
-    └── README.md             # Chroma-specific documentation
+└── AGENTS.md                        # Documentation only — no Go implementation files yet
 ```
+
+(Planned files when the backend is implemented: `store.go` — Chroma wrapper, `store_test.go`, `config.go` — connection config, `README.md`.)
 
 ---
 

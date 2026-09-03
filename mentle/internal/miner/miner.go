@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dashimaki/mentle/facade"
 	"github.com/dashimaki/mentle/internal/palace"
-	"github.com/dashimaki/mentle/internal/search"
 )
 
 // SupportedFileExtensions is the set of file extensions the miner will process.
@@ -49,16 +49,16 @@ type RoomDetector interface {
 
 // Miner extracts project files into the memory palace.
 type Miner struct {
-	searcher     *search.Searcher
+	writer       facade.DrawerWriter
 	ignoreFns    []func(path string) bool
 	roomDetector RoomDetector
 	projectDir   string
 }
 
 // NewMiner creates a new Miner.
-func NewMiner(searcher *search.Searcher) *Miner {
+func NewMiner(writer facade.DrawerWriter) *Miner {
 	return &Miner{
-		searcher:  searcher,
+		writer:    writer,
 		ignoreFns: []func(path string) bool{},
 	}
 }
@@ -93,6 +93,9 @@ func (m *Miner) LoadGitignore(dir string) error {
 
 // MineProject walks a directory and mines supported files into the palace.
 func (m *Miner) MineProject(ctx context.Context, dir, wingOverride string) error {
+	if m.writer == nil {
+		return fmt.Errorf("memory facade is unavailable")
+	}
 	if wingOverride == "" {
 		wingOverride = filepath.Base(dir)
 	}
@@ -184,7 +187,7 @@ func (m *Miner) MineProject(ctx context.Context, dir, wingOverride string) error
 				},
 			}
 
-			if err := m.searcher.Store(ctx, drawer); err != nil {
+			if _, err := m.writer.CreateDrawer(ctx, drawer, "project-miner", fmt.Sprintf("mine:%s:%d", absPath, i)); err != nil {
 				fmt.Printf("Warning: failed to store %s chunk %d: %v\n", path, i, err)
 			} else {
 				mined++

@@ -24,12 +24,16 @@ See [mentle/vector/AGENTS.md](../vector/AGENTS.md) for detailed API documentatio
 ```
 storage/
 ├── govector/
-│   ├── store.go                   # Vector store implementation
-│   ├── store_test.go
-│   └── (index management)
+│   └── store.go                   # HNSW vector store (bbolt) — the active production backend
+├── redis/
+│   └── store.go                   # Redis drawer storage (linear scan search; optional, not default)
+├── sqlite/
+│   └── store.go                   # Raw SQLite helper (CGO driver)
 └── vectorstore/
-    └── interface.go               # Public interface for vector operations
+    └── vectorstore.go             # Unified Store interface + Open() factory
 ```
+
+> **Backend status:** `BackendGoVector` is the only backend wired into `facade` (production path). `BackendQdrant`, `BackendChroma`, `BackendLanceDB` are **declared but not implemented** — `vectorstore.Open` returns `"not yet implemented"` for them. `storage/chroma/` and `storage/qdrant/` contain AGENTS.md docs only, no Go code.
 
 ---
 
@@ -49,20 +53,14 @@ Hierarchical Navigable Small World graph:
 Save and load index from disk:
 
 ```bash
-./storage/govector/hnsw.idx    # Binary HNSW graph
-./storage/govector/vectors.db   # SQLite metadata
+./storage/govector/vectors.db   # bbolt file holding the HNSW graph + payloads (not SQLite)
 ```
+
+`vectors.db` is a **bbolt file** (via DotNetAge/govector `core.Storage`), not a SQLite database — its magic header is `00000000...`, not `SQLite format 3`. The HNSW graph, vectors, and payload metadata all live inside this single bbolt file. There is no separate `hnsw.idx`; the graph is persisted inside `vectors.db`.
 
 ### Recovery
 
-If index is corrupted, rebuild from SQL metadata:
-
-```go
-store, err := govector.NewStore("./storage")
-if err != nil {
-    store.Rebuild(ctx)
-}
-```
+If index is corrupted, recreate the store (HNSW graph lives in `vectors.db`; rebuilding from canonical store data is handled by mentle's `repair` CLI / index_jobs replay):
 
 ---
 

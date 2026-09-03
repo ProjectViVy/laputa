@@ -68,7 +68,7 @@ func TestSearchCardsStatusFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.DeleteMemory(ctx, deleted.ID, "test", "req1"); err != nil {
+	if _, err := svc.DeleteMemory(ctx, deleted.ID, deleted.Version, "test", "req1"); err != nil {
 		t.Fatal(err)
 	}
 	page, err := svc.SearchCards(ctx, CardQuery{Text: "memory", Limit: 10})

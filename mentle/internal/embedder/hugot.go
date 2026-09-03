@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/gomlx/go-huggingface/tokenizers/api"
 	"github.com/knights-analytics/hugot"
@@ -27,6 +28,25 @@ type Embedder struct {
 	modelsDir   string
 	modelName   string
 	initialized bool
+}
+
+// Identity returns the semantic fingerprint of this embedder.
+func (e *Embedder) Identity() Identity {
+	provider := "go-onnx"
+	return Identity{
+		Model:      e.modelName,
+		Dimension:  384,
+		Metric:     "cosine",
+		Normalize:  true,
+		Provider:   provider,
+		Version:    "1",
+		CapturedAt: time.Now().UTC(),
+	}
+}
+
+// Dimension returns the size of vectors produced by this embedder.
+func (e *Embedder) Dimension() int {
+	return 384
 }
 
 // New creates a new Embedder. It downloads (if needed) and loads the model.

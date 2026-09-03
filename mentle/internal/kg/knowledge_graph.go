@@ -6,12 +6,15 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/dashimaki/mentle/storage/sqlite"
 )
+
+var ErrInvalidTemporalInterval = errors.New("kg: inverted temporal interval (valid_to < valid_from)")
 
 type Entity struct {
 	ID         string            `json:"id"`
@@ -22,16 +25,34 @@ type Entity struct {
 }
 
 type Triple struct {
-	ID           string    `json:"id"`
-	Subject      string    `json:"subject"`
-	Predicate    string    `json:"predicate"`
-	Object       string    `json:"object"`
-	ValidFrom    string    `json:"valid_from"`
-	ValidTo      string    `json:"valid_to"`
-	Confidence   float64   `json:"confidence"`
-	SourceCloset string    `json:"source_closet"`
-	SourceFile   string    `json:"source_file"`
-	ExtractedAt  time.Time `json:"extracted_at"`
+	ID             string    `json:"id"`
+	Subject        string    `json:"subject"`
+	Predicate      string    `json:"predicate"`
+	Object         string    `json:"object"`
+	ValidFrom      string    `json:"valid_from"`
+	ValidTo        string    `json:"valid_to"`
+	Confidence     float64   `json:"confidence"`
+	SourceCloset   string    `json:"source_closet"`
+	SourceFile     string    `json:"source_file"`
+	SourceDrawerID string    `json:"source_drawer_id"`
+	AdapterName    string    `json:"adapter_name"`
+	AdapterVersion string    `json:"adapter_version"`
+	ExtractedAt    time.Time `json:"extracted_at"`
+}
+
+type TripleInput struct {
+	Subject        string
+	Predicate      string
+	Object         string
+	ValidFrom      string
+	ValidTo        string
+	Confidence     float64
+	SourceCloset   string
+	SourceFile     string
+	SourceDrawerID string
+	AdapterName    string
+	AdapterVersion string
+	ExtractedAt    time.Time
 }
 
 type KnowledgeGraph struct {
@@ -74,6 +95,25 @@ func (kg *KnowledgeGraph) initDB() error {
 		CREATE INDEX IF NOT EXISTS idx_triples_subject ON triples(subject);
 		CREATE INDEX IF NOT EXISTS idx_triples_object ON triples(object);
 	`)
+	if err != nil {
+		return err
+	}
+
+	// Schema migrations
+	cols := []string{
+		"ALTER TABLE triples ADD COLUMN source_drawer_id TEXT;",
+		"ALTER TABLE triples ADD COLUMN adapter_name TEXT;",
+		"ALTER TABLE triples ADD COLUMN adapter_version TEXT;",
+	}
+	for _, query := range cols {
+		kg.db.Exec(query)
+	}
+
+	_, err = kg.db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_triples_source_drawer ON triples(source_drawer_id);
+		CREATE INDEX IF NOT EXISTS idx_triples_adapter ON triples(adapter_name);
+		CREATE INDEX IF NOT EXISTS idx_triples_extracted ON triples(extracted_at);
+	`)
 	return err
 }
 
@@ -91,27 +131,48 @@ func (kg *KnowledgeGraph) AddEntity(name, entityType string, properties map[stri
 	return eid, err
 }
 
-func (kg *KnowledgeGraph) AddTriple(subject, predicate, obj, validFrom, validTo string, confidence float64) (string, error) {
-	subID := entityID(subject)
-	objID := entityID(obj)
-	pred := strings.ToLower(strings.ReplaceAll(predicate, " ", "_"))
+func (kg *KnowledgeGraph) AddTriple(input TripleInput) (string, error) {
+	if input.ValidFrom != "" {
+		if _, err := time.Parse(time.RFC3339, input.ValidFrom); err != nil {
+			return "", fmt.Errorf("invalid ValidFrom: %w", err)
+		}
+	}
+	if input.ValidTo != "" {
+		if _, err := time.Parse(time.RFC3339, input.ValidTo); err != nil {
+			return "", fmt.Errorf("invalid ValidTo: %w", err)
+		}
+	}
+	if input.ValidFrom != "" && input.ValidTo != "" {
+		if input.ValidTo < input.ValidFrom {
+			return "", ErrInvalidTemporalInterval
+		}
+	}
 
-	hash := sha256.Sum256([]byte(time.Now().String()))
+	if input.ExtractedAt.IsZero() {
+		input.ExtractedAt = time.Now().UTC()
+	}
+
+	subID := entityID(input.Subject)
+	objID := entityID(input.Object)
+	pred := strings.ToLower(strings.ReplaceAll(input.Predicate, " ", "_"))
+
+	hashData := fmt.Sprintf("%s%s%s%s", input.Subject, input.Predicate, input.Object, input.ValidFrom)
+	hash := sha256.Sum256([]byte(hashData))
 	hashStr := fmt.Sprintf("%x", hash)[:12]
 	tripleID := fmt.Sprintf("t_%s_%s_%s_%s", subID, pred, objID, hashStr)
 
 	_, err := kg.db.Exec(`
 		INSERT OR IGNORE INTO entities (id, name) VALUES (?, ?), (?, ?)
-	`, subID, subject, objID, obj)
+	`, subID, input.Subject, objID, input.Object)
 
 	if err != nil {
 		return "", err
 	}
 
 	_, err = kg.db.Exec(`
-		INSERT INTO triples (id, subject, predicate, object, valid_from, valid_to, confidence)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, tripleID, subID, pred, objID, validFrom, validTo, confidence)
+		INSERT INTO triples (id, subject, predicate, object, valid_from, valid_to, confidence, source_closet, source_file, source_drawer_id, adapter_name, adapter_version, extracted_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, tripleID, subID, pred, objID, input.ValidFrom, input.ValidTo, input.Confidence, input.SourceCloset, input.SourceFile, input.SourceDrawerID, input.AdapterName, input.AdapterVersion, input.ExtractedAt.Format(time.RFC3339))
 
 	return tripleID, err
 }
@@ -126,37 +187,40 @@ type QueryResult struct {
 }
 
 func (kg *KnowledgeGraph) QueryEntity(name string, asOf string, direction string) ([]QueryResult, error) {
+	if asOf != "" {
+		if _, err := time.Parse(time.RFC3339, asOf); err != nil {
+			return nil, fmt.Errorf("invalid asOf: %w", err)
+		}
+	}
+
 	eid := entityID(name)
 
 	var query string
 	var args []any
 
+	baseOutgoing := `
+		SELECT t.predicate, t.object as other_id, t.valid_from, t.valid_to, t.confidence, t.source_closet, e.name as other_name
+		FROM triples t JOIN entities e ON t.object = e.id
+		WHERE t.subject = ?`
+	baseIncoming := `
+		SELECT t.predicate, t.subject as other_id, t.valid_from, t.valid_to, t.confidence, t.source_closet, e.name as other_name
+		FROM triples t JOIN entities e ON t.subject = e.id
+		WHERE t.object = ?`
+
 	switch direction {
 	case "outgoing":
-		query = `
-			SELECT t.predicate, t.object, t.valid_from, t.valid_to, t.confidence, t.source_closet,
-			       e.name as obj_name
-			FROM triples t JOIN entities e ON t.object = e.id
-			WHERE t.subject = ?`
+		query = "SELECT * FROM (" + baseOutgoing + ") q"
 		args = []any{eid}
 	case "incoming":
-		query = `
-			SELECT t.predicate, t.subject, t.valid_from, t.valid_to, t.confidence, t.source_closet,
-			       e.name as subj_name
-			FROM triples t JOIN entities e ON t.subject = e.id
-			WHERE t.object = ?`
+		query = "SELECT * FROM (" + baseIncoming + ") q"
 		args = []any{eid}
 	default:
-		query = `
-			SELECT t.predicate, t.object, t.valid_from, t.valid_to, t.confidence, t.source_closet,
-			       e.name as other_name
-			FROM triples t JOIN entities e ON t.object = e.id
-			WHERE t.subject = ?`
-		args = []any{eid}
+		query = "SELECT * FROM (" + baseOutgoing + " UNION ALL " + baseIncoming + ") q"
+		args = []any{eid, eid}
 	}
 
 	if asOf != "" {
-		query += " AND (t.valid_from IS NULL OR t.valid_from <= ?) AND (t.valid_to IS NULL OR t.valid_to >= ?)"
+		query += " WHERE (valid_from IS NULL OR valid_from <= ?) AND (valid_to IS NULL OR valid_to >= ?)"
 		args = append(args, asOf, asOf)
 	}
 

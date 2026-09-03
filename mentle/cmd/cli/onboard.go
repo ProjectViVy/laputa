@@ -143,12 +143,6 @@ func newOnboardCmd() *cobra.Command {
 				}
 			}
 
-			// Create WAL directory
-			walPath := filepath.Join(palacePath, "wal")
-			if err := os.MkdirAll(walPath, 0755); err != nil {
-				return fmt.Errorf("create WAL dir: %w", err)
-			}
-
 			// Create diary directory
 			diaryPath := filepath.Join(palacePath, "diary")
 			if err := os.MkdirAll(diaryPath, 0755); err != nil {

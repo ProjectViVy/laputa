@@ -110,6 +110,28 @@ func (idx *Index) Remove(docID string) {
 	idx.deleteLocked(docID)
 }
 
+// Count returns the number of documents currently indexed. It is a snapshot
+// suitable for health probes; callers must not infer canonical authority from
+// this disposable index.
+func (idx *Index) Count() int {
+	idx.mu.RLock()
+	defer idx.mu.RUnlock()
+	return idx.N
+}
+
+// Reset removes every document from the in-memory index.
+func (idx *Index) Reset() {
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
+	idx.inverted = make(map[string]map[string]int)
+	idx.docLengths = make(map[string]int)
+	idx.docPayloads = make(map[string]map[string]any)
+	idx.docContents = make(map[string]string)
+	idx.N = 0
+	idx.avgDocLength = 0
+	idx.totalTokens = 0
+}
+
 func (idx *Index) deleteLocked(docID string) {
 	if docLen, exists := idx.docLengths[docID]; exists {
 		idx.totalTokens -= docLen

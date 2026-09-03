@@ -9,16 +9,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dashimaki/mentle/internal/palace"
+	"github.com/dashimaki/mentle/internal/embedder"
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 var (
-	ErrMemoryNotFound      = errors.New("memory not found")
-	ErrVersionConflict     = errors.New("version conflict")
-	ErrIdempotencyConflict = errors.New("idempotency conflict")
-	ErrUnavailable         = errors.New("mentle unavailable")
+	ErrMemoryNotFound             = errors.New("memory not found")
+	ErrVersionConflict            = errors.New("version conflict")
+	ErrIdempotencyConflict        = errors.New("idempotency conflict")
+	ErrUnavailable                = errors.New("mentle unavailable")
+	ErrEmbeddingDimensionMismatch = errors.New("embedding dimension mismatch")
+	ErrEmbeddingMetricMismatch    = errors.New("embedding metric mismatch")
+	ErrEmbeddingIdentityMismatch  = errors.New("embedding identity mismatch")
 )
 
 type MemorySource struct {
@@ -70,6 +73,15 @@ type UpdateMemoryRequest struct {
 	RequestID       string    `json:"-"`
 }
 
+// DeleteMemoryRequest is the explicit optimistic-concurrency contract for a
+// logical delete. A deleted row is never treated as an idempotent success.
+type DeleteMemoryRequest struct {
+	ExpectedVersion int    `json:"expected_version"`
+	Reason          string `json:"reason"`
+	Actor           string `json:"-"`
+	RequestID       string `json:"-"`
+}
+
 type ListMemoryOptions struct {
 	Limit  int
 	Cursor string
@@ -83,9 +95,12 @@ type MemoryPage struct {
 }
 
 type DeleteResult struct {
-	ID      string `json:"id"`
-	Deleted bool   `json:"deleted"`
-	Status  string `json:"status"`
+	ID         string  `json:"id"`
+	Deleted    bool    `json:"deleted"`
+	Status     string  `json:"status"`
+	Version    int     `json:"version"`
+	IndexState string  `json:"index_state"`
+	IndexJobID *string `json:"index_job_id"`
 }
 
 type Catalog struct{ db *sql.DB }
@@ -108,28 +123,295 @@ CREATE TABLE IF NOT EXISTS idempotency (
  key TEXT PRIMARY KEY, body_hash TEXT NOT NULL, memory_id TEXT NOT NULL, created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS index_jobs (
- memory_id TEXT PRIMARY KEY, operation TEXT NOT NULL, content TEXT NOT NULL, metadata_json TEXT NOT NULL,
- created_at TEXT NOT NULL
+ job_id TEXT NOT NULL, memory_id TEXT PRIMARY KEY, canonical_version INTEGER NOT NULL DEFAULT 1,
+ operation TEXT NOT NULL, content TEXT NOT NULL, metadata_json TEXT NOT NULL,
+ state TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0,
+ last_error TEXT NOT NULL DEFAULT '', next_attempt_at TEXT NOT NULL DEFAULT '',
+ lease_owner TEXT NOT NULL DEFAULT '', lease_until TEXT NOT NULL DEFAULT '',
+ created_at TEXT NOT NULL, updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS audit_log (
  sequence INTEGER PRIMARY KEY AUTOINCREMENT, memory_id TEXT NOT NULL, action TEXT NOT NULL,
  actor TEXT NOT NULL, request_id TEXT NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL
-);`
+);
+CREATE TABLE IF NOT EXISTS embedding_identity (
+ id INTEGER PRIMARY KEY CHECK (id = 1),
+ model TEXT NOT NULL,
+ dimension INTEGER NOT NULL,
+ metric TEXT NOT NULL DEFAULT 'cosine',
+ normalize INTEGER NOT NULL DEFAULT 1,
+ provider TEXT NOT NULL,
+ version TEXT NOT NULL,
+ captured_at TEXT NOT NULL
+);
+ CREATE TABLE IF NOT EXISTS reindex_jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  reason TEXT NOT NULL,
+  old_model TEXT,
+  old_dimension INTEGER,
+  new_model TEXT,
+  new_dimension INTEGER,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT NOT NULL,
+  completed_at TEXT
+ );
+ CREATE TABLE IF NOT EXISTS session_cursor (
+  session_id TEXT PRIMARY KEY, last_timestamp TEXT, updated_at TEXT
+ );
+ CREATE TABLE IF NOT EXISTS session_lock (
+   session_id TEXT PRIMARY KEY, owner_pid INTEGER, acquired_at TEXT, ttl_seconds INTEGER
+ );
+ CREATE TABLE IF NOT EXISTS index_rebuilds (
+   id INTEGER PRIMARY KEY CHECK (id = 1), status TEXT NOT NULL,
+   started_at TEXT NOT NULL, completed_at TEXT NOT NULL DEFAULT '',
+   canonical_snapshot_count INTEGER, error_code TEXT NOT NULL DEFAULT ''
+ );`
 	if _, err = db.Exec(schema); err != nil {
 		db.Close()
 		return nil, err
+	}
+	if err = migrateIndexJobs(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate index outbox: %w", err)
 	}
 	return &Catalog{db: db}, nil
 }
 
 func (c *Catalog) Close() error { return c.db.Close() }
 
+func (c *Catalog) GetEmbeddingIdentity() (*embedder.Identity, error) {
+	var id embedder.Identity
+	var normalize int
+	var capturedAt string
+	err := c.db.QueryRow(`SELECT model, dimension, metric, normalize, provider, version, captured_at FROM embedding_identity WHERE id = 1`).
+		Scan(&id.Model, &id.Dimension, &id.Metric, &normalize, &id.Provider, &id.Version, &capturedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	id.Normalize = normalize == 1
+	id.CapturedAt, _ = time.Parse(time.RFC3339Nano, capturedAt)
+	return &id, nil
+}
+
+func (c *Catalog) SaveEmbeddingIdentity(id embedder.Identity) error {
+	norm := 0
+	if id.Normalize {
+		norm = 1
+	}
+	_, err := c.db.Exec(`
+		INSERT INTO embedding_identity (id, model, dimension, metric, normalize, provider, version, captured_at)
+		VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			model=excluded.model,
+			dimension=excluded.dimension,
+			metric=excluded.metric,
+			normalize=excluded.normalize,
+			provider=excluded.provider,
+			version=excluded.version,
+			captured_at=excluded.captured_at
+	`, id.Model, id.Dimension, id.Metric, norm, id.Provider, id.Version, id.CapturedAt.Format(time.RFC3339Nano))
+	return err
+}
+
+func (c *Catalog) EnqueueReindexJob(reason string, oldDim, newDim int, oldModel, newModel string) error {
+	_, err := c.db.Exec(`
+		INSERT INTO reindex_jobs (reason, old_model, old_dimension, new_model, new_dimension, status, created_at)
+		VALUES (?, ?, ?, ?, ?, 'pending', ?)
+	`, reason, oldModel, oldDim, newModel, newDim, time.Now().UTC().Format(time.RFC3339Nano))
+	return err
+}
+
+func (c *Catalog) PendingReindexJobs() (int, error) {
+	var count int
+	err := c.db.QueryRow(`SELECT COUNT(*) FROM reindex_jobs WHERE status = 'pending'`).Scan(&count)
+	return count, err
+}
+
+func (c *Catalog) SaveSessionCursor(sessionID, timestamp string) error {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return errors.New("session_id is required")
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(timestamp))
+	if err != nil {
+		return errors.New("timestamp must be RFC3339")
+	}
+	timestamp = parsed.UTC().Format(time.RFC3339Nano)
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = c.db.Exec(`
+		INSERT INTO session_cursor (session_id, last_timestamp, updated_at)
+		VALUES (?, ?, ?)
+		ON CONFLICT(session_id) DO UPDATE SET
+			last_timestamp=excluded.last_timestamp,
+			updated_at=excluded.updated_at
+		WHERE session_cursor.last_timestamp IS NULL OR session_cursor.last_timestamp <= excluded.last_timestamp
+	`, sessionID, timestamp, now)
+	return err
+}
+
+func (c *Catalog) GetSessionCursor(sessionID string) (string, error) {
+	var timestamp string
+	err := c.db.QueryRow(`SELECT last_timestamp FROM session_cursor WHERE session_id = ?`, sessionID).Scan(&timestamp)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return timestamp, err
+}
+
+// SaveSessionCursor persists the monotonic source boundary through the
+// facade, so ingest adapters never need a raw canonical database handle.
+func (s *Service) SaveSessionCursor(sessionID, timestamp string) error {
+	if s == nil || s.Catalog == nil {
+		return ErrUnavailable
+	}
+	return s.Catalog.SaveSessionCursor(sessionID, timestamp)
+}
+
+// GetSessionCursor returns the last durable source boundary for a session.
+func (s *Service) GetSessionCursor(sessionID string) (string, error) {
+	if s == nil || s.Catalog == nil {
+		return "", ErrUnavailable
+	}
+	return s.Catalog.GetSessionCursor(sessionID)
+}
+
+// AcquireSessionLease obtains a crash-reclaimable lease through the facade.
+func (s *Service) AcquireSessionLease(ctx context.Context, sessionID, owner string, ttl time.Duration) (bool, error) {
+	if s == nil || s.Catalog == nil {
+		return false, ErrUnavailable
+	}
+	return s.Catalog.AcquireSessionLease(ctx, sessionID, owner, ttl)
+}
+
+// ReleaseSessionLease releases a lease previously acquired by owner.
+func (s *Service) ReleaseSessionLease(ctx context.Context, sessionID, owner string) error {
+	if s == nil || s.Catalog == nil {
+		return ErrUnavailable
+	}
+	return s.Catalog.ReleaseSessionLease(ctx, sessionID, owner)
+}
+
+// AcquireSessionLease obtains a durable per-session lease. A live lease held
+// by another owner is not stolen; an expired lease can be reclaimed after a
+// crash or process restart.
+func (c *Catalog) AcquireSessionLease(ctx context.Context, sessionID, owner string, ttl time.Duration) (bool, error) {
+	if c == nil || c.db == nil {
+		return false, ErrUnavailable
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	owner = strings.TrimSpace(owner)
+	if sessionID == "" || owner == "" || ttl <= 0 {
+		return false, errors.New("session_id, owner and positive ttl are required")
+	}
+	now := time.Now().UTC()
+	tx, err := c.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	var currentOwner, acquired string
+	var ttlSeconds int
+	err = tx.QueryRowContext(ctx, `SELECT owner_pid, acquired_at, ttl_seconds FROM session_lock WHERE session_id=?`, sessionID).Scan(&currentOwner, &acquired, &ttlSeconds)
+	if errors.Is(err, sql.ErrNoRows) {
+		_, err = tx.ExecContext(ctx, `INSERT INTO session_lock(session_id,owner_pid,acquired_at,ttl_seconds) VALUES(?,?,?,?)`, sessionID, owner, now.Format(time.RFC3339Nano), int(ttl.Seconds()))
+		if err != nil {
+			return false, err
+		}
+		return true, tx.Commit()
+	}
+	if err != nil {
+		return false, err
+	}
+	acquiredAt, parseErr := time.Parse(time.RFC3339Nano, acquired)
+	if parseErr == nil && currentOwner != owner && acquiredAt.Add(time.Duration(ttlSeconds)*time.Second).After(now) {
+		return false, nil
+	}
+	_, err = tx.ExecContext(ctx, `UPDATE session_lock SET owner_pid=?,acquired_at=?,ttl_seconds=? WHERE session_id=?`, owner, now.Format(time.RFC3339Nano), int(ttl.Seconds()), sessionID)
+	if err != nil {
+		return false, err
+	}
+	return true, tx.Commit()
+}
+
+func (c *Catalog) ReleaseSessionLease(ctx context.Context, sessionID, owner string) error {
+	if c == nil || c.db == nil {
+		return ErrUnavailable
+	}
+	_, err := c.db.ExecContext(ctx, `DELETE FROM session_lock WHERE session_id=? AND owner_pid=?`, strings.TrimSpace(sessionID), strings.TrimSpace(owner))
+	return err
+}
+
 func canonicalID() string { return "mem_" + strings.ReplaceAll(uuid.NewString(), "-", "") }
+
+func (s *Service) runtimeEmbeddingIdentity() (*embedder.Identity, bool) {
+	if s == nil {
+		return nil, false
+	}
+	if s.EmbeddingIdentity != nil {
+		identity := s.EmbeddingIdentity()
+		return &identity, true
+	}
+	if s.Embedder != nil {
+		identity := s.Embedder.Identity()
+		return &identity, true
+	}
+	return nil, false
+}
+
+func sameEmbeddingIdentity(left, right embedder.Identity) bool {
+	return left.Model == right.Model &&
+		left.Dimension == right.Dimension &&
+		left.Metric == right.Metric &&
+		left.Normalize == right.Normalize &&
+		left.Provider == right.Provider &&
+		left.Version == right.Version
+}
+
+// ensureEmbeddingIdentity validates the exact identity before a mutation can
+// commit. A mismatch schedules an explicit reindex request, but never permits
+// mixed vectors into the disposable index.
+func (s *Service) ensureEmbeddingIdentity() error {
+	current, ok := s.runtimeEmbeddingIdentity()
+	if !ok || s.Catalog == nil {
+		return nil
+	}
+	saved, err := s.Catalog.GetEmbeddingIdentity()
+	if err != nil {
+		return err
+	}
+	if saved == nil {
+		return s.Catalog.SaveEmbeddingIdentity(*current)
+	}
+	if sameEmbeddingIdentity(*saved, *current) {
+		return nil
+	}
+	reason := "embedding identity mismatch"
+	if saved.Dimension != current.Dimension {
+		reason = "dimension mismatch"
+	} else if saved.Metric != current.Metric {
+		reason = "metric mismatch"
+	}
+	_ = s.Catalog.EnqueueReindexJob(reason, saved.Dimension, current.Dimension, saved.Model, current.Model)
+	if saved.Dimension != current.Dimension {
+		return ErrEmbeddingDimensionMismatch
+	}
+	if saved.Metric != current.Metric {
+		return ErrEmbeddingMetricMismatch
+	}
+	return ErrEmbeddingIdentityMismatch
+}
 
 func (s *Service) CreateMemory(ctx context.Context, req CreateMemoryRequest, idempotencyKey, bodyHash string) (Memory, error) {
 	if s.Catalog == nil || s.Hybrid == nil {
 		return Memory{}, ErrUnavailable
 	}
+	if err := s.ensureEmbeddingIdentity(); err != nil {
+		return Memory{}, err
+	}
+
 	req.Content = strings.TrimSpace(req.Content)
 	if req.Content == "" {
 		return Memory{}, errors.New("memory content is required")
@@ -156,9 +438,10 @@ func (s *Service) CreateMemory(ctx context.Context, req CreateMemoryRequest, ide
 			if savedHash != bodyHash {
 				return Memory{}, ErrIdempotencyConflict
 			}
-			if err := s.applyIndexJob(ctx, id); err != nil {
-				return Memory{}, err
-			}
+			// The canonical row already committed on the original request. A
+			// retry must return that row even when the derived-index worker is
+			// currently backoff/poisoned; recovery is observable via IndexHealth.
+			_ = s.applyIndexJob(ctx, id)
 			return s.GetMemory(ctx, id)
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
@@ -185,7 +468,7 @@ func (s *Service) CreateMemory(ctx context.Context, req CreateMemoryRequest, ide
 		_, err = tx.ExecContext(ctx, `INSERT INTO idempotency(key,body_hash,memory_id,created_at) VALUES(?,?,?,?)`, idempotencyKey, bodyHash, m.ID, now.Format(time.RFC3339Nano))
 	}
 	if err == nil {
-		_, err = tx.ExecContext(ctx, `INSERT INTO index_jobs(memory_id,operation,content,metadata_json,created_at) VALUES(?,?,?,?,?)`, m.ID, "upsert", m.Content, encode(m.Metadata), now.Format(time.RFC3339Nano))
+		_, err = enqueueIndexJobTx(ctx, tx, m.ID, m.Version, "upsert", m.Content, encode(m.Metadata), now)
 	}
 	if err == nil {
 		_, err = tx.ExecContext(ctx, `INSERT INTO audit_log(memory_id,action,actor,request_id,reason,created_at) VALUES(?,?,?,?,?,?)`, m.ID, "create", req.Actor, req.RequestID, "", now.Format(time.RFC3339Nano))
@@ -203,9 +486,7 @@ func (s *Service) CreateMemory(ctx context.Context, req CreateMemoryRequest, ide
 	if err = tx.Commit(); err != nil {
 		return Memory{}, err
 	}
-	if err = s.applyIndexJob(ctx, m.ID); err != nil {
-		return Memory{}, err
-	}
+	_ = s.applyIndexJob(ctx, m.ID)
 	return m, nil
 }
 
@@ -221,15 +502,21 @@ func (s *Service) GetMemory(ctx context.Context, id string) (Memory, error) {
 }
 
 func (s *Service) UpdateMemory(ctx context.Context, id string, req UpdateMemoryRequest) (Memory, error) {
-	m, err := s.GetMemory(ctx, id)
-	if err != nil {
+	if s.Catalog == nil {
+		return Memory{}, ErrUnavailable
+	}
+	if err := s.ensureEmbeddingIdentity(); err != nil {
 		return Memory{}, err
 	}
-	if req.ExpectedVersion != nil && *req.ExpectedVersion != m.Version {
+	if req.ExpectedVersion == nil || *req.ExpectedVersion <= 0 {
 		return Memory{}, ErrVersionConflict
 	}
 	if req.Content == nil && req.Tags == nil {
 		return Memory{}, errors.New("at least one mutable field is required")
+	}
+	m, err := s.GetMemory(ctx, id)
+	if err != nil {
+		return Memory{}, err
 	}
 	if req.Content != nil {
 		content := strings.TrimSpace(*req.Content)
@@ -244,17 +531,31 @@ func (s *Service) UpdateMemory(ctx context.Context, id string, req UpdateMemoryR
 	if req.Tags != nil {
 		m.Tags = nonNil(*req.Tags)
 	}
-	m.Version++
+	newVersion := m.Version + 1
 	m.UpdatedAt = time.Now().UTC()
 	tx, err := s.Catalog.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Memory{}, err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE memories SET content=?,tags_json=?,version=?,updated_at=? WHERE id=? AND status!='deleted'`, m.Content, encode(m.Tags), m.Version, m.UpdatedAt.Format(time.RFC3339Nano), id); err != nil {
+	result, err := tx.ExecContext(ctx, `UPDATE memories SET content=?,tags_json=?,version=version+1,updated_at=? WHERE id=? AND version=? AND status='active'`, m.Content, encode(m.Tags), m.UpdatedAt.Format(time.RFC3339Nano), id, *req.ExpectedVersion)
+	if err != nil {
 		tx.Rollback()
 		return Memory{}, err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO index_jobs(memory_id,operation,content,metadata_json,created_at) VALUES(?,?,?,?,?) ON CONFLICT(memory_id) DO UPDATE SET operation=excluded.operation,content=excluded.content,metadata_json=excluded.metadata_json,created_at=excluded.created_at`, m.ID, "upsert", m.Content, encode(m.Metadata), m.UpdatedAt.Format(time.RFC3339Nano)); err != nil {
+	affected, err := result.RowsAffected()
+	if err != nil {
+		tx.Rollback()
+		return Memory{}, err
+	}
+	if affected != 1 {
+		tx.Rollback()
+		if _, getErr := s.GetMemory(ctx, id); errors.Is(getErr, ErrMemoryNotFound) {
+			return Memory{}, ErrMemoryNotFound
+		}
+		return Memory{}, ErrVersionConflict
+	}
+	m.Version = newVersion
+	if _, err = enqueueIndexJobTx(ctx, tx, m.ID, m.Version, "upsert", m.Content, encode(m.Metadata), m.UpdatedAt); err != nil {
 		tx.Rollback()
 		return Memory{}, err
 	}
@@ -265,50 +566,62 @@ func (s *Service) UpdateMemory(ctx context.Context, id string, req UpdateMemoryR
 	if err = tx.Commit(); err != nil {
 		return Memory{}, err
 	}
-	if err = s.applyIndexJob(ctx, m.ID); err != nil {
-		return Memory{}, err
-	}
+	_ = s.applyIndexJob(ctx, m.ID)
 	return m, nil
 }
 
-func (s *Service) DeleteMemory(ctx context.Context, id, actor, requestID string) (DeleteResult, error) {
+func (s *Service) DeleteMemory(ctx context.Context, id string, expectedVersion int, actor, requestID string, reasons ...string) (DeleteResult, error) {
 	if s.Catalog == nil {
 		return DeleteResult{}, ErrUnavailable
 	}
-	var status string
-	err := s.Catalog.db.QueryRowContext(ctx, `SELECT status FROM memories WHERE id=?`, id).Scan(&status)
-	if errors.Is(err, sql.ErrNoRows) {
-		return DeleteResult{}, ErrMemoryNotFound
+	if expectedVersion <= 0 {
+		return DeleteResult{}, ErrVersionConflict
 	}
+	now := time.Now().UTC()
+	tx, err := s.Catalog.db.BeginTx(ctx, nil)
 	if err != nil {
 		return DeleteResult{}, err
 	}
-	if status != "deleted" {
-		now := time.Now().UTC().Format(time.RFC3339Nano)
-		tx, e := s.Catalog.db.BeginTx(ctx, nil)
-		if e != nil {
-			return DeleteResult{}, e
-		}
-		if _, err = tx.ExecContext(ctx, `UPDATE memories SET status='deleted',valid_to=?,updated_at=?,version=version+1 WHERE id=?`, now, now, id); err != nil {
-			tx.Rollback()
-			return DeleteResult{}, err
-		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO index_jobs(memory_id,operation,content,metadata_json,created_at) VALUES(?,?,?,?,?) ON CONFLICT(memory_id) DO UPDATE SET operation=excluded.operation,created_at=excluded.created_at`, id, "delete", "", "{}", now); err != nil {
-			tx.Rollback()
-			return DeleteResult{}, err
-		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO audit_log(memory_id,action,actor,request_id,reason,created_at) VALUES(?,?,?,?,?,?)`, id, "delete", actor, requestID, "", now); err != nil {
-			tx.Rollback()
-			return DeleteResult{}, err
-		}
-		if err = tx.Commit(); err != nil {
-			return DeleteResult{}, err
-		}
-		if err = s.applyIndexJob(ctx, id); err != nil {
-			return DeleteResult{}, err
-		}
+	result, err := tx.ExecContext(ctx, `UPDATE memories SET status='deleted',valid_to=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status='active'`, now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), id, expectedVersion)
+	if err != nil {
+		tx.Rollback()
+		return DeleteResult{}, err
 	}
-	return DeleteResult{ID: id, Deleted: true, Status: "deleted"}, nil
+	affected, err := result.RowsAffected()
+	if err != nil {
+		tx.Rollback()
+		return DeleteResult{}, err
+	}
+	if affected != 1 {
+		tx.Rollback()
+		var status string
+		lookupErr := s.Catalog.db.QueryRowContext(ctx, `SELECT status FROM memories WHERE id=?`, id).Scan(&status)
+		if errors.Is(lookupErr, sql.ErrNoRows) || status == "deleted" {
+			return DeleteResult{}, ErrMemoryNotFound
+		}
+		if lookupErr != nil {
+			return DeleteResult{}, lookupErr
+		}
+		return DeleteResult{}, ErrVersionConflict
+	}
+	if _, err = enqueueIndexJobTx(ctx, tx, id, expectedVersion, "delete", "", "{}", now); err != nil {
+		tx.Rollback()
+		return DeleteResult{}, err
+	}
+	reason := ""
+	if len(reasons) > 0 {
+		reason = reasons[0]
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO audit_log(memory_id,action,actor,request_id,reason,created_at) VALUES(?,?,?,?,?,?)`, id, "delete", actor, requestID, reason, now.Format(time.RFC3339Nano)); err != nil {
+		tx.Rollback()
+		return DeleteResult{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return DeleteResult{}, err
+	}
+	_ = s.applyIndexJob(ctx, id)
+	state, jobID := s.indexStatus(ctx, id)
+	return DeleteResult{ID: id, Deleted: true, Status: "deleted", Version: expectedVersion + 1, IndexState: contractIndexState(state), IndexJobID: jobID}, nil
 }
 
 func (s *Service) ListMemories(ctx context.Context, opts ListMemoryOptions) (MemoryPage, error) {
@@ -359,68 +672,6 @@ func (s *Service) ListMemories(ctx context.Context, opts ListMemoryOptions) (Mem
 		next = &value
 	}
 	return MemoryPage{Items: items, NextCursor: next}, rows.Err()
-}
-
-func (s *Service) replayIndexJobs(ctx context.Context) error {
-	if s.Catalog == nil {
-		return nil
-	}
-	rows, err := s.Catalog.db.QueryContext(ctx, `SELECT memory_id FROM index_jobs ORDER BY created_at`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	ids := []string{}
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return err
-		}
-		ids = append(ids, id)
-	}
-	for _, id := range ids {
-		if err := s.applyIndexJob(ctx, id); err != nil {
-			return err
-		}
-	}
-	return rows.Err()
-}
-func (s *Service) applyIndexJob(ctx context.Context, id string) error {
-	if s.Catalog == nil || s.Hybrid == nil {
-		return ErrUnavailable
-	}
-	var op, content, metadata string
-	err := s.Catalog.db.QueryRowContext(ctx, `SELECT operation,content,metadata_json FROM index_jobs WHERE memory_id=?`, id).Scan(&op, &content, &metadata)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	s.mutationMu.Lock()
-	defer s.mutationMu.Unlock()
-	if op == "delete" {
-		// Canonical deletes are filtered by the catalog. Keeping immutable vector
-		// revisions avoids corrupting the current govector HNSW graph when its
-		// last node is removed; offline compaction can reclaim tombstones.
-		err = nil
-	} else {
-		var meta map[string]any
-		_ = json.Unmarshal([]byte(metadata), &meta)
-		var version int
-		if err = s.Catalog.db.QueryRowContext(ctx, `SELECT version FROM memories WHERE id=?`, id).Scan(&version); err != nil {
-			return err
-		}
-		meta["canonical_id"] = id
-		meta["canonical_version"] = fmt.Sprint(version)
-		physicalID := fmt.Sprintf("%s@v%d", id, version)
-		err = s.Hybrid.Store(ctx, palace.Drawer{ID: physicalID, Content: content, Metadata: stringMetadata(meta)})
-	}
-	if err != nil {
-		return fmt.Errorf("apply index job: %w", err)
-	}
-	_, err = s.Catalog.db.ExecContext(ctx, `DELETE FROM index_jobs WHERE memory_id=?`, id)
-	return err
 }
 
 const memorySelect = `SELECT id,kind,content,status,version,scope,tags_json,source_json,valid_from,valid_to,supersedes_json,superseded_by,created_at,updated_at,metadata_json FROM memories`

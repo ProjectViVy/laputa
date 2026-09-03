@@ -14,7 +14,7 @@ mempalace-go provides a single, portable binary with no Python dependencies or p
 - **MCP Server**: Stdio-based JSON-RPC protocol for AI client integration
 - **Vector Search**: Semantic memory retrieval using ONNX embeddings (hugot)
 - **Knowledge Graph**: SQLite-based entity relationship tracking with temporal validity
-- **WAL-based Storage**: Write-ahead log for durable memory operations
+- **Recoverable Canonical Storage**: SQLite authority with transactional derived-index jobs
 - **CLI Tools**: Project mining, search, repair, and palace management
 
 ## Architecture
@@ -172,7 +172,7 @@ mempalace-go uses a config file at `~/.mempalace/config.json`:
 
 | Command | Description |
 |---------|-------------|
-| `mempalace-go repair` | Rebuild palace vector index from WAL files |
+| `mempalace-go repair` | Rebuild disposable vector/BM25 indexes from canonical SQLite using staged verification; never moves or overwrites canonical authority |
 | `mempalace-go compress` | Compress palace storage |
 | `mempalace-go split` | Split palace data |
 | `mempalace-go hook` | Manage hooks |
@@ -314,14 +314,19 @@ mempalace-go/
 │   ├── miner/            # Project/conversation mining
 │   ├── palace/           # Palace graph structure
 │   ├── search/           # Semantic search
+│   ├── hybrid/           # Hybrid vector+BM25 search (RRF fusion)
 │   ├── kg/               # Knowledge graph (SQLite)
 │   ├── diary/            # Agent diary (AAAK)
 │   ├── extractor/        # Memory extraction
 │   ├── dialect/          # Text dialect handling
 │   ├── entity/           # Entity detection
 │   └── sanitizer/        # Input sanitization
+├── facade/               # Unified service facade (canonical store + vector index)
 ├── storage/
-│   └── govector/         # Vector storage backend
+│   ├── govector/         # HNSW vector backend (bbolt) — production path
+│   ├── redis/            # Optional Redis drawer storage (linear scan)
+│   ├── sqlite/           # Raw SQLite helper (CGO)
+│   └── vectorstore/      # Unified Store interface + Open() factory
 ├── integration/          # Integration tests
 ├── benchmarks/           # Performance benchmarks
 ├── docs/                 # Documentation
@@ -330,10 +335,19 @@ mempalace-go/
 
 ## Storage Model
 
-- **Vector Store**: `vectors.db` (govector with HNSW index)
+mempalace-go persists to `palace_path` (default `~/.mempalace/palace`):
+
+- **Canonical store**: `canonical.sqlite3` — **source of truth** for memories (the `memories` table with kind/status/version/tags/source/metadata, plus `idempotency`, `index_jobs`, `audit_log`, `embedding_identity`). All reads/writes through `facade` go here first.
+- **Vector Store**: `vectors.db` — govector HNSW index, a **bbolt file** (not SQLite). Holds `id@version` physical vectors + payloads for semantic search.
 - **Knowledge Graph**: `knowledge_graph.sqlite3` (temporal RDF-style triples)
-- **WAL Directory**: `wal/` (write-ahead log for durability)
+- **Legacy WAL Directory**: `wal/` (non-authoritative diagnostic/legacy data; never canonical recovery)
 - **Diary**: `diary/` (agent-specific AAAK entries)
+
+Write path (facade): atomically mutate `canonical.sqlite3` and enqueue `index_jobs`, then apply the job to `vectors.db` (govector HNSW) and in-memory BM25. A post-commit index failure leaves canonical success plus observable pending/retry work. Deletes are canonical; vector tombstones are reclaimed by derived-index compaction/rebuild.
+
+Recovery follows [ADR-0014](../docs/architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md): rebuild only derived vector/BM25 artifacts from active current canonical revisions in staging, verify them, then swap derived artifacts. Repair never reconstructs, renames or overwrites `canonical.sqlite3`, and legacy JSONL WAL is not an authority source.
+
+**Vector backend status:** only `govector` is wired into production (`facade`). Qdrant / Chroma / LanceDB are declared in `storage/vectorstore` but return `"not yet implemented"` (ADR-0011 §2.4). `chroma.sqlite3` files that exist in an older palace are legacy artifacts from the pre-govector Python-era architecture and are **not written** by the current Go build.
 
 ## Embedding Models
 

@@ -5,6 +5,7 @@ package server
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -14,8 +15,8 @@ import (
 
 	"github.com/dashimaki/mentle/facade"
 	"github.com/dashimaki/mentle/internal/config"
-	"github.com/dashimaki/mentle/internal/diary"
 	"github.com/dashimaki/mentle/internal/dialect"
+	"github.com/dashimaki/mentle/internal/diary"
 	"github.com/dashimaki/mentle/internal/kg"
 	"github.com/dashimaki/mentle/internal/layers"
 	"github.com/dashimaki/mentle/internal/miner"
@@ -23,8 +24,6 @@ import (
 	"github.com/dashimaki/mentle/internal/sanitizer"
 	"github.com/dashimaki/mentle/internal/search"
 	"github.com/dashimaki/mentle/pkg/mcp"
-	"github.com/google/uuid"
-	"github.com/dashimaki/mentle/pkg/wal"
 )
 
 func runServer(cmd *cobra.Command, args []string) error {
@@ -42,7 +41,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 	defer server.Shutdown(ctx)
 
-	registerTools(server, svc.Cfg, svc.Stack, svc.Searcher, svc.KG, svc.WAL, svc.PalacePath, svc.PalaceGraph, svc.Diary)
+	registerTools(server, svc.Stack, svc.Searcher, svc.KG, svc, svc.PalacePath, svc.PalaceGraph, svc.Diary)
 
 	return server.Run()
 }
@@ -56,7 +55,30 @@ func NewCommand() *cobra.Command {
 	return cmd
 }
 
-func registerTools(server *mcp.Server, cfg *config.Config, stack *layers.MemoryStack, searcher *search.Searcher, kgDB *kg.KnowledgeGraph, walInstance *wal.WAL, palacePath string, palaceGraph *palace.Graph, agentDiary *diary.Diary) {
+type searchReader interface {
+	Search(context.Context, string, string, string, int) ([]search.Drawer, error)
+	GetTaxonomy(context.Context) (map[string]*search.TaxonomyNode, error)
+	ListWings(context.Context) ([]search.WingInfo, error)
+	ListRooms(context.Context, string) ([]search.RoomInfo, error)
+}
+
+func integerParam(params map[string]any, key string) int {
+	switch value := params[key].(type) {
+	case int:
+		return value
+	case int64:
+		return int(value)
+	case float64:
+		return int(value)
+	case json.Number:
+		parsed, _ := value.Int64()
+		return int(parsed)
+	default:
+		return 0
+	}
+}
+
+func registerTools(server *mcp.Server, stack *layers.MemoryStack, searcher searchReader, kgDB *kg.KnowledgeGraph, memorySvc *facade.Service, palacePath string, palaceGraph *palace.Graph, agentDiary *diary.Diary) {
 	server.RegisterTool("mempalace_search", "Search memories", mcp.SearchToolSchema, func(params map[string]any) (any, error) {
 		query, _ := params["query"].(string)
 		wing, _ := params["wing"].(string)
@@ -303,46 +325,36 @@ func registerTools(server *mcp.Server, cfg *config.Config, stack *layers.MemoryS
 
 		ctx := context.Background()
 		drawer := palace.Drawer{
-			ID:         uuid.NewString(),
 			Content:    content,
 			Wing:       wing,
 			Room:       room,
 			SourceFile: source,
 		}
 
-		if err := searcher.Store(ctx, drawer); err != nil {
-			return nil, err
-		}
-
-		if err := walInstance.LogAdd(wal.Entry{
-			Op:      "add",
-			Wing:    wing,
-			Room:    room,
-			Content: content,
-		}); err != nil {
+		result, err := memorySvc.CreateDrawer(ctx, drawer, "mcp-agent", "mcp:add-drawer")
+		if err != nil {
 			return nil, err
 		}
 
 		return mcp.ToolCallResult{
-			Content: []mcp.ToolContent{{Type: "text", Text: fmt.Sprintf("Successfully added drawer to %s/%s", wing, room)}},
+			Content: []mcp.ToolContent{{Type: "text", Text: fmt.Sprintf("Successfully added memory %s to %s/%s (%s)", result.Memory.ID, wing, room, result.IndexState)}},
 		}, nil
 	})
 
 	server.RegisterTool("mempalace_delete_drawer", "Delete a drawer by ID", mcp.SchemaToJSON(map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"id": map[string]any{"type": "string"},
+			"id":               map[string]any{"type": "string"},
+			"expected_version": map[string]any{"type": "integer"},
+			"reason":           map[string]any{"type": "string"},
 		},
-		"required": []string{"id"},
+		"required": []string{"id", "expected_version", "reason"},
 	}), func(params map[string]any) (any, error) {
 		id, _ := params["id"].(string)
-
+		expectedVersion := integerParam(params, "expected_version")
+		reason, _ := params["reason"].(string)
 		ctx := context.Background()
-		if err := searcher.Delete(ctx, id); err != nil {
-			return nil, err
-		}
-
-		if err := walInstance.LogDelete(id); err != nil {
+		if _, err := memorySvc.DeleteMemory(ctx, id, expectedVersion, "mcp-agent", "mcp:delete-drawer", reason); err != nil {
 			return nil, err
 		}
 
@@ -373,7 +385,14 @@ func registerTools(server *mcp.Server, cfg *config.Config, stack *layers.MemoryS
 			confidence = c
 		}
 
-		tripleID, err := kgDB.AddTriple(subject, predicate, obj, validFrom, validTo, confidence)
+		tripleID, err := kgDB.AddTriple(kg.TripleInput{
+			Subject:    subject,
+			Predicate:  predicate,
+			Object:     obj,
+			ValidFrom:  validFrom,
+			ValidTo:    validTo,
+			Confidence: confidence,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -456,10 +475,10 @@ func registerTools(server *mcp.Server, cfg *config.Config, stack *layers.MemoryS
 	server.RegisterTool("mempalace_traverse", "Walk the palace graph from a room", mcp.SchemaToJSON(map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"wing":       map[string]any{"type": "string"},
-			"room":       map[string]any{"type": "string"},
-			"max_depth":  map[string]any{"type": "integer", "default": 3},
-			"direction":  map[string]any{"type": "string", "default": "both"},
+			"wing":      map[string]any{"type": "string"},
+			"room":      map[string]any{"type": "string"},
+			"max_depth": map[string]any{"type": "integer", "default": 3},
+			"direction": map[string]any{"type": "string", "default": "both"},
 		},
 		"required": []string{"wing", "room"},
 	}), func(params map[string]any) (any, error) {
@@ -532,28 +551,6 @@ func registerTools(server *mcp.Server, cfg *config.Config, stack *layers.MemoryS
 		}
 		return mcp.ToolCallResult{
 			Content: []mcp.ToolContent{{Type: "text", Text: fmt.Sprintf("Diary entries (%d):\n%s", len(entries), strings.Join(lines, "\n"))}},
-		}, nil
-	})
-
-	server.RegisterTool("mempalace_wal_replay", "Replay WAL operations", mcp.SchemaToJSON(map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"since": map[string]any{"type": "string", "description": "Replay entries since this timestamp (RFC3339)"},
-		},
-	}), func(params map[string]any) (any, error) {
-		_ = params["since"]
-
-		entries, err := walInstance.ReadAll()
-		if err != nil {
-			return nil, err
-		}
-
-		var lines []string
-		for _, e := range entries {
-			lines = append(lines, fmt.Sprintf("[%s] %s: %s", e.Timestamp.Format("2006-01-02 15:04"), e.Op, e.Content))
-		}
-		return mcp.ToolCallResult{
-			Content: []mcp.ToolContent{{Type: "text", Text: fmt.Sprintf("WAL entries (%d):\n%s", len(entries), strings.Join(lines, "\n"))}},
 		}, nil
 	})
 
@@ -708,13 +705,12 @@ func registerTools(server *mcp.Server, cfg *config.Config, stack *layers.MemoryS
 
 				ctx := context.Background()
 				drawer := palace.Drawer{
-					ID:         uuid.NewString(),
 					Content:    content,
 					Wing:       wing,
 					Room:       room,
 					SourceFile: source,
 				}
-				if err := searcher.Store(ctx, drawer); err == nil {
+				if _, err := memorySvc.CreateDrawer(ctx, drawer, "mcp-agent", "mcp:batch-store"); err == nil {
 					count++
 				}
 			}
@@ -753,24 +749,24 @@ func registerTools(server *mcp.Server, cfg *config.Config, stack *layers.MemoryS
 	server.RegisterTool("mempalace_update_drawer", "Update drawer content by ID", mcp.SchemaToJSON(map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"id":      map[string]any{"type": "string"},
-			"content": map[string]any{"type": "string"},
+			"id":               map[string]any{"type": "string"},
+			"content":          map[string]any{"type": "string"},
+			"expected_version": map[string]any{"type": "integer"},
+			"reason":           map[string]any{"type": "string"},
 		},
-		"required": []string{"id", "content"},
+		"required": []string{"id", "content", "expected_version", "reason"},
 	}), func(params map[string]any) (any, error) {
 		id, _ := params["id"].(string)
 		content, _ := params["content"].(string)
-
+		expectedVersion := integerParam(params, "expected_version")
+		reason, _ := params["reason"].(string)
 		ctx := context.Background()
-		if err := searcher.Delete(ctx, id); err != nil {
-			return nil, err
-		}
-		drawer := palace.Drawer{ID: id, Content: content, Wing: "", Room: ""}
-		if err := searcher.Store(ctx, drawer); err != nil {
+		result, err := memorySvc.UpdateMemoryWithIndexStatus(ctx, id, facade.UpdateMemoryRequest{Content: &content, ExpectedVersion: &expectedVersion, Reason: reason, Actor: "mcp-agent", RequestID: "mcp:update-drawer"})
+		if err != nil {
 			return nil, err
 		}
 		return mcp.ToolCallResult{
-			Content: []mcp.ToolContent{{Type: "text", Text: fmt.Sprintf("Updated drawer %s", id)}},
+			Content: []mcp.ToolContent{{Type: "text", Text: fmt.Sprintf("Updated memory %s to version %d (%s)", result.Memory.ID, result.Memory.Version, result.IndexState)}},
 		}, nil
 	})
 
@@ -807,7 +803,12 @@ func registerTools(server *mcp.Server, cfg *config.Config, stack *layers.MemoryS
 		predicate, _ := params["predicate"].(string)
 		obj, _ := params["object"].(string)
 
-		tripleID, err := kgDB.AddTriple(subject, predicate, obj, "", "", 1.0)
+		tripleID, err := kgDB.AddTriple(kg.TripleInput{
+			Subject:    subject,
+			Predicate:  predicate,
+			Object:     obj,
+			Confidence: 1.0,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -905,13 +906,20 @@ func registerTools(server *mcp.Server, cfg *config.Config, stack *layers.MemoryS
 		"type":       "object",
 		"properties": map[string]any{},
 	}), func(params map[string]any) (any, error) {
+		health, err := memorySvc.IndexHealth(context.Background())
+		if err != nil {
+			return nil, err
+		}
 		var lines []string
-		lines = append(lines, "Palace Health Check:")
-		lines = append(lines, "  Status: OK")
-		lines = append(lines, fmt.Sprintf("  Palace path: %s", palacePath))
-		lines = append(lines, "  Vector DB: connected")
-		lines = append(lines, "  Knowledge Graph: connected")
-		lines = append(lines, "  WAL: active")
+		lines = append(lines, "MemPalace derived-index health:")
+		lines = append(lines, fmt.Sprintf("  Status: %s", health.Status))
+		lines = append(lines, fmt.Sprintf("  Canonical active: %d", health.CanonicalActiveCount))
+		lines = append(lines, fmt.Sprintf("  Vector active/physical: %d/%d", health.VectorActiveCount, health.VectorPhysicalCount))
+		lines = append(lines, fmt.Sprintf("  BM25 documents: %d", health.BM25Count))
+		lines = append(lines, fmt.Sprintf("  Pending/failed jobs: %d/%d", health.PendingJobs, health.FailedJobs))
+		if len(health.Reasons) > 0 {
+			lines = append(lines, "  Reasons: "+strings.Join(health.Reasons, ", "))
+		}
 		return mcp.ToolCallResult{
 			Content: []mcp.ToolContent{{Type: "text", Text: strings.Join(lines, "\n")}},
 		}, nil
@@ -920,15 +928,15 @@ func registerTools(server *mcp.Server, cfg *config.Config, stack *layers.MemoryS
 	server.RegisterTool("mempalace_mine_project", "Mine a directory into the palace", mcp.SchemaToJSON(map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"dir":          map[string]any{"type": "string"},
-			"wing":         map[string]any{"type": "string"},
+			"dir":  map[string]any{"type": "string"},
+			"wing": map[string]any{"type": "string"},
 		},
 		"required": []string{"dir"},
 	}), func(params map[string]any) (any, error) {
 		dir, _ := params["dir"].(string)
 		wing, _ := params["wing"].(string)
 
-		m := miner.NewMiner(searcher)
+		m := miner.NewMiner(memorySvc)
 		_ = m.LoadGitignore(dir)
 		ctx := context.Background()
 		if err := m.MineProject(ctx, dir, wing); err != nil {
@@ -950,7 +958,7 @@ func registerTools(server *mcp.Server, cfg *config.Config, stack *layers.MemoryS
 		dir, _ := params["dir"].(string)
 		wing, _ := params["wing"].(string)
 
-		m := miner.NewMiner(searcher)
+		m := miner.NewMiner(memorySvc)
 		cm := miner.NewConversationMiner(m)
 		ctx := context.Background()
 		if err := cm.MineConversations(ctx, dir, wing); err != nil {

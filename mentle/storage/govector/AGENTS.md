@@ -23,31 +23,33 @@ See parent [mentle/storage/AGENTS.md](../AGENTS.md) for interface documentation.
 
 ## Structure
 
-```
+```text
 govector/
-├── store.go                         # Vector store implementation
-├── store_test.go                    # Test suite
-├── index.go                         # HNSW index management
-├── serialization.go                 # Index persistence
-└── (supporting utilities)
+└── store.go                         # Vector store implementation (single file)
 ```
+
+The package is a single `store.go`. It wraps `DotNetAge/govector` `core.Collection` + `core.Storage` (bbolt). There is no separate `index.go` or `serialization.go`; HNSW graph persistence is internal to govector's `core.Storage`.
 
 ---
 
 ## Key Operations
 
 ```go
-// Create or open store
-store, err := govector.NewStore("./storage")
+// Create or open store (path + vector dimension are both required)
+store, err := govector.NewStore("./vectors.db", 384)
 
-// Add vectors
-err := store.Insert(ctx, id, vector)
+// Add vectors (upsert semantics)
+err := store.Add(id, vector, payload)     // single
+err := store.AddBatch(points)             // batch
 
 // Search
-results, err := store.Search(ctx, query, k)  // top-k
+results, err := store.Search(query, limit, filter)   // top-k with optional filter map
 
-// Rebuild index
-err := store.Rebuild(ctx)
+// Delete
+err := store.Delete(id)
+
+// List all (zero-vector scan)
+results, err := store.ListAll(limit)
 ```
 
 ---

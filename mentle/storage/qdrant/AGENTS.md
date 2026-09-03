@@ -21,20 +21,18 @@ The `qdrant/` subdirectory provides an alternative vector storage backend using 
 
 ## Status
 
-Currently not active in production. Offered as pluggable alternative to govector HNSW.
+**NOT IMPLEMENTED.** This directory contains documentation only — there is **no Go code**. `storage/vectorstore.Open(BackendQdrant)` returns `"qdrant: not yet implemented"`. Per ADR-0011 §2.4, an in-process SQLite-FTS5 stand-in is the planned first step (no external Qdrant in MVP). Do not reference it as an available production backend.
 
 ---
 
 ## Structure
 
-```
+```text
 mentle/storage/qdrant/
-└── (implementation files TBD)
-    ├── store.go              # Qdrant vector store wrapper
-    ├── store_test.go
-    ├── config.go             # Qdrant connection config
-    └── README.md             # Qdrant-specific documentation
+└── AGENTS.md                        # Documentation only — no Go implementation files yet
 ```
+
+(Planned files when the backend is implemented: `store.go` — Qdrant wrapper, `store_test.go`, `config.go` — connection config, `README.md`.)
 
 ---
 

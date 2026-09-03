@@ -367,3 +367,60 @@ func TestStore_Cleanup(t *testing.T) {
 		t.Error("expected vectors.db to exist after close")
 	}
 }
+
+func TestStore_RebuildAtomicallyReplacesDerivedArtifact(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	points := []Point{
+		{ID: "current-1", Vector: []float32{1, 0, 0, 0}, Payload: map[string]any{"content": "current one"}},
+		{ID: "current-2", Vector: []float32{0, 1, 0, 0}, Payload: map[string]any{"content": "current two"}},
+	}
+	if err := store.RebuildAtomically(points); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.Count(); got != len(points) {
+		t.Fatalf("count after rebuild=%d want=%d", got, len(points))
+	}
+	results, err := store.Search([]float32{1, 0, 0, 0}, 10, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != len(points) {
+		t.Fatalf("results after rebuild=%d want=%d", len(results), len(points))
+	}
+
+	path := store.dbPath
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := NewStore(path, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	if got := reopened.Count(); got != len(points) {
+		t.Fatalf("persisted count=%d want=%d", got, len(points))
+	}
+}
+
+func TestStore_RebuildAtomicallyLeavesCurrentArtifactOnStageFailure(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	before := store.Count()
+	err := store.RebuildAtomically([]Point{{ID: "bad", Vector: []float32{1, 0, 0}, Payload: map[string]any{}}})
+	if err == nil {
+		t.Fatal("invalid dimension should fail staging")
+	}
+	if got := store.Count(); got != before {
+		t.Fatalf("current artifact changed after stage failure: got=%d want=%d", got, before)
+	}
+	results, err := store.Search([]float32{1, 0, 0, 0}, 10, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != before {
+		t.Fatalf("current search changed after stage failure: got=%d want=%d", len(results), before)
+	}
+}

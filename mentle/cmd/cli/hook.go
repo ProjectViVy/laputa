@@ -9,12 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dashimaki/mentle/facade"
 	"github.com/dashimaki/mentle/internal/config"
-	"github.com/dashimaki/mentle/internal/embedder"
 	"github.com/dashimaki/mentle/internal/miner"
 	"github.com/dashimaki/mentle/internal/palace"
-	"github.com/dashimaki/mentle/internal/search"
-	govector "github.com/dashimaki/mentle/storage/govector"
 
 	"github.com/spf13/cobra"
 )
@@ -209,7 +207,7 @@ func handleStop(input HookInput, harness string, autoIngestDir string) (map[stri
 			room = "session-notes"
 		}
 
-		if saved, errMsg := saveContentToPalace(palacePath, cfg, wing, room, input.Content); !saved {
+		if saved, errMsg := saveContentToPalace(palacePath, cfg, wing, room, input.Content, input.SessionID, input.Timestamp); !saved {
 			return nil, errMsg
 		}
 	}
@@ -266,7 +264,7 @@ func handlePrecompact(input HookInput, harness string, autoIngestDir string) (ma
 		room = "precompact-save"
 	}
 
-	if saved, errMsg := saveContentToPalace(palacePath, cfg, wing, room, input.Content); !saved {
+	if saved, errMsg := saveContentToPalace(palacePath, cfg, wing, room, input.Content, input.SessionID, input.Timestamp); !saved {
 		return nil, errMsg
 	}
 
@@ -287,26 +285,24 @@ func handlePrecompact(input HookInput, harness string, autoIngestDir string) (ma
 }
 
 // saveContentToPalace stores content into the palace vector store.
-func saveContentToPalace(palacePath string, cfg *config.Config, wing, room, content string) (bool, string) {
+func saveContentToPalace(palacePath string, cfg *config.Config, wing, room, content, sessionID, timestamp string) (bool, string) {
 	ctx := context.Background()
-	emb, err := embedder.New("", cfg.GetModelsDir())
-	if err != nil {
-		return false, fmt.Sprintf("embedder: %v", err)
+	_ = palacePath
+	_ = cfg
+	svc := &facade.Service{}
+	if err := svc.Init(ctx, facade.Options{}); err != nil {
+		return false, fmt.Sprintf("memory facade: %v", err)
 	}
-	defer emb.Close()
-
-	vectorDB, err := govector.NewStore(palacePath+"/vectors.db", 384)
-	if err != nil {
-		return false, fmt.Sprintf("vector store: %v", err)
-	}
-
-	searcher := search.NewSearcher(vectorDB, emb)
-
-	if err := searcher.Store(ctx, palace.Drawer{
+	defer svc.Close()
+	if _, err := svc.CreateDrawer(ctx, palace.Drawer{
 		Wing:    wing,
 		Room:    room,
 		Content: content,
-	}); err != nil {
+		Metadata: map[string]string{
+			"session_id":      sessionID,
+			"event_timestamp": timestamp,
+		},
+	}, "session-hook", "session:"+sessionID+":"+timestamp); err != nil {
 		return false, fmt.Sprintf("store: %v", err)
 	}
 	return true, ""
@@ -315,21 +311,16 @@ func saveContentToPalace(palacePath string, cfg *config.Config, wing, room, cont
 // ingestDirectory mines a directory into the palace.
 func ingestDirectory(palacePath string, cfg *config.Config, dir, wing string) (bool, string) {
 	ctx := context.Background()
-	emb, err := embedder.New("", cfg.GetModelsDir())
-	if err != nil {
-		return false, fmt.Sprintf("embedder: %v", err)
+	_ = palacePath
+	_ = cfg
+	svc := &facade.Service{}
+	if err := svc.Init(ctx, facade.Options{}); err != nil {
+		return false, fmt.Sprintf("memory facade: %v", err)
 	}
-	defer emb.Close()
-
-	vectorDB, err := govector.NewStore(palacePath+"/vectors.db", 384)
-	if err != nil {
-		return false, fmt.Sprintf("vector store: %v", err)
-	}
-
-	searcher := search.NewSearcher(vectorDB, emb)
+	defer svc.Close()
 
 	// Load gitignore if present
-	m := miner.NewMiner(searcher)
+	m := miner.NewMiner(svc)
 	m.LoadGitignore(dir)
 
 	if err := m.MineProject(ctx, dir, wing); err != nil {

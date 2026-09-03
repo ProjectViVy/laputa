@@ -3,12 +3,20 @@
 package govector
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
+
 	"github.com/DotNetAge/govector/core"
 )
 
 type Store struct {
+	mu         sync.RWMutex
 	collection *core.Collection
 	storage    *core.Storage
+	dbPath     string
+	dimension  int
 }
 
 type SearchResult struct {
@@ -24,12 +32,18 @@ func NewStore(dbPath string, dimension int) (*Store, error) {
 	}
 	col, err := core.NewCollection("mempalace_drawers", dimension, core.Cosine, storage, true)
 	if err != nil {
+		_ = storage.Close()
 		return nil, err
 	}
-	return &Store{collection: col, storage: storage}, nil
+	return &Store{collection: col, storage: storage, dbPath: dbPath, dimension: dimension}, nil
 }
 
 func (s *Store) Add(id string, vector []float32, payload map[string]any) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.collection == nil {
+		return fmt.Errorf("vector store is closed")
+	}
 	return s.collection.Upsert([]core.PointStruct{{
 		ID:      id,
 		Vector:  vector,
@@ -46,6 +60,11 @@ type Point struct {
 
 // AddBatch stores multiple points in a single upsert call.
 func (s *Store) AddBatch(points []Point) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.collection == nil {
+		return fmt.Errorf("vector store is closed")
+	}
 	ps := make([]core.PointStruct, len(points))
 	for i, p := range points {
 		ps[i] = core.PointStruct{
@@ -58,6 +77,11 @@ func (s *Store) AddBatch(points []Point) error {
 }
 
 func (s *Store) Search(query []float32, limit int, filter map[string]any) ([]SearchResult, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.collection == nil {
+		return nil, fmt.Errorf("vector store is closed")
+	}
 	hasIn, hasNin := hasInOrNinFilter(filter)
 
 	// If we have $in filters, we need to fetch more results since govector
@@ -290,18 +314,35 @@ func applyNinFilter(results []SearchResult, filter map[string]any) []SearchResul
 }
 
 func (s *Store) Close() error {
-	if s.storage != nil {
-		return s.storage.Close()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.storage == nil {
+		return nil
 	}
-	return nil
+	err := s.storage.Close()
+	if err == nil {
+		s.collection = nil
+		s.storage = nil
+	}
+	return err
 }
 
 func (s *Store) Delete(id string) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.collection == nil {
+		return fmt.Errorf("vector store is closed")
+	}
 	_, err := s.collection.Delete([]string{id}, nil)
 	return err
 }
 
 func (s *Store) ListAll(limit int) ([]SearchResult, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.collection == nil {
+		return nil, fmt.Errorf("vector store is closed")
+	}
 	zeroVector := make([]float32, s.collection.VectorLen)
 	results, err := s.collection.Search(zeroVector, nil, limit)
 	if err != nil {
@@ -316,4 +357,119 @@ func (s *Store) ListAll(limit int) ([]SearchResult, error) {
 		})
 	}
 	return searchResults, nil
+}
+
+// Count returns the number of physical points in the disposable vector
+// index. Canonical active/current counts are computed by the facade.
+func (s *Store) Count() int {
+	if s == nil {
+		return 0
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.collection == nil {
+		return 0
+	}
+	return s.collection.Count()
+}
+
+// RebuildAtomically builds a complete replacement bbolt artifact beside the
+// current one, then swaps only that derived artifact. Callers must prepare
+// and validate the points before invoking this method. The canonical catalog
+// is never involved.
+func (s *Store) RebuildAtomically(points []Point) error {
+	if s == nil {
+		return fmt.Errorf("vector store is unavailable")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.storage == nil || s.collection == nil {
+		return fmt.Errorf("vector store is closed")
+	}
+	if s.dbPath == "" || s.dimension <= 0 {
+		return fmt.Errorf("vector store path or dimension is unavailable")
+	}
+
+	dir := filepath.Dir(s.dbPath)
+	tempFile, err := os.CreateTemp(dir, ".vectors-rebuild-*")
+	if err != nil {
+		return err
+	}
+	tempPath := tempFile.Name()
+	if err := tempFile.Close(); err != nil {
+		_ = os.Remove(tempPath)
+		return err
+	}
+	if err := os.Remove(tempPath); err != nil {
+		return err
+	}
+	defer os.Remove(tempPath)
+
+	staged, err := NewStore(tempPath, s.dimension)
+	if err != nil {
+		return err
+	}
+	if err := staged.AddBatch(points); err != nil {
+		_ = staged.Close()
+		return err
+	}
+	if staged.Count() != len(points) {
+		_ = staged.Close()
+		return fmt.Errorf("staged vector count mismatch: got %d want %d", staged.Count(), len(points))
+	}
+	if err := staged.Close(); err != nil {
+		return err
+	}
+
+	backupFile, err := os.CreateTemp(dir, ".vectors-backup-*")
+	if err != nil {
+		return err
+	}
+	backupPath := backupFile.Name()
+	if err := backupFile.Close(); err != nil {
+		_ = os.Remove(backupPath)
+		return err
+	}
+	if err := os.Remove(backupPath); err != nil {
+		return err
+	}
+	defer os.Remove(backupPath)
+
+	oldStorage := s.storage
+	if err := oldStorage.Close(); err != nil {
+		return err
+	}
+	reopenOld := func() error {
+		restored, reopenErr := NewStore(s.dbPath, s.dimension)
+		if reopenErr != nil {
+			return reopenErr
+		}
+		s.collection = restored.collection
+		s.storage = restored.storage
+		return nil
+	}
+	if err := os.Rename(s.dbPath, backupPath); err != nil {
+		_ = reopenOld()
+		return err
+	}
+	restore := func(cause error) error {
+		_ = os.Remove(s.dbPath)
+		if renameErr := os.Rename(backupPath, s.dbPath); renameErr != nil {
+			return fmt.Errorf("%w; restore vector artifact: %v", cause, renameErr)
+		}
+		if reopenErr := reopenOld(); reopenErr != nil {
+			return fmt.Errorf("%w; reopen restored vector artifact: %v", cause, reopenErr)
+		}
+		return cause
+	}
+	if err := os.Rename(tempPath, s.dbPath); err != nil {
+		return restore(err)
+	}
+	replacement, err := NewStore(s.dbPath, s.dimension)
+	if err != nil {
+		return restore(err)
+	}
+	s.collection = replacement.collection
+	s.storage = replacement.storage
+	return nil
 }

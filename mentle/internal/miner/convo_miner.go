@@ -243,6 +243,9 @@ func buildExchangeText(exchange Exchange) string {
 }
 
 func (cm *ConversationMiner) MineConversations(ctx context.Context, dir, wing string) error {
+	if cm == nil || cm.miner == nil || cm.miner.writer == nil {
+		return fmt.Errorf("memory facade is unavailable")
+	}
 	if wing == "" {
 		wing = filepath.Base(dir)
 	}
@@ -318,7 +321,7 @@ func (cm *ConversationMiner) MineConversations(ctx context.Context, dir, wing st
 					},
 				}
 
-				if err := cm.miner.searcher.Store(ctx, drawer); err == nil {
+				if _, err := cm.miner.writer.CreateDrawer(ctx, drawer, "conversation-miner", fmt.Sprintf("conversation:%s:%d", path, totalExchanges)); err == nil {
 					stored++
 				}
 			}

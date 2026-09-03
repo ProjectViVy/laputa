@@ -9,10 +9,10 @@
 
 ## Purpose
 
-The `vector/` package (or `storage/govector/`) implements the vector storage backend:
+This document describes the vector storage backend. The actual implementation lives in **`storage/govector/store.go`** — `vector/` itself is a documentation-only directory (AGENTS.md only, no Go code). Key facts:
 
 - **HNSW (Hierarchical Navigable Small World)** index for fast approximate nearest neighbor search
-- **Vector persistence** to disk with recovery
+- **Persistence** to a single bbolt file (`vectors.db`) with recovery
 - **Index optimization** and rebuild
 - **Configurable distance metrics** (cosine, euclidean)
 
@@ -20,12 +20,12 @@ The `vector/` package (or `storage/govector/`) implements the vector storage bac
 
 ## Structure
 
-```
-storage/
-└── govector/
-    ├── store.go                   # Vector store implementation
-    ├── store_test.go
-    └── (index management utilities)
+```text
+storage/govector/
+└── store.go                         # Vector store implementation (single file, wraps govector bbolt)
+
+vector/                              # documentation only
+└── AGENTS.md
 ```
 
 ---
@@ -62,7 +62,7 @@ Hierarchical Navigable Small World graph:
 ### Create Store
 
 ```go
-store, err := govector.NewStore("./storage/vectors")
+store, err := govector.NewStore("./vectors.db", 384)   // path + vector dimension
 if err != nil {
     log.Fatal(err)
 }

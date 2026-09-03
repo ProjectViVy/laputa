@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
+	"sync"
 
 	"github.com/dashimaki/mentle/internal/bm25"
 	"github.com/dashimaki/mentle/internal/palace"
@@ -29,6 +31,7 @@ type Searcher struct {
 	store    search.Store
 	embedder search.Embedder
 	bm25     *bm25.Index
+	bm25Mu   sync.RWMutex
 
 	// alpha controls the weight of vector similarity (0.0-1.0).
 	// alpha=1.0: pure vector search, alpha=0.0: pure BM25.
@@ -97,7 +100,7 @@ func (s *Searcher) SearchScored(ctx context.Context, query string, wing, room st
 	}
 
 	// 2. BM25 search (post-filter by wing/room).
-	bm25Results := s.bm25.Search(query, nResults*3)
+	bm25Results := s.BM25Search(query, nResults*3)
 
 	// 3. Apply BM25 filters (wing/room) if specified.
 	if wing != "" || room != "" {
@@ -158,7 +161,7 @@ func (s *Searcher) Store(ctx context.Context, drawer palace.Drawer) error {
 	}
 
 	// Index content in BM25 with payload for filtering.
-	s.bm25.AddWithPayload(drawer.ID, drawer.Content, payload)
+	s.IndexBM25(drawer.ID, drawer.Content, payload)
 	return nil
 }
 
@@ -177,7 +180,7 @@ func (s *Searcher) StoreVectors(ids []string, vectors [][]float32, payloads []ma
 		}
 		// Index content in BM25 with payload for filtering.
 		if content, ok := payloads[i]["content"].(string); ok {
-			s.bm25.AddWithPayload(ids[i], content, payloads[i])
+			s.IndexBM25(ids[i], content, payloads[i])
 		}
 	}
 
@@ -189,25 +192,199 @@ func (s *Searcher) Delete(ctx context.Context, id string) error {
 	if err := s.store.Delete(id); err != nil {
 		return err
 	}
+	s.bm25Mu.Lock()
 	s.bm25.Remove(id)
+	s.bm25Mu.Unlock()
 	return nil
 }
 
-// RebuildBM25Index rebuilds the BM25 index from all documents in the vector store.
-// Call this when initializing hybrid search on an existing database.
+// PruneCanonicalRevisions removes physical version-qualified projections for
+// one canonical memory, retaining only keepID when it is non-empty. This is
+// part of derived-index maintenance; it never changes canonical SQLite.
+func (s *Searcher) PruneCanonicalRevisions(ctx context.Context, canonicalID, keepID string) error {
+	if s == nil || s.store == nil {
+		return fmt.Errorf("vector store unavailable")
+	}
+	physical, err := s.store.ListAll(1_000_000)
+	if err != nil {
+		return err
+	}
+	prefix := canonicalID + "@v"
+	for _, point := range physical {
+		if !strings.HasPrefix(point.ID, prefix) || point.ID == keepID {
+			continue
+		}
+		if err := s.Delete(ctx, point.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RebuildBM25Index rebuilds the BM25 index from the disposable vector-store
+// projection. Production recovery should use the canonical Facade snapshot
+// path so deleted/tombstoned rows cannot be mistaken for live authority.
+// This compatibility helper has no fixed 50k truncation; callers migrating
+// from the standalone hybrid example should move to Facade rebuilds.
 func (s *Searcher) RebuildBM25Index(ctx context.Context) error {
-	results, err := s.store.ListAll(50000)
+	results, err := s.store.ListAll(1_000_000)
 	if err != nil {
 		return err
 	}
 
+	index := bm25.New(bm25.DefaultK1, bm25.DefaultB)
 	for _, r := range results {
 		if content, ok := r.Payload["content"].(string); ok {
-			s.bm25.AddWithPayload(r.ID, content, r.Payload)
+			index.AddWithPayload(r.ID, content, r.Payload)
 		}
 	}
+	s.bm25Mu.Lock()
+	s.bm25 = index
+	s.bm25Mu.Unlock()
 
 	return nil
+}
+
+// BM25Search executes a lexical search against the disposable index.
+func (s *Searcher) BM25Search(query string, limit int) []bm25.ScoredDoc {
+	s.bm25Mu.RLock()
+	defer s.bm25Mu.RUnlock()
+	return s.bm25.Search(query, limit)
+}
+
+// BM25Count returns the number of documents in the disposable lexical index.
+func (s *Searcher) BM25Count() int {
+	s.bm25Mu.RLock()
+	defer s.bm25Mu.RUnlock()
+	return s.bm25.Count()
+}
+
+// IndexBM25 upserts one document into the disposable lexical index.
+func (s *Searcher) IndexBM25(id, content string, payload map[string]any) {
+	s.bm25Mu.Lock()
+	defer s.bm25Mu.Unlock()
+	s.bm25.AddWithPayload(id, content, payload)
+}
+
+// RebuildBM25FromDrawers replaces BM25 from an explicit canonical snapshot.
+// The snapshot must already be bounded to active current revisions.
+func (s *Searcher) RebuildBM25FromDrawers(drawers []search.Drawer) {
+	index := bm25.New(bm25.DefaultK1, bm25.DefaultB)
+	for _, drawer := range drawers {
+		payload := make(map[string]any, len(drawer.Metadata)+3)
+		for key, value := range drawer.Metadata {
+			payload[key] = value
+		}
+		if drawer.Wing != "" {
+			payload["wing"] = drawer.Wing
+		}
+		if drawer.Room != "" {
+			payload["room"] = drawer.Room
+		}
+		payload["content"] = drawer.Content
+		index.AddWithPayload(drawer.ID, drawer.Content, payload)
+	}
+	s.bm25Mu.Lock()
+	s.bm25 = index
+	s.bm25Mu.Unlock()
+}
+
+// RebuildVectorIndex prepares every embedding before mutating the current
+// disposable vector store. It then removes physical points that are absent
+// from the canonical snapshot. Canonical SQLite is never touched here.
+func (s *Searcher) RebuildVectorIndex(ctx context.Context, drawers []search.Drawer) error {
+	if s == nil || s.store == nil || s.embedder == nil {
+		return fmt.Errorf("vector rebuild dependencies unavailable")
+	}
+	texts := make([]string, len(drawers))
+	for i, drawer := range drawers {
+		texts[i] = drawer.Content
+	}
+	vectors, err := s.embedder.CreateEmbeddings(ctx, texts)
+	if err != nil {
+		return err
+	}
+	if len(vectors) != len(drawers) {
+		return fmt.Errorf("embedding count mismatch: got %d want %d", len(vectors), len(drawers))
+	}
+	points := make([]govector.Point, len(drawers))
+	keep := make(map[string]struct{}, len(drawers))
+	for i, drawer := range drawers {
+		payload := make(map[string]any, len(drawer.Metadata)+3)
+		for key, value := range drawer.Metadata {
+			payload[key] = value
+		}
+		if drawer.Wing != "" {
+			payload["wing"] = drawer.Wing
+		}
+		if drawer.Room != "" {
+			payload["room"] = drawer.Room
+		}
+		payload["content"] = drawer.Content
+		points[i] = govector.Point{ID: drawer.ID, Vector: vectors[i], Payload: payload}
+		keep[drawer.ID] = struct{}{}
+	}
+	if atomicStore, ok := s.store.(interface {
+		RebuildAtomically([]govector.Point) error
+	}); ok {
+		return atomicStore.RebuildAtomically(points)
+	}
+	if len(points) > 0 {
+		if err := s.store.AddBatch(points); err != nil {
+			return err
+		}
+	}
+	existing, err := s.store.ListAll(1_000_000)
+	if err != nil {
+		return err
+	}
+	for _, point := range existing {
+		if _, ok := keep[point.ID]; ok {
+			continue
+		}
+		if err := s.store.Delete(point.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// VectorPhysicalCount probes the disposable vector backend.
+func (s *Searcher) VectorPhysicalCount(ctx context.Context) (int, error) {
+	if counter, ok := s.store.(interface{ Count() int }); ok {
+		return counter.Count(), nil
+	}
+	results, err := s.store.ListAll(1_000_000)
+	if err != nil {
+		return 0, err
+	}
+	return len(results), nil
+}
+
+// ListAll returns a snapshot of physical vector documents for diagnostics and
+// rebuild verification. It does not grant callers mutation authority.
+func (s *Searcher) ListAll(ctx context.Context, limit int) ([]search.Drawer, error) {
+	if limit <= 0 {
+		limit = 1_000_000
+	}
+	results, err := s.store.ListAll(limit)
+	if err != nil {
+		return nil, err
+	}
+	drawers := make([]search.Drawer, 0, len(results))
+	for _, result := range results {
+		drawer := search.Drawer{ID: result.ID, Metadata: map[string]string{}}
+		for key, value := range result.Payload {
+			if text, ok := value.(string); ok {
+				drawer.Metadata[key] = text
+			}
+		}
+		drawer.Wing, _ = result.Payload["wing"].(string)
+		drawer.Room, _ = result.Payload["room"].(string)
+		drawer.Content, _ = result.Payload["content"].(string)
+		drawers = append(drawers, drawer)
+	}
+	return drawers, nil
 }
 
 // ListWings delegates to the underlying store.

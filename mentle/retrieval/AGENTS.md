@@ -23,22 +23,24 @@ Hybrid search powers both Fast Recall (deterministic ranking) and Deep Recall (w
 
 ## Structure
 
-```
+> **Note:** `retrieval/` is a documentation-only directory. The hybrid search code it describes lives in **`internal/hybrid/searcher.go`** (RRF fusion over vector + BM25) and **`internal/bm25/`** (inverted index). There is no `vector.go`/`bm25.go`/`hybrid.go`/`ranker.go`/`types.go` under `retrieval/`.
+
+```text
 retrieval/
-├── vector.go                      # Vector search interface
-├── vector_test.go
-├── bm25.go                        # BM25 ranking implementation
-├── bm25_test.go
-├── hybrid.go                      # Hybrid fusion and ranking
-├── hybrid_test.go
-├── ranker.go                      # Result ranking and deduplication
-├── ranker_test.go
-└── types.go                       # Common types and interfaces
+└── AGENTS.md                        # Documentation only — no Go code
 ```
 
-### Subdirectories (Depth 3)
+Actual implementation layout:
 
-No formal depth-3 AGENTS.md required; implementations are self-contained.
+```text
+internal/
+├── hybrid/
+│   └── searcher.go                  # Hybrid Searcher (RRF fusion, alpha=0.7)
+├── bm25/
+│   └── bm25.go                      # BM25 inverted index (in-memory)
+└── search/
+    └── searcher.go                  # Vector-only Searcher (govector store + embedder)
+```
 
 ---
 

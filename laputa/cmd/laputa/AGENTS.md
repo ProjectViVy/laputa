@@ -1,43 +1,9 @@
 <!-- Parent: ../../AGENTS.md -->
 
-# laputa/cmd/laputa — Main Laputa CLI (Placeholder)
+# laputa/cmd/laputa — Retired Placeholder
 
-**Generated:** 2026-08-01  
-**Purpose:** Main command-line interface for Laputa governance operations
+This placeholder predates the Markdown clean break. Do not implement JSON section initialization, generic audit, section backup/restore or Governance status commands here.
 
----
+Any future Laputa CLI must be separately scoped and call the Persona/ACTMEM domain services. It may expose complete Markdown document operations, Persona-specific review/history and explicit ACTMEM tools only after their contracts are live. It must not create compatibility aliases or read `.laputa/sections`.
 
-## Purpose
-
-The `laputa` directory is reserved for main CLI entry points and commands (currently minimal).
-
-Future commands:
-- `laputa init` — initialize governance sections
-- `laputa audit` — view mutation history
-- `laputa backup` — snapshot sections to tarball
-- `laputa restore` — restore from backup
-- `laputa status` — show current governance state
-
----
-
-## Structure
-
-```
-laputa/
-├── main.go                          # CLI entry point (if implemented)
-└── (command files as added)
-```
-
----
-
-## Current Status
-
-Currently a placeholder. See `eino_smoke/` for working smoke tests.
-
----
-
-## MANUAL
-
-When implementing main CLI commands, add them to this directory and document here.
-
-Parent reference: ../../AGENTS.md
+Parent reference: `../../AGENTS.md`

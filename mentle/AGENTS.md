@@ -5,7 +5,7 @@
 **Generated:** 2026-08-01  
 **Module Path:** `github.com/dashimaki/mentle`  
 **Go Version:** 1.26.4 or later  
-**Status:** Phase 3+ active — hybrid search, knowledge graph, WAL durability
+**Current recovery contract:** [`../docs/architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md`](../docs/architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md)
 
 ---
 
@@ -15,7 +15,7 @@ Mentle is a Go implementation of MemPalace — a memory system for AI assistants
 
 - **Vector search** using ONNX embeddings (hugot, no external daemons)
 - **Knowledge graph** with SQLite-based entity relationship tracking
-- **WAL-based storage** for durable memory operations
+- **Canonical SQLite authority** with transactional `index_jobs` for recoverable derived indexing
 - **MCP server** for AI client integration (Claude Desktop, Cursor, etc.)
 - **Hybrid search** combining semantic and lexical retrieval (BM25)
 - **Taxonomy** organized as palace wings and rooms
@@ -79,10 +79,12 @@ mentle/
 │       ├── wal.go
 │       └── wal_test.go
 ├── storage/
-│   ├── govector/                 # Vector storage backend (HNSW)
+│   ├── govector/                 # HNSW vector backend (bbolt) — production path
 │   │   ├── store.go
 │   │   └── store_test.go
-│   └── vectorstore/              # Vector store interface
+│   ├── redis/                    # Optional Redis drawer storage (linear scan)
+│   ├── sqlite/                   # Raw SQLite helper (CGO)
+│   └── vectorstore/              # Store interface + Open() factory (Qdrant/Chroma/LanceDB stubs)
 ├── Makefile                      # Build targets (build, test, bench-perf, etc.)
 ├── go.mod                        # Module: github.com/dashimaki/mentle
 ├── go.sum
@@ -148,9 +150,11 @@ Supports:
 - Fact invalidation
 - Relationship traversal
 
-### WAL (Write-Ahead Log)
+### Authority and recovery
 
-Durability via write-ahead log in `wal/` directory. All mutations are logged before applied.
+`canonical.sqlite3` is the sole authority for logical memory identity, content, metadata, version, status and idempotency. Every accepted canonical mutation records an `index_jobs` operation in the same transaction. Govector and BM25 are derived projections that can be rebuilt from active canonical revisions.
+
+The legacy JSONL package under `pkg/wal` is not canonical recovery. It must not be replayed into canonical memory or used as a second mutation authority; Epic 3 removes unused business seams or scopes retained code to diagnostics only.
 
 ### AAAK Dialect
 
@@ -266,7 +270,8 @@ cd mentle && GOSUMDB=off go test ./facade/...
 - ReadEvidence enforces per-item and total character budget
 - Knowledge graph temporal queries are consistent
 - Vector search is deterministic and repeatable
-- WAL recovery produces bit-identical state
+- Canonical commit plus transactional index jobs recover across crash/restart
+- Derived indexes rebuild from canonical state without renaming or overwriting canonical SQLite
 - Integration tests pass with MCP protocol
 
 ---
