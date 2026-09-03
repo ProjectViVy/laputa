@@ -1,4 +1,4 @@
-export type Source = "live" | "compat" | "accepted-design";
+export type Source = "live" | "accepted-design";
 export type ComponentStatus = "ok" | "degraded" | "offline" | string;
 
 export interface IngestionStats {
@@ -15,6 +15,7 @@ export interface OverviewResponse {
   components: Record<string, ComponentStatus>;
   ingestion?: IngestionStats;
   spool_pending?: number;
+  index_health?: IndexHealthResponse;
   source: Source;
 }
 
@@ -77,23 +78,6 @@ export interface SpoolEntry {
 export interface SpoolResponse {
   pending_count: number;
   entries: SpoolEntry[];
-  source: Source;
-}
-
-export interface AuditEntry {
-  sequence: number;
-  section: string;
-  action: string;
-  actor: string;
-  reason: string;
-  request_id: string;
-  rollback_ref: string;
-  timestamp: string;
-}
-
-export interface AuditResponse {
-  entries: AuditEntry[];
-  count: number;
   source: Source;
 }
 
@@ -323,4 +307,34 @@ export interface MailboxListResponse {
   box: string;
   items: MailboxItem[];
   count: number;
+}
+
+// ============ Index Health (live canonical/derived probe) ============
+
+export interface EmbeddingIdentity {
+  model: string;
+  dimension: number;
+  metric: string;
+  normalize: boolean;
+  provider: string;
+  version: string;
+  captured_at: string;
+}
+
+export interface IndexHealthResponse {
+  status: string;
+  observed_at: string;
+  reasons: string[];
+  canonical_active_count: number;
+  vector_active_count: number;
+  vector_physical_count: number;
+  tombstone_count: number;
+  tombstone_ratio: number;
+  pending_jobs: number;
+  failed_jobs: number;
+  oldest_pending_age_ms: number | null;
+  last_rebuild: { status: string; started_at: string | null; completed_at: string | null; canonical_snapshot_count: number | null; error_code: string | null };
+  bm25_count: number;
+  embedding_identity: EmbeddingIdentity | null;
+  expected_embedding_identity: EmbeddingIdentity | null;
 }

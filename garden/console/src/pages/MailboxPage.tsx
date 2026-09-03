@@ -23,12 +23,13 @@ export default function MailboxPage() {
   return (
     <div className="page">
       <PageHeader title={t("mailbox.title")} lede={t("mailbox.lede")} />
-      <div className="modules-grid">
-        <InboxColumn />
-        <OutboxColumn />
-      </div>
+      <MailboxPanel />
     </div>
   );
+}
+
+export function MailboxPanel() {
+  return <div className="modules-grid"><InboxColumn /><OutboxColumn /></div>;
 }
 
 function InboxColumn() {

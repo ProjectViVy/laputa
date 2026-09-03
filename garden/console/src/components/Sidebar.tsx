@@ -10,17 +10,16 @@ interface Item {
 
 const ITEMS: Item[] = [
   { to: "/", key: "overview", icon: "M3 12h4l2 5 4-12 2 7h6" },
-  { to: "/governance", key: "governance", icon: "M12 3v6m0 6v6M5 8l7 4 7-4M5 16l7-4 7 4" },
-  { to: "/work", key: "work", icon: "M4 6h16M4 12h10M4 18h7", soon: true },
+  { to: "/persona", key: "persona", icon: "M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0" },
+  { to: "/memory", key: "memory", icon: "M4 5h16v14H4zM8 9h8M8 13h5" },
+  { to: "/evolution", key: "evolution", icon: "M12 4a8 8 0 018 8m-8-4a4 4 0 014 4m-4-1a1 1 0 011 1M4 12h3m10 6l2 2m0-2l-2 2" },
+  { to: "/chat-approval", key: "chatApproval", icon: "M4 5h16v11H8l-4 4z" },
   { to: "/materials", key: "materials", icon: "M4 5h10l6 6v8H4zM14 5v6h6" },
   { to: "/trace", key: "trace", icon: "M12 4v4m0 4v4m0 4v0M6 8h.01M18 16h.01M6 8a6 6 0 0112 8" },
   { to: "/reports", key: "reports", icon: "M6 3h9l4 4v14H6zM9 12h6M9 16h6" },
-  { to: "/modules", key: "modules", icon: "M12 3l2.5 5.5L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.5-.5z" },
-  { to: "/evolution", key: "evolution", icon: "M12 4a8 8 0 018 8m-8-4a4 4 0 014 4m-4-1a1 1 0 011 1M4 12h3m10 6l2 2m0-2l-2 2" },
-  { to: "/mailbox", key: "mailbox", icon: "M4 5h16v14H4zM4 7l8 6 8-6" },
   { to: "/operations", key: "operations", icon: "M4 7h16M4 12h16M4 17h16M8 5v4M15 10v4M10 15v4" },
   { to: "/library", key: "library", icon: "M5 4h6v16H5zM13 4h6v16h-6z" },
-  { to: "/settings", key: "settings", icon: "M12 8a4 4 0 100 8 4 4 0 000-8zM12 2v3m0 14v3M2 12h3m14 0h3", soon: true },
+  { to: "/settings", key: "settings", icon: "M12 8a4 4 0 100 8 4 4 0 000-8zM12 2v3m0 14v3M2 12h3m14 0h3" },
 ];
 
 function Icon({ d }: { d: string }) {

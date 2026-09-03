@@ -3,7 +3,6 @@
   margin: 0;
   padding: 0;
 }
-
 html,
 body,
 #root {
@@ -15,11 +14,12 @@ body {
   color: var(--ink);
   background-color: var(--bg-0);
   background-image:
-    radial-gradient(900px 600px at 82% -8%, rgba(92, 200, 255, 0.07), transparent 60%),
-    radial-gradient(760px 520px at 8% 108%, rgba(232, 161, 92, 0.06), transparent 60%),
-    linear-gradient(rgba(29, 54, 65, 0.32) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(29, 54, 65, 0.32) 1px, transparent 1px);
-  background-size: auto, auto, 44px 44px, 44px 44px;
+    radial-gradient(1200px 700px at 85% -10%, rgba(56, 189, 248, 0.08), transparent 65%),
+    radial-gradient(900px 600px at 15% 105%, rgba(245, 158, 11, 0.07), transparent 60%),
+    radial-gradient(800px 500px at 50% 50%, rgba(168, 85, 247, 0.04), transparent 70%),
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: auto, auto, auto, 48px 48px, 48px 48px;
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -32,19 +32,22 @@ body {
 
 /* ---- scrollbar ---- */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--line-strong);
+  background: rgba(255, 255, 255, 0.16);
   border-radius: 20px;
-  border: 2px solid var(--bg-0);
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #356073;
+  background: var(--info);
+  border: 1px solid transparent;
+  background-clip: content-box;
 }
 
 a {
@@ -62,28 +65,52 @@ button {
 
 :focus-visible {
   outline: 2px solid var(--info);
-  outline-offset: 2px;
+  outline-offset: 3px;
   border-radius: var(--r-sm);
 }
 
-/* ---- shared primitives ---- */
+/* ---- Huashu Design Primitives ---- */
 .panel {
-  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  background: var(--panel);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
+  box-shadow: var(--shadow-bento);
   position: relative;
+  overflow: hidden;
+  transition: border-color var(--t-med) var(--ease), box-shadow var(--t-med) var(--ease), transform var(--t-med) var(--ease);
+}
+
+.panel::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+  pointer-events: none;
+}
+
+.panel-hover:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-bento-hover);
+  transform: translateY(-2px);
 }
 
 .panel-pad {
-  padding: 20px 22px;
+  padding: 22px 24px;
 }
 
 .label {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-3);
+  font-weight: 600;
+  text-wrap: pretty;
 }
 
 .mono {
@@ -92,7 +119,7 @@ button {
 
 .telemetry {
   font-family: var(--font-mono);
-  font-weight: 500;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
@@ -100,62 +127,85 @@ button {
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.03em;
-  padding: 3px 9px;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
   border-radius: 100px;
   border: 1px solid var(--line);
   background: var(--panel-3);
   color: var(--ink-2);
   white-space: nowrap;
+  backdrop-filter: blur(8px);
+  transition: border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+
+.chip:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
 }
 
 .divider {
   height: 1px;
-  background: var(--line);
+  background: linear-gradient(90deg, transparent, var(--line), transparent);
   border: none;
 }
 
-/* ---- status colors ---- */
+/* ---- status colors & glows ---- */
 .s-ok {
   color: var(--ok);
+  text-shadow: 0 0 12px var(--ok-dim);
 }
 .s-degraded {
   color: var(--degraded);
+  text-shadow: 0 0 12px var(--degraded-dim);
 }
 .s-down {
   color: var(--down);
+  text-shadow: 0 0 12px var(--down-dim);
 }
 .s-info {
   color: var(--info);
+  text-shadow: 0 0 12px var(--info-dim);
 }
 .s-brand {
   color: var(--brand);
+  text-shadow: 0 0 12px var(--brand-dim);
 }
 
-/* ---- keyframes ---- */
+.gradient-text {
+  background: linear-gradient(135deg, var(--ink) 0%, var(--ink-2) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gradient-brand {
+  background: linear-gradient(135deg, var(--brand-strong) 0%, var(--brand) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ---- keyframes & motion ---- */
 @keyframes pulse {
-  0%,
-  100% {
+  0%, 100% {
     opacity: 1;
     transform: scale(1);
   }
   50% {
-    opacity: 0.45;
-    transform: scale(0.82);
+    opacity: 0.4;
+    transform: scale(0.85);
   }
 }
 
 @keyframes reveal {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(12px) scale(0.99);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -177,7 +227,7 @@ button {
 }
 
 .reveal {
-  animation: reveal 0.5s var(--ease) both;
+  animation: reveal 0.45s var(--ease) both;
 }
 
 @media (prefers-reduced-motion: reduce) {

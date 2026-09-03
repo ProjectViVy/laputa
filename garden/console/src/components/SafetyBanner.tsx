@@ -36,7 +36,6 @@ export default function SafetyBanner() {
           {t("banner.pendingSpool", { count: spool })}
         </span>
       )}
-      <span className="banner-item banner-compat">{t("banner.compat")}</span>
     </div>
   );
 }

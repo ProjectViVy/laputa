@@ -16,99 +16,138 @@
 .content {
   flex: 1;
   overflow-y: auto;
-  padding: 28px 34px 60px;
+  padding: 32px 40px 64px;
 }
 
-/* ============ sidebar ============ */
+/* ============ sidebar (Huashu Glass Sidebar) ============ */
 .sidebar {
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, var(--panel), var(--bg-1));
+  background: var(--panel-glass);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-right: 1px solid var(--line);
-  padding: 18px 12px 14px;
+  padding: 20px 14px 16px;
+  position: relative;
+  z-index: 20;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 4px 8px 18px;
+  gap: 12px;
+  padding: 6px 10px 20px;
   border-bottom: 1px solid var(--line);
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .brand-mark {
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
   font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 17px;
+  font-weight: 800;
+  font-size: 19px;
   color: var(--brand-strong);
-  background: var(--brand-dim);
-  border: 1px solid rgba(232, 161, 92, 0.4);
+  background: radial-gradient(circle at 30% 30%, rgba(245, 158, 11, 0.35), var(--brand-dim));
+  border: 1px solid rgba(245, 158, 11, 0.45);
   border-radius: var(--r-md);
   box-shadow: var(--glow-brand);
+  transition: transform var(--t-fast) var(--ease);
+}
+
+.brand:hover .brand-mark {
+  transform: scale(1.05) rotate(-3deg);
 }
 
 .brand-text {
   display: flex;
   flex-direction: column;
-  line-height: 1.15;
+  line-height: 1.2;
 }
 
 .brand-name {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 16px;
-  letter-spacing: 0.01em;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  background: linear-gradient(135deg, var(--ink) 0%, var(--ink-2) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .brand-sub {
   font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--brand);
+  font-weight: 600;
 }
 
 .nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   flex: 1;
   overflow-y: auto;
+  padding-right: 2px;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 9px 11px;
+  gap: 12px;
+  padding: 10px 12px;
   border-radius: var(--r-md);
   color: var(--ink-2);
   font-size: 13.5px;
-  border-left: 2px solid transparent;
-  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease),
-    transform var(--t-fast) var(--ease);
+  font-weight: 500;
+  position: relative;
+  transition: all var(--t-fast) var(--ease);
+}
+
+.nav-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 15%;
+  bottom: 15%;
+  width: 3px;
+  border-radius: 4px;
+  background: var(--brand);
+  opacity: 0;
+  transform: scaleY(0.4);
+  transition: all var(--t-fast) var(--ease);
 }
 
 .nav-item:hover {
   background: var(--panel-3);
   color: var(--ink);
-  transform: translateX(2px);
+  transform: translateX(3px);
 }
 
 .nav-item.active {
   background: var(--brand-dim);
   color: var(--brand-strong);
-  border-left-color: var(--brand);
+  font-weight: 600;
+}
+
+.nav-item.active::before {
+  opacity: 1;
+  transform: scaleY(1);
 }
 
 .nav-icon {
   display: inline-flex;
   opacity: 0.85;
+  transition: transform var(--t-fast) var(--ease);
+}
+
+.nav-item:hover .nav-icon {
+  transform: scale(1.1);
+  color: var(--info);
 }
 
 .nav-label {
@@ -127,31 +166,34 @@
 }
 
 .sidebar-foot {
-  padding: 12px 8px 2px;
+  padding: 14px 10px 4px;
   border-top: 1px solid var(--line);
   font-size: 10px;
-  letter-spacing: 0.08em;
-  color: var(--ink-faint);
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+  text-transform: uppercase;
 }
 
-/* ============ topbar ============ */
+/* ============ topbar (Huashu Glass Header) ============ */
 .topbar {
   height: var(--topbar-h);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 28px;
   border-bottom: 1px solid var(--line);
-  background: rgba(13, 26, 32, 0.72);
-  backdrop-filter: blur(8px);
+  background: var(--panel-glass);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  z-index: 10;
 }
 
 .topbar-left,
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
 }
 
 .scope {
@@ -163,36 +205,48 @@
 .scope-value {
   font-size: 12px;
   color: var(--ink-2);
-  padding: 4px 10px;
+  padding: 5px 12px;
   border: 1px solid var(--line);
   border-radius: 100px;
-  background: var(--panel);
+  background: var(--panel-3);
+  backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .live-tag {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-size: 10.5px;
+  gap: 8px;
+  font-size: 11px;
   letter-spacing: 0.14em;
   color: var(--ink-3);
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 100px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
 }
 
-.lang-toggle {
+.lang-toggle,
+.tweak-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  padding: 5px 12px;
+  padding: 5px 14px;
   border: 1px solid var(--line-strong);
   border-radius: 100px;
-  background: var(--panel);
-  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+  background: var(--panel-3);
+  color: var(--ink-2);
+  transition: all var(--t-fast) var(--ease);
 }
 
-.lang-toggle:hover {
+.lang-toggle:hover,
+.tweak-toggle:hover {
   border-color: var(--info);
+  color: var(--ink);
   box-shadow: var(--glow-info);
+  transform: translateY(-1px);
 }
 
 .lang-on {
@@ -214,9 +268,9 @@
   display: flex;
   align-items: center;
   gap: 22px;
-  padding: 8px 24px;
+  padding: 10px 28px;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 0.02em;
   border-bottom: 1px solid;
   animation: banner-in 0.35s var(--ease) both;
@@ -224,33 +278,29 @@
 
 .banner-degraded {
   background: var(--degraded-dim);
-  border-bottom-color: rgba(255, 180, 84, 0.4);
+  border-bottom-color: rgba(251, 191, 36, 0.35);
   color: var(--degraded);
 }
 
 .banner-down {
   background: var(--down-dim);
-  border-bottom-color: rgba(255, 107, 107, 0.4);
+  border-bottom-color: rgba(248, 113, 113, 0.35);
   color: var(--down);
 }
 
 .banner-item {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   white-space: nowrap;
-}
-
-.banner-compat {
-  margin-left: auto;
-  color: var(--ink-3);
 }
 
 /* ============ inspector drawer ============ */
 .drawer-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(6, 12, 15, 0.55);
+  background: rgba(4, 8, 12, 0.7);
+  backdrop-filter: blur(6px);
   z-index: 40;
   animation: reveal 0.2s var(--ease) both;
 }
@@ -260,19 +310,20 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: min(440px, 92vw);
-  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  width: min(460px, 92vw);
+  background: var(--panel-2);
+  backdrop-filter: blur(24px) saturate(180%);
   border-left: 1px solid var(--line-strong);
   z-index: 50;
   display: flex;
   flex-direction: column;
-  box-shadow: -24px 0 60px rgba(0, 0, 0, 0.45);
+  box-shadow: -30px 0 80px rgba(0, 0, 0, 0.6);
   animation: drawer-in 0.3s var(--ease) both;
 }
 
 @keyframes drawer-in {
   from {
-    transform: translateX(40px);
+    transform: translateX(50px);
     opacity: 0;
   }
   to {
@@ -285,23 +336,23 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 22px 24px 16px;
+  padding: 24px 28px 18px;
   border-bottom: 1px solid var(--line);
 }
 
 .drawer-title {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 20px;
+  font-size: 22px;
   margin-bottom: 4px;
 }
 
 .drawer-close {
   color: var(--ink-3);
-  font-size: 15px;
-  padding: 4px 8px;
+  font-size: 16px;
+  padding: 6px 10px;
   border-radius: var(--r-sm);
-  transition: color var(--t-fast), background var(--t-fast);
+  transition: all var(--t-fast) var(--ease);
 }
 
 .drawer-close:hover {
@@ -312,11 +363,11 @@
 .drawer-body {
   flex: 1;
   overflow-y: auto;
-  padding: 8px 24px 32px;
+  padding: 12px 28px 36px;
 }
 
 .drawer-section {
-  padding: 14px 0;
+  padding: 16px 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -325,9 +376,9 @@
 }
 
 .drawer-content {
-  margin-top: 7px;
-  font-size: 13px;
-  line-height: 1.55;
+  margin-top: 8px;
+  font-size: 13.5px;
+  line-height: 1.6;
   color: var(--ink-2);
 }
 
@@ -335,20 +386,21 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  font-size: 11.5px;
+  gap: 6px;
+  font-size: 12px;
 }
 
 .api-list li {
-  padding: 4px 8px;
+  padding: 6px 10px;
   background: var(--bg-1);
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   color: var(--info);
+  font-family: var(--font-mono);
 }
 
 .doc-refs {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
 }

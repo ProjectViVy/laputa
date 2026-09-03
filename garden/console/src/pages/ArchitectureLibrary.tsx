@@ -1,7 +1,6 @@
 import { useTranslation } from "react-i18next";
 import PageHeader from "../components/PageHeader";
-import { DOCS, ROLE_LABELS, type DocRole, type DocStatus } from "../data/docs";
-import { useBi } from "../lib/bi";
+import { DOCS, ROLE_LABELS, type Bi, type DocRole, type DocStatus } from "../data/docs";
 
 const ROLES: DocRole[] = ["L0", "L1", "L2", "L3", "L4", "L5"];
 
@@ -15,7 +14,8 @@ const STATUS_TONE: Record<DocStatus, string> = {
 
 export default function ArchitectureLibrary() {
   const { t } = useTranslation();
-  const bi = useBi();
+  const { i18n } = useTranslation();
+  const bi = (value: Bi) => value[i18n.language.startsWith("zh") ? "zh" : "en"];
 
   return (
     <div className="page">

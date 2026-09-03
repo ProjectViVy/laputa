@@ -1,5 +1,4 @@
-import type { Bi } from "./governance";
-
+export type Bi = { en: string; zh: string };
 export type DocStatus = "accepted" | "implemented" | "proposed" | "superseded" | "archived";
 export type DocRole = "L0" | "L1" | "L2" | "L3" | "L4" | "L5";
 
@@ -10,104 +9,25 @@ export interface DocEntry {
   path: string;
   status: DocStatus;
   modules: string[];
-  supersedes?: string;
   supersededBy?: string;
   note?: Bi;
 }
 
 export const ROLE_LABELS: Record<DocRole, Bi> = {
-  L0: { en: "Product Vision", zh: "产品愿景" },
-  L1: { en: "Accepted Decisions", zh: "已接受决策" },
-  L2: { en: "Target Architecture", zh: "目标架构" },
-  L3: { en: "Runtime Contracts", zh: "运行时契约" },
-  L4: { en: "Implementation Evidence", zh: "实现证据" },
-  L5: { en: "Historical Evidence", zh: "历史证据" },
+  L0: { en: "Product vision", zh: "产品愿景" },
+  L1: { en: "Accepted decisions", zh: "已接受决策" },
+  L2: { en: "Target architecture", zh: "目标架构" },
+  L3: { en: "Runtime contracts", zh: "运行时契约" },
+  L4: { en: "Implementation evidence", zh: "实现证据" },
+  L5: { en: "Historical evidence", zh: "历史证据" },
 };
 
 export const DOCS: DocEntry[] = [
-  {
-    id: "readme",
-    role: "L0",
-    title: { en: "MemoryOS — purpose & boundaries", zh: "MemoryOS — 目的与边界" },
-    path: "README.md / AGENTS.md",
-    status: "implemented",
-    modules: ["Laputa", "Garden", "Mentle"],
-    note: {
-      en: "Defines the governed-memory vision and the three-module ownership rule.",
-      zh: "定义受治理记忆的愿景与三模块所有权规则。",
-    },
-  },
-  {
-    id: "0002",
-    role: "L1",
-    title: { en: "ADR-0002 — Laputa Cognitive Partition", zh: "ADR-0002 — Laputa 认知分区" },
-    path: "docs/architecture/0002-laputa-cognitive-partition-decision.md",
-    status: "accepted",
-    modules: ["Laputa", "Garden"],
-    note: {
-      en: "Deletes LTM/LONGMEM; defines MEMRULES & WORLD; reclassifies 07–11 as the report system.",
-      zh: "删除 LTM/LONGMEM;定义 MEMRULES 与 WORLD;将 07–11 重分类为报告系统。",
-    },
-  },
-  {
-    id: "0003",
-    role: "L1",
-    title: { en: "ADR-0003 — Operations Console Design", zh: "ADR-0003 — 运营台设计" },
-    path: "docs/architecture/0003-operations-console-design.md",
-    status: "accepted",
-    modules: ["Garden"],
-    note: {
-      en: "This console: workbench-first admin UI, /v2/admin/* aggregation, i18n, MVP phasing.",
-      zh: "本控制台:工作台优先的管理 UI、/v2/admin/* 聚合、i18n、MVP 分期。",
-    },
-  },
-  {
-    id: "0001",
-    role: "L2",
-    title: { en: "0001 — MemoryOS vNext Architecture", zh: "0001 — MemoryOS vNext 架构" },
-    path: "docs/architecture/0001-memoryos-vnext-architecture.md",
-    status: "implemented",
-    modules: ["Laputa", "Garden", "Mentle", "Hosts"],
-    note: {
-      en: "Master plan: modules, interfaces, flows, migration waves 0–7, security, performance targets.",
-      zh: "总体规划:模块、接口、流程、迁移 Wave 0–7、安全、性能目标。",
-    },
-  },
-  {
-    id: "http-contracts",
-    role: "L3",
-    title: { en: "Garden HTTP API contracts (v2)", zh: "Garden HTTP API 契约(v2)" },
-    path: "AGENTS.md §HTTP API Contracts · internal/server",
-    status: "implemented",
-    modules: ["Garden"],
-    note: {
-      en: "v2 recall/ingest/memories/governance/evolution/admin routes; legacy v1 removed (ADR-0008).",
-      zh: "v2 recall/ingest/memories/governance/evolution/admin 路由;遗留 v1 已删除(ADR-0008)。",
-    },
-  },
-  {
-    id: "test-suite",
-    role: "L4",
-    title: { en: "Garden internal + E2E test suite", zh: "Garden internal + E2E 测试套件" },
-    path: "garden/internal/** · garden/e2e",
-    status: "implemented",
-    modules: ["Garden", "Mentle", "Laputa"],
-    note: {
-      en: "Behavioral proofs: capability gate, budget enforcement, degradation, no unauthorized mutation.",
-      zh: "行为证明:能力门、预算强制、降级、无未授权变更。",
-    },
-  },
-  {
-    id: "archive-2026-08-01",
-    role: "L5",
-    title: { en: "Pre-MemoryOS redesign archive", zh: "MemoryOS 重设计前归档" },
-    path: "docs/archive/2026-08-01-pre-memoryos-redesign/",
-    status: "archived",
-    modules: ["Laputa", "Garden", "Mentle"],
-    supersededBy: "0001",
-    note: {
-      en: "Superseded design history. Read-only; explicitly not the current contract.",
-      zh: "已被取代的设计历史。只读;明确不是当前契约。",
-    },
-  },
+  { id: "readme", role: "L0", title: { en: "MemoryOS purpose and boundaries", zh: "MemoryOS 目的与边界" }, path: "README.md / AGENTS.md", status: "implemented", modules: ["Laputa", "Mentle", "Garden", "EvoMap"], note: { en: "Module ownership and the local-first operating model.", zh: "模块所有权与本地优先运行模型。" } },
+  { id: "0012", role: "L1", title: { en: "ADR-0012 — Laputa Markdown clean break", zh: "ADR-0012 — Laputa Markdown clean break" }, path: "docs/architecture/0012-laputa-markdown-clean-break.md", status: "accepted", modules: ["Laputa", "Garden"], note: { en: "Seven Markdown authority files, explicit activity memory, and bounded context.", zh: "七份 Markdown 权威文件、显式活动记忆与有界上下文。" } },
+  { id: "0013", role: "L2", title: { en: "ADR-0013 — implementation architecture", zh: "ADR-0013 — 实施架构" }, path: "docs/architecture/0013-laputa-clean-break-implementation-architecture.md", status: "accepted", modules: ["Laputa", "Garden", "EvoMap"], note: { en: "Replacement order, adapters, and deletion proof matrix.", zh: "替换顺序、适配器与删除证明矩阵。" } },
+  { id: "0014", role: "L2", title: { en: "ADR-0014 — canonical authority and index recovery", zh: "ADR-0014 — 权威与索引恢复" }, path: "docs/architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md", status: "accepted", modules: ["Mentle", "Garden"], note: { en: "Canonical SQLite is authoritative; derived indexes recover from transactional jobs.", zh: "Canonical SQLite 是唯一权威；派生索引通过事务任务恢复。" } },
+  { id: "api-contract", role: "L3", title: { en: "Garden HTTP API contracts", zh: "Garden HTTP API 契约" }, path: "docs/bmad/garden-authority-recovery-2026-09/api-contract.md", status: "implemented", modules: ["Garden", "Mentle", "Laputa"] },
+  { id: "implementation", role: "L4", title: { en: "Recovery implementation records", zh: "恢复实施记录" }, path: "docs/bmad/garden-authority-recovery-2026-09/implementation/", status: "implemented", modules: ["Garden", "Mentle", "Laputa", "EvoMap"] },
+  { id: "archive", role: "L5", title: { en: "Superseded architecture archive", zh: "已取代的架构归档" }, path: "docs/archive/2026-08-14-laputa-clean-break/", status: "archived", modules: ["Laputa", "Garden", "Mentle"], note: { en: "Read-only historical evidence; it is not an implementation source.", zh: "只读历史证据，不是实施来源。" } },
 ];

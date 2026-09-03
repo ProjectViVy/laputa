@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useApi } from "../api/hooks";
 import { post } from "../api/client";
@@ -11,6 +12,7 @@ import type {
   RunsListResponse,
 } from "../api/types";
 import PageHeader from "../components/PageHeader";
+import { MailboxPanel } from "./MailboxPage";
 
 function fmtTime(iso?: string): string {
   if (!iso) return "—";
@@ -23,6 +25,8 @@ function errMsg(e: unknown): string {
 
 export default function EvolutionPage() {
   const { t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view = searchParams.get("view") === "mailbox" ? "mailbox" : "capabilities";
   const { data: hub, error: hubError } = useApi<ProviderStatus>(
     "/v2/evolution/hub/status",
     { poll: 30000 }
@@ -32,6 +36,11 @@ export default function EvolutionPage() {
   return (
     <div className="page">
       <PageHeader title={t("evolution.title")} lede={t("evolution.lede")} />
+
+      <div className="flow-tabs" role="tablist" aria-label="Evolution views">
+        <button type="button" className={`flow-tab${view === "capabilities" ? " active" : ""}`} onClick={() => setSearchParams({})}>Runs & proposals</button>
+        <button type="button" className={`flow-tab${view === "mailbox" ? " active" : ""}`} onClick={() => setSearchParams({ view: "mailbox" })}>Mailbox</button>
+      </div>
 
       <section className="evolution-hub">
         <h2 className="modules-title">{t("evolution.hub.title")}</h2>
@@ -74,10 +83,7 @@ export default function EvolutionPage() {
         )}
       </section>
 
-      <div className="modules-grid">
-        <RunsColumn degraded={degraded} />
-        <ProposalsColumn />
-      </div>
+      {view === "mailbox" ? <MailboxPanel /> : <div className="modules-grid"><RunsColumn degraded={degraded} /><ProposalsColumn /></div>}
     </div>
   );
 }
@@ -105,7 +111,7 @@ function RunsColumn({ degraded }: { degraded: boolean }) {
       await post("/v2/evolution/runs", {
         trigger: trigger.trim(),
         outcome: outcome.trim(),
-        trace_ref: traceRef.trim(),
+        trace_refs: traceRef.trim() ? [traceRef.trim()] : [],
         evidence_refs: evidenceRefs,
       });
       setTrigger("");
