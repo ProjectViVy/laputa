@@ -3,13 +3,13 @@
 **Status:** accepted  
 **Date:** 2026-08-03  
 **Supersedes:** none  
-**Depends on:** ADR-0001 §8.1–8.3 (materials, provenance, source adapters), §8.2 (raw-first), ADR-0002 §3.6 (AAAK lesson without a Laputa summary section)
+**Depends on:** ADR-0012 §6 (Mentle owns materials/evidence, not authority), which supersedes the former Laputa section references; raw-first ingestion remains this ADR's subject.
 
 ---
 
 ## 1. Context
 
-The historic AAAK pipeline (removed in ADR-0002) contained one durable lesson: external note content is most useful when decomposed into small, provenance-preserving semantic units for indexing — not when compressed into a Laputa summary file.
+Historical note: the retired AAAK pipeline demonstrated that external note content is most useful when decomposed into small, provenance-preserving semantic units for indexing, not compressed into a Laputa summary file.
 
 Current state at decision time:
 
@@ -34,7 +34,7 @@ Gate C requires: an Obsidian source adapter design, provenance-preserving semant
 
 | Kind | Meaning | Written by |
 |---|---|---|
-| `source_artifact` | Raw original content, persisted before acknowledgement (raw-first, ADR-0001 §8.2) | Garden ingest worker, source adapters |
+| `source_artifact` | Raw original content, persisted before acknowledgement | Garden ingest worker, source adapters |
 | `semantic_unit` | Derived index unit referencing a `source_artifact` | Semantic decomposition step |
 | `fact/preference/decision/session_digest/note` | unchanged | unchanged |
 
@@ -46,7 +46,7 @@ Rules:
 
 ## 4. Source Adapter Contract (specification only)
 
-Per ADR-0001 §8.3, first adapters are read-only and bounded:
+First adapters are read-only and bounded:
 
 ```go
 type SourceAdapter interface {
@@ -69,7 +69,7 @@ type SourceItem struct {
 Obsidian specifics (specified, implementation deferred to a later batch):
 
 - Vault location, enablement, and sync trigger (endpoint vs scheduled) are deliberately undecided here.
-- The adapter reads only; it never writes back into the vault (`read_only=true`, ADR-0001 §8.1).
+- The adapter reads only; it never writes back into the vault (`read_only=true`).
 - Scan results feed the raw-first path: persist `source_artifact` first, then decompose.
 
 ## 5. Semantic Unit Decomposition (specification)
@@ -106,12 +106,11 @@ Structured metadata keys (enumerated, stable):
 
 Semantic-unit ingestion must not recreate AAAK's failure mode:
 
-- No Laputa section is written anywhere in the ingestion path (07–09 remain report-system-only; `14-aaak_summaries` stays compat-deleted).
-- Units never automatically create WORLD claims, authority mutations, skills, or EvoMap uploads (ADR-0001 §8.2).
-- The original source remains authoritative; Mentle never writes back (ADR-0001 §8.1).
+- No Laputa authority file is written anywhere in the ingestion path. Units never create `WORLD.MD` content, Persona mutations, Skills, or EvoMap uploads automatically.
+- The original source remains authoritative; Mentle never writes back.
 - Units participate in card search and bounded evidence read only; heat alone establishes nothing.
 
-Acceptance test: an ingestion run asserts zero mutations against every Laputa section.
+Acceptance test: an ingestion run asserts zero mutations against every Laputa authority file and `ACTMEM.MD`.
 
 ## 8. Bounded Evidence Read
 

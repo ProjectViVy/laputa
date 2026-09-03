@@ -2,16 +2,16 @@
 
 **Status:** accepted  
 **Date:** 2026-08-03  
-**Supersedes:** ADR-0005 §8 carrier sentence ("Carried by the sections ADR-0002 repurposes for them (`10-journal_reflective` → AMBITION, `11-proposal_inbox` → USER SUGGESTIONS); physical rename remains deferred to the migration-execution PR, as with Gate A")  
-**Depends on:** ADR-0002 §3.4 (monthly human modules), ADR-0005 (report system), ADR-0008 (deletion of sections 10/11)
+**Supersedes:** the former report-carrier sentence that assigned human modules to retired Laputa sections.
+**Refines:** ADR-0012 §6. These remain human report modules, outside Laputa authority and EvoMap capability lifecycle.
 
 ---
 
 ## 1. Context
 
-ADR-0005 §8 specified `AMBITION` and `USER SUGGESTIONS` as optional **monthly-only** human modules, non-binding, with a user-only write path. Their originally intended carriers were the legacy sections `10-journal_reflective` (→ AMBITION) and `11-proposal_inbox` (→ USER SUGGESTIONS).
+Earlier report design specified `AMBITION` and `USER SUGGESTIONS` as optional monthly-only human modules, non-binding, with a user-only write path. Its intended legacy-section carriers are retired.
 
-ADR-0008 (Gate E) then deleted both sections from the governance registry: no host uses the legacy Laputa runtime, and the registry converged to 01-05 + 07-09. The §8 carrier sentence is therefore obsolete. This ADR relocates the modules into the report subsystem (Garden state SQLite), preserving every ADR-0005 §8 guarantee and the reserved `modules` array on monthly reports.
+The retired section model was removed before these modules were implemented. This ADR locates them in the Garden report subsystem (Garden state SQLite), preserving the user-only, non-binding contract and the reserved `modules` array on monthly reports.
 
 ## 2. Decisions
 
@@ -30,10 +30,10 @@ CREATE TABLE IF NOT EXISTS human_modules(
 );
 ```
 
-### 2.2 Non-binding human content (unchanged from ADR-0005 §8)
+### 2.2 Non-binding human content
 
 - Ambitions and suggestions never become commitments, never alter Frozen Core, and are never projected into ContextView by default.
-- **User-only write path:** creation, edit, and dismissal are user actions. There is no agent write path, and module writes do **not** go through `GovernedService`/audit — they are human-facing report content, not authority mutations.
+- **User-only write path:** creation, edit, and dismissal are user actions. There is no agent write path, and module writes do not go through Persona review or a generic governance audit; they are human-facing report content, not authority mutations.
 - No hard delete; dismissal (`active → dismissed`) is the terminal user action and is reversible (`dismissed → active`).
 
 ### 2.3 Bounds
@@ -79,6 +79,6 @@ Validation failures (bad kind, empty or over-long content, bad status) → 400. 
 
 ## 6. Consequences
 
-- ADR-0005 §8's deferred "later batch" is delivered without reviving sections 10/11 (ADR-0008 stays intact).
+- This decision delivers the deferred human-module capability without reviving any retired Laputa section.
 - Report subsystem gains one table and three endpoints; monthly reports can reference the human modules.
 - Users manage ambitions/suggestions through the console Modules page; no agent can write them.

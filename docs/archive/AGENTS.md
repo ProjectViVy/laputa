@@ -102,7 +102,8 @@ If a design becomes obsolete:
 
 | Document | Archived | Reason | Current Reference |
 |----------|----------|--------|-------------------|
-| GARDEN-PLAN-2026-07-08.md | 2026-08-01 | Pre-vNext design | architecture/0001-memoryos-vnext-architecture.md |
+| GARDEN-PLAN-2026-07-08.md | 2026-08-01 | Pre-vNext design | archive/2026-08-14-laputa-clean-break/README.md |
+| ADR-0001/0002/0003/0004/0005/0008 and Raw-first STM proposal | 2026-08-14 | Replaced by the Markdown authority, tool-only context, and EvoMap boundary contract | architecture/0012-laputa-markdown-clean-break.md |
 
 ---
 

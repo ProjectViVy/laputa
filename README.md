@@ -2,130 +2,66 @@
 
 [中文文档](README_CN.md)
 
-A governed memory operating system for continuous AI agents. LAPUTA connects personal work materials to recalled context and reusable capability — without treating storage, retrieval, or evolution output as authority by themselves.
+Garden MemoryOS is a governed operating system for continuous agents. It connects material evidence, bounded working context, personality authority, and reusable capability without treating any one of them as another.
 
-## Core Idea
+## Current Architecture
 
-```text
-MemoryOS = a memory operating system centered on agent identity and governed memory,
-           capable of understanding, locating, and invoking all personal work information.
-```
+[ADR-0012: Laputa Markdown Clean Break](docs/architecture/0012-laputa-markdown-clean-break.md) is the current contract.
 
-Three independent Go modules enforce strict ownership boundaries:
-
-| Module | Responsibility |
-|--------|---------------|
-| **Laputa** | Identity, authority, lifecycle, policy, audit |
-| **Mentle** | Canonical material, evidence, retrieval, taxonomy, knowledge graph |
-| **Garden** | Source ingestion, recall orchestration, ContextView assembly, HTTP gateway |
-
-No module holds authority over the others. Each degrades gracefully.
-
-## Key Design Decisions
-
-- **Progressive Recall** — Fast Recall (default): zero LLM, deterministic, low-latency, cacheable. Deep Recall (explicit upgrade): independent budget, KG/timeline/graph expansion, full trace.
-- **Candidate ≠ Evidence ≠ ContextView** — discovery, bounded evidence read, and final assembly are separate stages with separate budgets.
-- **No silent high-impact mutation** — authority changes, skill approval, host installation, and physical deletion are always explicit and audited.
-- **Governed evolution** — external Evolver proposes capability; only Laputa approves and applies authority.
-
-## Architecture
+[ADR-0013](docs/architecture/0013-laputa-clean-break-implementation-architecture.md) defines the clean-break implementation order. [ADR-0014](docs/architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md) makes canonical SQLite the sole Mentle memory authority and treats vector/BM25 indexes as rebuildable projections.
 
 ```text
-┌─────────────────────────────────────────────────────┐
-│  Host Adapters (Hermes / Claude Code / Codex)       │
-└──────────────────────┬──────────────────────────────┘
-                       │ HTTP
-┌──────────────────────▼──────────────────────────────┐
-│  Garden — orchestration gateway                     │
-│  /v2/recall/fast · /v2/recall/deep                  │
-│  /v2/activity/*  · /v2/governance/*                 │
-│  /v2/evolution/* · /v2/mailbox/*                     │
-└───────┬─────────────────────────────┬───────────────┘
-        │                             │
-┌───────▼────────┐          ┌─────────▼──────────────┐
-│  Laputa        │          │  Mentle                │
-│  governance    │          │  material + retrieval  │
-│  authority     │          │  evidence + graph      │
-│  audit         │          │  hybrid search (HNSW)  │
-└────────────────┘          └────────────────────────┘
+Laputa  = seven Markdown personality authorities + Persona review/history + ACTMEM semantics
+Mentle  = raw material, evidence, retrieval, index, provenance
+Garden  = activity/runtime orchestration, bounded ContextView, host integration, console
+EvoMap  = capability candidates, proposal review, artifact lifecycle, mailbox, Hub policy
 ```
 
-## Quick Start
+Laputa authority is one profile, one directory, and exactly these seven uppercase Markdown files:
 
-```bash
-# Prerequisites: Go 1.26+, CGO enabled (for SQLite)
-
-# Build all modules
-cd laputa  && go build ./...
-cd ../mentle && go build ./...
-cd ../garden && go build -o garden.exe .
-
-# Run the server (default: http://127.0.0.1:7373)
-./garden.exe
-
-# Health check
-curl -s http://127.0.0.1:7373/health
+```text
+IDENTITY.MD      RELATIONSHIP.MD  REDLINE.MD  USER.MD
+DREAM.MD         DARK.MD          WORLD.MD
 ```
 
-## Configuration
+`ACTMEM.MD` is the profile-wide cross-session activity memory. It is not a personality authority and is never default prompt context.
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `GARDEN_PIPELINE_CONFIG` | Path to pipelines.yaml | `~/.garden/pipelines.yaml` |
-| `GARDEN_RAG_BASE_URL` | OpenAI-compatible LLM endpoint | _(disabled)_ |
-| `GARDEN_RAG_API_KEY` | API key for LLM planner | _(disabled)_ |
-| `GARDEN_RAG_MODEL` | Model name for planner | _(disabled)_ |
+## Context Discipline
 
-Without LLM environment variables, Garden uses a deterministic planner and reports degradation without failing.
+| Lane | Content |
+| --- | --- |
+| Frozen Core | Bounded session-frozen projections of `IDENTITY`, `RELATIONSHIP`, `REDLINE`, `USER`, `DREAM`, and `DARK` |
+| Dynamic loading | Empty in v1 |
+| Tool access | Full `WORLD.MD`, full `ACTMEM.MD`, full authority documents, Mentle evidence, reports, and history |
 
-## Testing
+Neither `WORLD.MD` nor `ACTMEM.MD` may enter Fast Recall, Deep Recall, bootstrap, or automatic ContextView assembly.
+
+## EvoMap
+
+EvoMap is retained and owns all capability-artifact lifecycle: evolution candidates, proposals, evaluation, versioning, installation permission, mailbox, privacy gate, and Hub publication policy. Laputa does not produce, install, or publish Skills.
+
+## Clean Break
+
+The following are retired and must not appear in new runtime design: JSON Persona descriptors, `.laputa/sections/*.json` authority state, `Commitment`, `Preferences`, `MemoryMD`, `MEMORY.MD`, `memory_md`, JSON Patch, generic Persona governance mutation, automatic WORLD projection, and automatic ACTMEM projection.
+
+There is no migration, dual read/write, descriptor mapping, or fallback to retired JSON authority data.
+
+## Build and Test
 
 ```bash
-cd laputa  && GOSUMDB=off go test ./governance/...
-cd ../mentle && GOSUMDB=off go test ./facade/...
-cd ../garden && GOSUMDB=off go test ./internal/...
+cd laputa && GOSUMDB=off go test ./...
+cd ../mentle && GOSUMDB=off go test ./...
+cd ../garden && GOSUMDB=off go test ./...
 GOSUMDB=off go test -tags=e2e ./e2e/...
 ```
 
-## Repository Layout
-
-```text
-laputa/    Go governance module — authority, identity, lifecycle, audit
-mentle/    Go material & retrieval module — canonical catalog, evidence, hybrid search, graph
-garden/    Go application module — HTTP gateway, recall, activity orchestration
-docs/      Architecture decisions, migration plans, historical archive
-```
-
-## Performance Targets
-
-| Operation | Target |
-|-----------|--------|
-| Governance projection (warm) | P95 ≤ 5 ms |
-| SearchCards | P95 ≤ 80 ms |
-| Filter / rank / dedupe | P95 ≤ 10 ms |
-| Bounded ReadEvidence | P95 ≤ 40 ms |
-| Fast Recall total | P95 ≤ 150 ms |
-| Governance-only degradation | P95 ≤ 30 ms |
-
 ## Documentation
 
-- [Architecture Plan (vNext)](docs/architecture/0001-memoryos-vnext-architecture.md)
-- [ADR-0002: Cognitive Partition](docs/architecture/0002-laputa-cognitive-partition-decision.md)
-- [ADR-0003: Operations Console](docs/architecture/0003-operations-console-design.md)
+- [Current Architecture: ADR-0012](docs/architecture/0012-laputa-markdown-clean-break.md)
+- [Implementation Architecture: ADR-0013](docs/architecture/0013-laputa-clean-break-implementation-architecture.md)
+- [Mentle Recovery Authority: ADR-0014](docs/architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md)
+- [Authority & Recovery GOAL Runbook](docs/bmad/garden-authority-recovery-2026-09/GOAL-EXECUTION-RUNBOOK.md)
 - [Documentation Index](docs/README.md)
-- [Historical Archive](docs/archive/2026-08-01-pre-memoryos-redesign/)
-
-## References & Inspiration
-
-- [MemGPT / Letta](https://github.com/letta-ai/letta) — LLM memory management with virtual context paging
-- [Mem0](https://github.com/mem0ai/mem0) — memory layer for AI agents
-- [Zep](https://github.com/getzep/zep) — long-term memory service for AI assistants
-- [LangChain Memory](https://github.com/langchain-ai/langchain) — composable memory modules for LLM applications
-- [LlamaIndex](https://github.com/run-llama/llama_index) — data framework for LLM-based retrieval
-- [Cognee](https://github.com/topoteretes/cognee) — memory management for AI agents using knowledge graphs
-- [HNSW (govector)](https://github.com/DotNetAge/govector) — HNSW vector index used in Mentle
-- [Eino (CloudWeGo)](https://github.com/cloudwego/eino) — LLM orchestration framework used in Laputa
-
-## License
-
-[MIT](LICENSE)
+- [EvoMap Mailbox](docs/architecture/0007-evomap-mailbox.md)
+- [EvoMap Hub Transport](docs/architecture/0010-evomap-hub-transport-provider.md)
+- [Archived Previous Laputa Contract](docs/archive/2026-08-14-laputa-clean-break/)

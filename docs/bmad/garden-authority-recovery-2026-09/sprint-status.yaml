@@ -1,0 +1,100 @@
+project: garden-authority-recovery-convergence
+method: BMAD
+planning_path: project-sized
+updated: 2026-09-03
+phase: execution
+readiness: PASS
+implementation_authorized: true
+goal:
+  scope: waves-0-through-3
+  activated: true
+  goal_id: 01a06630-b2df-7342-942b-856080834cb6
+  concurrency_limit: 2
+  commit_policy: one-checkpoint-per-wave
+  push_allowed: false
+  dirty_tree_policy: audited-adoption-in-wave-0
+architecture_contract:
+  - ../../architecture/0012-laputa-markdown-clean-break.md
+  - ../../architecture/0013-laputa-clean-break-implementation-architecture.md
+  - ../../architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md
+  - ARCHITECTURE-SPINE.md
+  - GOAL-EXECUTION-RUNBOOK.md
+risks:
+  - id: C-01
+    status: mitigated
+    summary: dirty and untracked repository baseline explicitly scoped by Story 0.1
+  - id: C-02
+    status: resolved
+    summary: E00-S02 restored a deterministic green Garden full-test baseline
+  - id: C-03
+    status: resolved
+    summary: breaking REST contract cutover is live with retired routes absent
+  - id: C-04
+    status: resolved
+    summary: accepted ADR-0014 establishes canonical SQLite plus transactional index_jobs
+epics:
+  epic-00:
+    title: Baseline, Contract and Deletion Gates
+    status: done
+    depends_on: []
+    stories:
+      e00-s01: {title: Isolate the implementation baseline, status: done}
+      e00-s02: {title: Restore the pre-implementation quality gate, status: done}
+      e00-s03: {title: Freeze the target API and error contract, status: done}
+      e00-s04: {title: Add deletion and boundary scanner tests, status: done}
+      e00-s05: {title: Convert architecture decisions into test inventories, status: done}
+  epic-01:
+    title: Persona Authority Parity and Write Safety
+    status: done
+    depends_on: [epic-00]
+    stories:
+      e01-s01: {title: Lock DIVA text CAS and no-op parity, status: done}
+      e01-s02: {title: Make history immutable and failure-atomic, status: done}
+      e01-s03: {title: Implement atomic five-file initialization and repair, status: done}
+      e01-s04: {title: Enforce Persona write classes, status: done}
+      e01-s05: {title: Complete review lifecycle semantics, status: done}
+      e01-s06: {title: Complete Persona domain adapter tests, status: done}
+  epic-02:
+    title: ACTMEM, Frozen Core and Runtime Clean Break
+    status: done
+    depends_on: [epic-01]
+    stories:
+      e02-s01: {title: Port ACTMEM model and atomic store from DIVA, status: done}
+      e02-s02: {title: Port ACTMEM maintenance and capsule lifecycle, status: done}
+      e02-s03: {title: Build explicit ACTMEM read/query adapters, status: done}
+      e02-s04: {title: Implement restart-safe session Frozen Core, status: done}
+      e02-s05: {title: Move checkpoint and report state out of Governance, status: done}
+      e02-s06: {title: Atomically cut recall/bootstrap to Frozen Core, status: done}
+      e02-s07: {title: Delete the retired runtime composition, status: done}
+      e02-s08: {title: Prove the clean-break vertical slice, status: done}
+  epic-03:
+    title: Mentle Single Authority and Recoverable Indexing
+    status: done
+    depends_on: [epic-00]
+    stories:
+      e03-s01: {title: Enforce atomic canonical version CAS, status: done}
+      e03-s02: {title: Converge every mutation entry point on Facade, status: done}
+      e03-s03: {title: Evolve index_jobs into a recoverable outbox, status: done}
+      e03-s04: {title: Complete embedding identity enforcement, status: done}
+      e03-s05: {title: Replace repair with canonical-derived staged rebuild, status: done}
+      e03-s06: {title: Define tombstone and BM25 rebuild correctness, status: done}
+      e03-s07: {title: Implement live IndexHealth, status: done}
+      e03-s08: {title: Make session ingest deterministic and restart-safe, status: done}
+      e03-s09: {title: Retire legacy business-WAL authority claims, status: done}
+  epic-04:
+    title: Domain Adapters, MCP, Console and Release Gate
+    status: done
+    depends_on: [epic-02, epic-03]
+    stories:
+      e04-s01: {title: Apply principal-scoped local capability authentication, status: done}
+      e04-s02: {title: Cut over REST to the stable domain contract, status: done}
+      e04-s03: {title: Align Garden MCP with domain rules, status: done}
+      e04-s04: {title: Correct memory_search semantics, status: done}
+      e04-s05: {title: Complete Persona and Memory workspaces, status: done}
+      e04-s06: {title: Replace legacy Console information architecture, status: done}
+      e04-s07: {title: Reconcile bounded EvoMap candidate input, status: done}
+      e04-s08: {title: Run final project acceptance gate, status: done}
+next_action:
+  story: closeout
+  condition: all Waves 0–3 gates passed; retain host adapters as Deferred
+  note: GOAL activated by owner request and completed. Four audited Wave checkpoint commits are required; no push.

@@ -3,19 +3,19 @@
 **Status:** accepted  
 **Date:** 2026-08-03  
 **Supersedes:** none  
-**Depends on:** ADR-0001 §9 (EvoMap/Evolver integration), ADR-0002 §3.5 (no `proposal_inbox` reuse; mailbox state changes audited)
+**Refines:** ADR-0012 §5. EvoMap remains the only capability-artifact domain; its mailbox is independent of Laputa authority files.
 
 ---
 
 ## 1. Context
 
-ADR-0002 removed the legacy `11-proposal_inbox` as the EvoMap proposal system and mandated a separately designed mailbox with explicit inbox/outbox, state machine, evidence references, privacy gate, evaluation, approval/rejection, retry, and dead-letter semantics. The live proposal machinery (`garden/internal/evolution`: runs, candidates, proposals, `NormalizeCandidate` + `LeakageReport`, `HubPolicy`) has no durable communication channel for external Evolver exchange.
+This mailbox replaces the retired proposal-inbox idea with a separately designed inbox/outbox channel: explicit state machines, evidence references, privacy gate, evaluation, approval/rejection, retry, and dead-letter semantics. The live proposal machinery (`garden/internal/evolution`: runs, candidates, proposals, `NormalizeCandidate` + `LeakageReport`, `HubPolicy`) requires this durable communication channel for external Evolver exchange.
 
 This ADR designs that mailbox and delivers its core implementation.
 
 ## 2. Decision Summary
 
-1. New Garden package `internal/mailbox`, bridging `evolution.Service`; the laputa `11-proposal_inbox` section is never written (remains `tbd` placeholder, guarded).
+1. New Garden package `internal/mailbox`, bridging `evolution.Service`; no Laputa authority file or `ACTMEM.MD` is written by mailbox flows.
 2. Inbox and outbox share one durable store with per-direction state machines.
 3. A privacy gate runs before any outbox item leaves the local boundary; payloads carrying prohibited references are rejected and never sent.
 4. Hub publication stays disabled by default; the mailbox default target is local-only.
@@ -49,7 +49,7 @@ Rules:
 
 Before an outbox item transitions `queued → sending`:
 
-- `evolution.ValidateBundleInput` bounds (evidence refs, content hashes, source revision only — ADR-0001 §9.1 input boundary).
+- `evolution.ValidateBundleInput` bounds evidence references, content hashes, and source revisions.
 - `evolution.NormalizeCandidate`-style leakage scan over the payload: prohibited keys and refs (raw corpus paths, personality/cognitive files, tokens, private absolute paths — `isProhibitedRef` rules) block dispatch.
 - Blocked items transition to `dead_letter` with reason `privacy_gate`, carrying the `LeakageReport`.
 
@@ -88,10 +88,10 @@ Approve/reject, dead-lettering, and any future Hub-bound transition are explicit
 
 ## 8. Non-goals
 
-- Mailbox console UI (deferred, ADR-0003).
-- External Evolver process policy / MCP sidecar (ADR-0001 §9.2, later batch).
+- Mailbox console UI was deferred when this ADR was written; console work now follows ADR-0012.
+- External Evolver process policy / MCP sidecar is a later batch.
 - Semantic privacy review; Hub fetch/publish transport.
-- Any write to `11-proposal_inbox` or other laputa sections.
+- No write to Laputa authority files or `ACTMEM.MD`.
 
 ## 9. Test Matrix
 
@@ -102,10 +102,10 @@ Approve/reject, dead-lettering, and any future Hub-bound transition are explicit
 | 3 | Privacy gate blocks prohibited refs/payload keys → dead_letter + report | mailbox unit |
 | 4 | Hub policy default denies publish/install without explicit approval | evolution policy |
 | 5 | v2 endpoints list inbox/outbox/dead-letter; approve/reject mutate state | server |
-| 6 | Zero writes to `11-proposal_inbox` across all flows | laputa regression |
+| 6 | Zero writes to Laputa authority files and `ACTMEM.MD` across all flows | boundary regression |
 
 ## 10. Consequences
 
 - External evolution communication has a durable, bounded, auditable channel.
-- No new authority concept; proposals still require explicit Laputa application.
+- No new Persona authority; EvoMap retains explicit artifact review and authorization.
 - Hub stays off; nothing leaves the host without a future approved batch.

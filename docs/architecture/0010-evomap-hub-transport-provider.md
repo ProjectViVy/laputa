@@ -2,14 +2,14 @@
 
 **Status:** accepted  
 **Date:** 2026-08-03  
-**Refines:** ADR-0001 §9.2 (process boundary, "preferred" sidecar sentence)  
-**Depends on:** ADR-0001 §9 (EvoMap/Evolver integration), ADR-0007 (evolution privacy gates), ADR-0006 (mailbox)
+**Refines:** ADR-0012 §5 (EvoMap capability boundary).
+**Depends on:** ADR-0012 §5 (EvoMap capability boundary), ADR-0007 (mailbox privacy gates), ADR-0006 (bounded evidence).
 
 ---
 
 ## 1. Context
 
-ADR-0001 §9.2 describes the preferred vNext integration as a *local Evolver MCP server or bounded CLI process* and states "no in-process/bundled Evolver dependency before license and supply-chain review". The read/write surface of the EvoMap Hub (GEP-A2A v1.0.0) has since been verified end-to-end against the live hub (2026-08-03: hello/heartbeat/fetch/search/validate/publish/report; see `docs/dev/reference/2026-08-03-evomap-gep-a2a-integration-research.md`).
+The previous design proposed a local Evolver MCP server or bounded CLI process and prohibited bundled Evolver code before license and supply-chain review. The read/write surface of the EvoMap Hub (GEP-A2A v1.0.0) has since been verified end-to-end against the live hub (2026-08-03: hello/heartbeat/fetch/search/validate/publish/report; see `docs/dev/reference/2026-08-03-evomap-gep-a2a-integration-research.md`).
 
 Key findings that shape this decision:
 
@@ -32,10 +32,10 @@ A provider "run" is a **local record of one hub round trip**:
 
 `PollRun` is a local state read with an optional heartbeat refresh; it never pretends the hub has an asynchronous state machine. A run older than `ProviderLimits.MaxLifetime` that is still `running` is failed locally.
 
-### 2.2 Boundaries and gates (unchanged from ADR-0001 §9)
+### 2.2 Boundaries and gates
 
 - **Input boundary:** only `EvolutionEvidenceBundle` fields leave the process; the provider runs `CheckOutbound` (ADR-0007 §4 mechanical gate) before any network call and rejects leaky bundles with `ErrLeakageDetected`.
-- **Hub publish:** disabled by default (`GARDEN_EVOMAP_HUB_PUBLISH` defaults to 0) and additionally requires `bundle.Policy.PublicationAllowed`. HubPublish for *proposals* (ADR-0001 §9.4) is untouched: `HubPolicy.CanPublishHub` still requires explicit approval.
+- **Hub publish:** disabled by default (`GARDEN_EVOMAP_HUB_PUBLISH` defaults to 0) and additionally requires `bundle.Policy.PublicationAllowed`. `HubPolicy.CanPublishHub` still requires explicit approval.
 - **Hub fetch:** discovery uses the **free** `search` endpoint only. Paid `fetch_full_content` is reachable only through the manual CLI (`cmd/evomap`), never from the server path.
 - **Session-only operations** (`revoke`, `decision`, own-asset management) are **never** called by Garden; the client does not implement them.
 - **Secrets:** node credentials stay in `~/.evomap/node.json` (0600); `node_secret` is redacted from every error string and log line, and is never printed.
@@ -64,7 +64,7 @@ Existing `/v2/evolution/*` routes are unchanged; with a provider present they be
 
 ## 5. Non-goals
 
-- No bundled/sidecar Evolver in this batch (remains a future bounded process per ADR-0001 §9.2).
+- No bundled/sidecar Evolver in this batch; a bounded process remains deferred.
 - No `revoke`/`decision`/asset management via A2A (session-only; account page).
 - No automatic credit spend; no scheduled background evolution.
 - No change to `HubPolicy` semantics for proposals/host artifacts.
@@ -77,4 +77,4 @@ All automated tests are hermetic against an `httptest` mock of the GEP-A2A surfa
 
 - `garden/cmd/evomap-demo` is promoted to the library (`internal/evolution`) and slimmed into `cmd/evomap`, a manual ops CLI (the only path to paid `fetch_full_content`).
 - `evolution` component can become `ok` on this machine (credentials already exist at `~/.evomap/node.json`).
-- The ADR-0001 §9.2 "preferred sidecar" sentence is refined: in-process transport allowed; sidecar reserved for actual Evolver execution.
+- In-process transport is allowed; a sidecar is reserved for actual Evolver execution.

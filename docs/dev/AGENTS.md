@@ -24,7 +24,8 @@ Development-focused documentation:
 dev/
 ├── garden-memory-orchestration/    # Garden orchestration guide
 └── reference/                      # External case studies & benchmark evidence
-    └── 2026-08-02-mempalace-84d-long-memory-case.md
+    ├── 2026-08-02-mempalace-84d-long-memory-case.md
+    └── 2026-08-04-mempalace-python-gap-audit.md
 ```
 
 ---
