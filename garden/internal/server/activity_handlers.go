@@ -9,8 +9,15 @@ import (
 )
 
 func (s *Server) handleActivityEvents(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requirePrincipal(w, r, PrincipalUser, PrincipalAgent, PrincipalAutodream); !ok {
+		return
+	}
 	if s.Activity == nil {
 		writeError(w, http.StatusServiceUnavailable, errors.New("activity service unavailable"))
+		return
+	}
+	if !personaContentTypeOK(r) {
+		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("content type must be application/json"))
 		return
 	}
 	var body struct {

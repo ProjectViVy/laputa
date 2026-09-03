@@ -1,111 +1,37 @@
 <!-- Parent: ../AGENTS.md -->
 
-# garden/internal/server — HTTP Server & Request Handling
+# garden/internal/server — Domain HTTP Adapters
 
-**Generated:** 2026-08-01  
-**Purpose:** HTTP server setup, middleware, and request/response handling
+This package owns HTTP mechanics and composition of domain handlers. Business mutation rules remain in Persona, ACTMEM, Mentle Facade, Garden runtime and EvoMap services.
 
----
+## Target contract
 
-## Purpose
+Use `docs/bmad/garden-authority-recovery-2026-09/api-contract.md` as the exact route, DTO, principal and error source. The clean-break groups are:
 
-The `server/` package sets up the HTTP server and handles request lifecycle:
+- `/v2/persona/documents`, `/v2/persona/reviews`, `/v2/persona/history`, initialization and repair;
+- `/v2/actmem` and `/v2/actmem/query` plus separately authorized maintenance;
+- `/v2/memories` through canonical Mentle Facade;
+- `/v2/admin/index-health` from live probes;
+- existing recall, activity, evolution and mailbox domain routes that remain valid.
 
-- **Server initialization** — configure port, TLS, timeouts
-- **Middleware** — logging, tracing, error recovery
-- **Request parsing** — unmarshal JSON bodies
-- **Response formatting** — consistent JSON responses
-- **Graceful shutdown** — drain connections, cleanup resources
+At atomic cutover, remove `/v2/persona/files`, `/v2/persona/requests`, `/v2/governance/*` and `/v2/cognitive/world`; no aliases or fallback period.
 
----
+## Rules
 
-## Structure
+- Capability tokens establish `read`, `user`, `agent` or `operator`; `X-Garden-Actor` is audit metadata only.
+- Handlers call policy/domain services, never raw file writers, Searcher mutation, vector stores or raw SQLite handles.
+- Errors use the stable envelope and codes in the API contract without leaking token or filesystem details.
+- WORLD content loads only through an explicit Persona document read. ACTMEM loads only through explicit ACTMEM calls.
+- Missing/stub probes are unavailable, not healthy.
+- Shared route wiring in `server.go` is an integration lock under the GOAL runbook.
 
-```
-server/
-├── server.go        # HTTP server implementation
-├── handlers.go      # Route handlers
-└── server_test.go
-```
-
----
-
-## Key Endpoints
-
-### v2
-
-```
-POST   /v2/memories                # Canonical memory create
-GET    /v2/memories/{id}           # Canonical memory read
-GET    /v2/memories                # Canonical memory list
-PATCH  /v2/memories/{id}           # Canonical memory update
-DELETE /v2/memories/{id}           # Canonical memory delete
-POST   /v2/ingest/sessions         # Session-end ingestion
-GET    /v2/ingestions/{id}         # Ingestion status
-POST   /v2/recall/bootstrap        # Session bootstrap context
-GET    /health                     # Health check
-```
-
-```
-POST   /v2/recall/fast            # Fast recall
-POST   /v2/recall/deep            # Deep recall
-GET    /v2/recall/traces/{id}     # Retrieve trace
-POST   /v2/activity/events        # Ingest event
-GET    /v2/activity/sessions/{id} # Session history
-POST   /v2/governance/projection  # Read governance
-POST   /v2/governance/mutations   # Governed mutation (audited)
-GET    /v2/governance/audit       # Audit trail
-POST   /v2/evolution/runs         # Evolution run
-GET    /v2/evolution/runs         # List runs (newest first, read-only)
-GET    /v2/evolution/proposals    # List proposals (newest first, read-only)
-GET    /v2/evolution/hub/status   # EvoMap provider liveness (ADR-0010)
-GET    /v2/mailbox/inbox          # EvoMap inbox
-GET    /v2/mailbox/outbox         # EvoMap outbox
-GET    /v2/admin/overview         # Admin overview
-GET    /v2/materials/cards        # Card discovery
-GET    /v2/cognitive/world        # WORLD projection
-```
-
----
-
-## Configuration
-
-Environment variables:
-- `GARDEN_PORT` — HTTP port (default: 7373)
-- `GARDEN_HOST` — bind address (default: 127.0.0.1)
-- `GARDEN_TIMEOUT` — request timeout (default: 30s)
-- `GARDEN_LOG_LEVEL` — log level (default: info)
-
----
-
-## Testing
+## Verification
 
 ```bash
 cd garden
-GOSUMDB=off go test -v ./internal/server/...
+GOSUMDB=off go test ./internal/server/...
 ```
 
-**Behavioral tests:**
+Contract tests cover success DTOs, malformed/unknown fields, principal denial, domain errors, old-route absence and structural WORLD/ACTMEM omission.
 
-- Server starts and listens on configured port
-- Request timeout is enforced
-- Graceful shutdown closes connections
-- Health check returns 200 OK
-- All routes return appropriate status codes
-
----
-
-## Conventions
-
-- All responses are JSON
-- Errors include error_code and message
-- Trace IDs are included in response headers
-- Logging is structured
-
----
-
-## MANUAL
-
-Keep server focused on HTTP mechanics. Business logic goes to the service packages.
-
-Parent reference: ../AGENTS.md
+Parent reference: `../AGENTS.md`

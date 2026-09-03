@@ -16,16 +16,16 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{SchemaVersion: "1", Pipelines: []Definition{{
 		Name: "agentic_recall_v1", Version: "1.0.0",
-		Capabilities: []string{"governance", "llm", "hybrid", "kg", "timeline"}, MaxSteps: 20, MaxVisitsPerStep: 2,
+		Capabilities: []string{"persona", "llm", "hybrid", "kg", "timeline"}, MaxSteps: 20, MaxVisitsPerStep: 2,
 		Steps: []StepConfig{
-			{ID: "load_governance", TimeoutMS: 3000},
+			{ID: "load_frozen_core", TimeoutMS: 3000},
 			{ID: "resolve_policy", TimeoutMS: 1000},
 			{ID: "build_plan", TimeoutMS: 10000, OnError: "skip"},
 			{ID: "retrieve_candidates", TimeoutMS: 5000, OnError: "skip"},
 			{ID: "expand_graph", TimeoutMS: 5000, OnError: "skip"},
 			{ID: "judge_sufficiency", TimeoutMS: 10000, OnError: "skip", Next: []string{"retrieve_candidates"}},
 			{ID: "deduplicate_and_rerank", TimeoutMS: 1000},
-			{ID: "governance_filter", TimeoutMS: 1000},
+			{ID: "runtime_scope_filter", TimeoutMS: 1000},
 			{ID: "assemble_context", TimeoutMS: 10000, OnError: "skip"},
 		},
 	}}}

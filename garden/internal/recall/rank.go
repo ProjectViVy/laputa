@@ -1,25 +1,12 @@
 package recall
 
-import (
-	"sort"
+import "sort"
 
-	"github.com/dashimaki/garden/internal/authority"
-	"github.com/dashimaki/mentle/facade"
-)
+import "github.com/dashimaki/mentle/facade"
 
-func FilterCards(cards []facade.MemoryCard, proj authority.GovernanceProjection) []facade.MemoryCard {
-	denied := toSet(proj.DeniedSources)
-	allowed := toSet(proj.AllowedKinds)
-	out := make([]facade.MemoryCard, 0, len(cards))
-	for _, card := range cards {
-		if len(denied) > 0 && (denied[card.Collection] || denied[card.SourceRef]) {
-			continue
-		}
-		if len(allowed) > 0 && !allowed[card.Kind] {
-			continue
-		}
-		out = append(out, card)
-	}
+func FilterCards(cards []facade.MemoryCard) []facade.MemoryCard {
+	out := make([]facade.MemoryCard, len(cards))
+	copy(out, cards)
 	return out
 }
 
@@ -51,15 +38,4 @@ func DeduplicateCards(cards []facade.MemoryCard) []facade.MemoryCard {
 		out = append(out, card)
 	}
 	return out
-}
-
-func toSet(items []string) map[string]bool {
-	if len(items) == 0 {
-		return nil
-	}
-	set := make(map[string]bool, len(items))
-	for _, item := range items {
-		set[item] = true
-	}
-	return set
 }

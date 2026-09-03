@@ -11,7 +11,6 @@ type RetrievalPlan struct {
 
 type PlannerInput struct {
 	Intent     string
-	Governance map[string]map[string]any
 	Candidates []Candidate
 	Prior      RetrievalPlan
 }

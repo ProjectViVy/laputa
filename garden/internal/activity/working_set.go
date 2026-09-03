@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	maxCardIDs     = 50
+	maxCardIDs      = 50
 	maxEvidenceRefs = 50
 	maxPendingLeads = 20
 )

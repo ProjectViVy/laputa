@@ -50,8 +50,15 @@ func (s *Server) handleMailboxReject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) writeMailboxReview(w http.ResponseWriter, r *http.Request, decision string) {
+	if _, ok := s.requirePrincipal(w, r, PrincipalUser, PrincipalOperator); !ok {
+		return
+	}
 	if s.Mailbox == nil {
 		writeError(w, http.StatusServiceUnavailable, errors.New("mailbox unavailable"))
+		return
+	}
+	if !personaContentTypeOK(r) {
+		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("content type must be application/json"))
 		return
 	}
 	var body struct {

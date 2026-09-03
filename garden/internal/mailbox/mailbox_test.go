@@ -114,7 +114,7 @@ func TestPrivacyGateDeadLettersProhibitedPayload(t *testing.T) {
 func TestPrivacyGateDeadLettersProhibitedRefs(t *testing.T) {
 	store := openTestStore(t)
 	ctx := context.Background()
-	item, err := store.QueueOutbox(ctx, map[string]any{}, []string{".laputa/sections/01-frozen"})
+	item, err := store.QueueOutbox(ctx, map[string]any{}, []string{"legacy-persona-json/identity"})
 	if err != nil {
 		t.Fatal(err)
 	}

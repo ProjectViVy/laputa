@@ -1,205 +1,26 @@
-<!-- Parent: ../AGENTS.md -->
+# garden/internal — Runtime Packages
 
-# garden/internal — Core Recall, Activity, and Routing
+**Current contract:** [`../../docs/architecture/0012-laputa-markdown-clean-break.md`](../../docs/architecture/0012-laputa-markdown-clean-break.md)
 
-**Generated:** 2026-08-01  
-**Purpose:** HTTP routing, recall orchestration, activity lifecycle, and Mentle integration
+The internal packages implement Garden's runtime responsibilities: activity events, raw-first ingestion, bounded recall, evidence, console aggregation, EvoMap integration, and HTTP transport.
 
----
+## Package Boundaries
 
-## Purpose
+| Package area | Responsibility | Must not do |
+| --- | --- | --- |
+| `activity`, `lifecycle` | Session events, checkpoints, restart-safe runtime work | Claim to be `ACTMEM.MD` or replace it |
+| `recall`, `rag` | Cards, bounded evidence selection, disposable ContextView and trace | Automatically include `WORLD.MD` or `ACTMEM.MD` |
+| `authority` | Temporary migration seam for reading the new Persona/Frozen Core contract | Reintroduce JSON sections, generic Persona mutation, or an old authority mapper |
+| `evolution`, `mailbox` | EvoMap candidates/proposals, evaluation, mailbox, privacy and Hub policy | Write Persona, ACTMEM, Mentle authority, or directly create/install Skills outside EvoMap |
+| `ingest`, `report` | Material ingestion and human-readable continuity artifacts | Become a new Persona or long-term authority store |
+| `server` | Versioned HTTP contracts and explicit tool surfaces | Hide a legacy fallback behind v2 handlers |
 
-The `internal/` directory contains Garden's core business logic:
+## Required Rules
 
-- **HTTP request routing** by key prefix (section: vs memory:)
-- **Fast and Deep Recall** orchestration
-- **Activity lifecycle** management (sessions, events, traces)
-- **LLM planner** integration (OpenAI-compatible)
-- **Governance projection** reading (read-only from Laputa)
-- **Process supervision** and graceful degradation
+- Authority bodies are Markdown documents, never `map[string]any` or JSON Patch.
+- The only automatic personality input is the bounded session-frozen six-document Frozen Core.
+- `WORLD.MD` and `ACTMEM.MD` are explicit tool reads. No planner, recall, bootstrap, or ContextView path may project them automatically.
+- EvoMap alone owns capability artifact lifecycle.
+- ContextView remains a temporary response; it is never a new authority or memory store.
 
----
-
-## Structure
-
-```
-internal/
-├── activity/                       # STM runtime, spool, checkpoints
-├── arbiter/                        # Conflict arbitration (read-only)
-├── authority/                      # Governance projection and writer
-├── cognitive/                      # MEMRULES loading
-├── evolution/                      # EvoMap runs/proposals/events
-├── ingest/                         # Session ingestion and semantic units
-├── lifecycle/                      # Session and event lifecycle
-│   ├── lifecycle.go                # Session creation, event ingestion, end
-│   └── lifecycle_test.go
-├── mailbox/                        # EvoMap inbox/outbox
-├── pipeline/                       # Pipeline orchestration
-│   ├── pipeline.go                 # Pipeline definition and execution
-│   ├── pipeline_test.go
-│   └── config.go                   # Pipeline configuration parsing
-├── rag/                            # Planner surface (deterministic + LLM)
-│   ├── planner.go                  # Planner interface (deterministic + LLM)
-│   ├── planner_test.go
-│   ├── openai.go                   # OpenAI-compatible LLM adapter
-│   └── openai_test.go
-├── recall/                         # Fast/Deep recall and traces
-├── report/                         # Human-facing report system
-├── server/                         # HTTP handlers and routing
-└── supervision/                    # Process supervision and logging
-    ├── supervision.go             # Shutdown, logging, metrics
-    └── supervision_test.go
-```
-
-### Subdirectories (Depth 3)
-
-No formal depth-3 AGENTS.md required; implementation details are documented inline.
-
----
-
-## Key Components
-
-### Router
-
-Routes requests by key prefix:
-
-| Prefix | Backend | Purpose |
-|--------|---------|---------|
-| `section:` | Laputa (governance) | Authority, lifecycle, policy |
-| `memory:` | Mentle | Material, evidence, retrieval |
-
-All requests go through the unified router before reaching backend-specific handlers.
-
-### Recall
-
-Implements two modes:
-
-1. **Fast Recall** — deterministic, no LLM, no KG, ~150ms P95
-2. **Deep Recall** — explicit expensive recall, optional LLM planner, full trace
-
-Both return RecallResponse with cards and evidence.
-
-### Activity Lifecycle
-
-Manages session state:
-
-- Session creation (scope, start_time)
-- Event ingestion (normalized activity events)
-- Session end (idempotent on session_id + event_id)
-
-### LLM Planner
-
-Deterministic planner (always available) or LLM-based:
-
-- **Deterministic:** keyword matching, lexical ranking, no external calls
-- **OpenAI-compatible:** configurable endpoint, model, API key
-
-Planner helps disambiguate intent for recall target selection.
-
-### Governance Adapter
-
-Read-only access to Laputa governance:
-
-- GovernanceProjection for current scope
-- Authority checks (who can write, read, delete)
-- Policy enforcement (denied sources, wings, rooms)
-
-### Mentle Adapter
-
-Facade to Mentle backend:
-
-- SearchCards (with policy filtering)
-- ReadEvidence (with budget enforcement)
-- StoreActivity (for event ingestion)
-
----
-
-## Build & Test
-
-### Build
-
-```bash
-cd garden
-go mod tidy
-go build ./internal/...
-```
-
-### Test (Unit)
-
-```bash
-cd garden
-GOSUMDB=off go test ./internal/...
-```
-
-### Test (Specific Package)
-
-```bash
-GOSUMDB=off go test -v ./internal/server/...
-GOSUMDB=off go test -v ./internal/rag/...
-```
-
----
-
-## Key Interfaces
-
-### Facade Interface (canonical memory)
-
-The server talks to Mentle through `facade.Service` (`/v2/memories`, cards, evidence). The legacy prefix router and `Backend` interface were removed (ADR-0008).
-
-### Planner Interface
-
-```go
-type Planner interface {
-    Plan(ctx context.Context, intent string, scope string) (PlanResult, error)
-    Degraded() bool
-}
-```
-
----
-
-## Testing Requirements
-
-Before starting feature work:
-
-```bash
-cd garden && GOSUMDB=off go test ./internal/...
-```
-
-**Mandatory behavioral tests:**
-
-- SearchCards does not return full Content
-- ReadEvidence enforces per-item and total character budget
-- Fast Recall does not call Planner, KG, or graph
-- Deep Recall always emits RecallTrace
-- Session end is idempotent on session_id + event_id
-- Unauthorized mutations are rejected with audit
-
----
-
-## Conventions
-
-- **Go formatting:** standard `gofmt`
-- **Error handling:** explicit, wrapped with context
-- **Concurrency:** request-scoped contexts, graceful shutdown
-- **Logging:** structured, optional; trace IDs for correlation
-- **HTTP:** JSON request/response bodies, standard status codes
-
----
-
-## MANUAL
-
-When updating:
-
-1. Keep each package focused on one responsibility
-2. Link to subdirectory implementations for details
-3. Do not duplicate router logic or recall algorithms
-4. Update when:
-   - New HTTP routes are added
-   - Planner behavior changes
-   - Activity semantics evolve
-   - Governance policy changes
-5. Do not update for:
-   - Implementation details (use package README instead)
-   - Temporary branches
-
-Parent reference: ../AGENTS.md
+Existing code still implements parts of the retired architecture. Do not extend those contracts. Replace them under the clean-break plan and enforce removal through tests and repository scans.

@@ -62,7 +62,7 @@ func (s *Service) CreateModule(ctx context.Context, kind, content string) (Modul
 	if err := validateModuleContent(content); err != nil {
 		return Module{}, err
 	}
-	now := time.Now().UTC()
+	now := s.now()
 	m := Module{ID: "mod_" + uuid.NewString()[:8], Kind: kind, Content: content, Status: ModuleStatusActive, CreatedAt: now, UpdatedAt: now}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO human_modules(id,kind,content,status,created_at,updated_at) VALUES(?,?,?,?,?,?)`, m.ID, m.Kind, m.Content, m.Status, m.CreatedAt.Format(time.RFC3339Nano), m.UpdatedAt.Format(time.RFC3339Nano))
 	if err != nil {
@@ -130,7 +130,7 @@ func (s *Service) UpdateModule(ctx context.Context, id, content, status string) 
 		}
 		m.Status = status
 	}
-	m.UpdatedAt = time.Now().UTC()
+	m.UpdatedAt = s.now()
 	_, err = s.db.ExecContext(ctx, `UPDATE human_modules SET content=?,status=?,updated_at=? WHERE id=?`, m.Content, m.Status, m.UpdatedAt.Format(time.RFC3339Nano), m.ID)
 	if err != nil {
 		return Module{}, err

@@ -1,13 +1,20 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/dashimaki/garden/internal/recall"
-	"github.com/dashimaki/laputa/governance"
+	"github.com/dashimaki/mentle/facade"
 )
+
+func (s *Server) indexHealth(ctx context.Context) (facade.IndexHealth, error) {
+	if s.Facade == nil {
+		return facade.IndexHealth{Status: "unavailable", Reasons: []string{"canonical_probe_failed"}}, facade.ErrIndexHealthUnavailable
+	}
+	return s.Facade.IndexHealth(ctx)
+}
 
 func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 	status := "ok"
@@ -24,6 +31,11 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 		"components": components,
 		"source":     "live",
 	}
+	indexHealth, healthErr := s.indexHealth(r.Context())
+	resp["index_health"] = indexHealth
+	if healthErr != nil || indexHealth.Status != "ok" {
+		resp["status"] = "degraded"
+	}
 
 	if s.Ingestions != nil {
 		if stats, err := s.Ingestions.Stats(r.Context()); err == nil {
@@ -39,6 +51,18 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+func (s *Server) handleAdminIndexHealth(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireReadPrincipal(w, r, PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator); !ok {
+		return
+	}
+	health, err := s.indexHealth(r.Context())
+	if err != nil {
+		writeErrorWithDetails(w, http.StatusServiceUnavailable, "index_health_unavailable", errors.New("live index probes unavailable"), map[string]any{"reasons": health.Reasons})
+		return
+	}
+	writeJSON(w, http.StatusOK, health)
+}
+
 func (s *Server) handleAdminComponents(w http.ResponseWriter, r *http.Request) {
 	type componentEntry struct {
 		Name   string `json:"name"`
@@ -50,6 +74,12 @@ func (s *Server) handleAdminComponents(w http.ResponseWriter, r *http.Request) {
 	for name, value := range s.Components {
 		merged[name] = value
 	}
+	indexHealth, healthErr := s.indexHealth(r.Context())
+	if healthErr != nil {
+		merged["mentle"] = "unavailable"
+	} else {
+		merged["mentle"] = indexHealth.Status
+	}
 
 	entries := make([]componentEntry, 0, len(merged))
 	for name, status := range merged {
@@ -58,6 +88,7 @@ func (s *Server) handleAdminComponents(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"components":   entries,
+		"index_health": indexHealth,
 		"api_contract": "garden-hermes/1",
 	})
 }
@@ -108,29 +139,4 @@ func (s *Server) handleAdminSpool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"pending_count": len(entries), "entries": out, "source": "live"})
-}
-
-func (s *Server) handleAdminAudit(w http.ResponseWriter, r *http.Request) {
-	if s.Governed == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"entries": []any{}, "count": 0, "source": "live"})
-		return
-	}
-	limit := 50
-	if v := r.URL.Query().Get("limit"); v != "" {
-		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
-			limit = parsed
-		}
-	}
-	if limit > 200 {
-		limit = 200
-	}
-	entries, err := s.Governed.RecentAudit(r.Context(), limit)
-	if err != nil {
-		writeHandlerError(w, err)
-		return
-	}
-	if entries == nil {
-		entries = []governance.AuditEntry{}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"entries": entries, "count": len(entries), "source": "live"})
 }

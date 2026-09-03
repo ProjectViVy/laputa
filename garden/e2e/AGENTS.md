@@ -1,125 +1,32 @@
 <!-- Parent: ../AGENTS.md -->
 
-# garden/e2e — End-to-End Integration Tests
+# garden/e2e — Clean-Break End-to-End Tests
 
-**Generated:** 2026-08-01  
-**Purpose:** Full-system integration tests with real processes and HTTP endpoints
+The e2e suite proves complete Garden behavior with real process, persistence and HTTP boundaries. Tests compile under the `e2e` tag and use isolated temporary profiles/state.
 
----
+## Required target proofs
 
-## Purpose
+- Five-file Persona initialization, user direct write and agent review work through the accepted domain API.
+- ACTMEM survives session and process restart and is available only through explicit read/query/maintenance calls.
+- A session's six-document Frozen Core remains immutable after Persona edits and restart; a new session captures current revisions.
+- Bootstrap, Fast Recall, Deep Recall, traces and assembled context structurally omit WORLD and ACTMEM.
+- Historical `.laputa/sections` files are ignored and never imported or used as fallback.
+- Mentle canonical commits and pending index jobs survive restart; derived-index failure is visible as degraded health.
+- Old Persona `/files`/`requests`, generic `/v2/governance/*` and `/v2/cognitive/world` routes are absent after cutover.
+- MCP/Console use the same live domain contracts and principal rules.
 
-The `e2e/` directory contains end-to-end tests that verify Garden as a complete system:
+Mentle-unavailable recall may degrade to Frozen Core plus available bounded evidence behavior; it must never fall back to a GovernanceProjection. LLM-unavailable Deep Recall may use its deterministic fallback while still emitting a trace.
 
-- **Real HTTP server** (not mocked)
-- **Real backend connections** (Laputa, Mentle)
-- **Complete request/response cycles** (no test fakes)
-- **Degradation scenarios** (backend failures, timeouts)
-
-Tests require `-tags=e2e` to compile and run.
-
----
-
-## Structure
-
-```
-e2e/
-├── external_e2e_test.go       # End-to-end test suite
-└── (integration test utilities as needed)
-```
-
----
-
-## Key Test Scenarios
-
-### HTTP API Contract Verification
-
-- POST `/v2/recall/fast` returns valid RecallResponse
-- POST `/v2/recall/deep` includes RecallTrace
-- POST `/v2/activity/events` accepts and stores events
-- GET `/health` responds with status
-
-### Degradation Paths
-
-- Mentle unavailable → Fast Recall still works (governance-only)
-- LLM unavailable → Deep Recall falls back to deterministic planner
-- Both unavailable → health check returns degraded status
-
-### Error Handling
-
-- Invalid requests return 400 with error message
-- Unauthorized governance mutations return 403
-- Missing required fields return 422
-- Server errors return 500 with trace ID
-
----
-
-## Build & Test
-
-### Run E2E Tests
+## Test discipline
 
 ```bash
 cd garden
 GOSUMDB=off go test -tags=e2e ./e2e/...
 ```
 
-### Run with Output
-
-```bash
-GOSUMDB=off go test -v -tags=e2e ./e2e/... -run TestName
-```
-
-### Run All Tests (Unit + E2E)
-
-```bash
-GOSUMDB=off go test -tags=e2e ./...
-```
-
----
-
-## Test Requirements
-
-Before running E2E tests:
-
-1. **Port 7373 must be available** (Garden HTTP listen port)
-2. **Laputa governance store must be accessible** (`.laputa/` directory or configured path)
-3. **Mentle backend must be accessible** (SQLite or configured Mentle service)
-
-Tests will start a Garden instance on 127.0.0.1:7373 and shut it down cleanly.
-
----
-
-## Exit Gates
-
-All E2E tests must pass before release:
-
-- [ ] Fast Recall returns results within P95 latency
-- [ ] Deep Recall includes RecallTrace
-- [ ] Activity events are persisted and retrievable
-- [ ] Mentle unavailable does not crash Fast Recall
-- [ ] LLM unavailable triggers graceful fallback
-- [ ] Unauthorized mutations are rejected and audited
-- [ ] Session end is idempotent on session_id + event_id
-
----
-
-## Conventions
-
-- Use `TestNameDescribesBehavior` format
-- Each test is independent (no shared state)
-- Cleanup: delete test files and temp data after test
-- Timeouts: set explicit `context.WithTimeout` for each HTTP call
-- Assertions: use standard `testing.T` patterns, no frameworks
-
----
-
-## MANUAL
-
-When updating:
-
-1. Keep tests focused on complete request/response cycles
-2. Document any external service dependencies
-3. Add new degradation scenarios as features are added
-4. Run full suite before committing
+- Use random available ports rather than assuming 7373 is free.
+- Set explicit timeouts and clean up child processes and temporary state.
+- Do not use real user profiles, credentials or API keys.
+- Retired-behavior tests are rewritten/deleted by their owning cutover Story; passing them is not acceptance evidence.
 
 Parent reference: `../AGENTS.md`

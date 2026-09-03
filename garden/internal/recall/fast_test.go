@@ -6,15 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dashimaki/laputa/governance"
+	"github.com/dashimaki/garden/internal/personactx"
 	"github.com/dashimaki/mentle/facade"
 )
-
-type fakeGov struct{}
-
-func (fakeGov) GetSection(_ context.Context, _ governance.SectionName) (map[string]any, error) {
-	return map[string]any{"_meta": map[string]any{"version": "test-v1"}}, nil
-}
 
 type fakeSearcher struct {
 	cards    []facade.MemoryCard
@@ -37,80 +31,80 @@ func (f *fakeSearcher) ReadEvidence(_ context.Context, _ facade.EvidenceQuery) (
 	return f.evidence, nil
 }
 
+type staticFrozen struct {
+	core personactx.FrozenCore
+	err  error
+}
+
+func (f staticFrozen) Get(context.Context, string) (personactx.FrozenCore, error) {
+	return f.core, f.err
+}
+
+func testCore() personactx.FrozenCore {
+	var core personactx.FrozenCore
+	core.SessionID = "session-1"
+	core.Sections[0] = personactx.FrozenSection{Section: personactx.SectionIdentity, Content: "identity"}
+	return core
+}
+
 func TestFastRecallWithSearcher(t *testing.T) {
 	searcher := &fakeSearcher{
-		cards: []facade.MemoryCard{
-			{ID: "mem_1", Kind: "fact", Summary: "garden architecture", CandidateScore: 0.9, HeatScore: 0.5},
-		},
-		evidence: []facade.EvidenceFragment{
-			{CardID: "mem_1", Excerpt: "Garden uses three modules", Validity: "active"},
-		},
+		cards:    []facade.MemoryCard{{ID: "mem_1", Kind: "fact", Summary: "garden architecture", CandidateScore: 0.9, HeatScore: 0.5}},
+		evidence: []facade.EvidenceFragment{{CardID: "mem_1", Excerpt: "Garden uses three modules", Validity: "active"}},
 	}
-	svc := &FastService{Gov: fakeGov{}, Searcher: searcher}
+	svc := &FastService{Searcher: searcher}
 	view, err := svc.Recall(context.Background(), FastRequest{Query: "architecture", BudgetChars: 6000})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if view.Mode != "fast" {
-		t.Fatalf("mode=%q", view.Mode)
+	if view.Mode != "fast" || len(view.Cards) != 1 || view.Cards[0].ID != "mem_1" {
+		t.Fatalf("view=%+v", view)
 	}
-	if len(view.Cards) != 1 || view.Cards[0].ID != "mem_1" {
-		t.Fatalf("cards=%+v", view.Cards)
-	}
-	if len(view.Evidence) != 1 {
-		t.Fatalf("evidence=%+v", view.Evidence)
-	}
-	if !strings.Contains(view.Context, "three modules") {
-		t.Fatalf("context=%q", view.Context)
-	}
-	if view.Degraded {
-		t.Fatalf("should not be degraded: %v", view.Warnings)
+	if len(view.Evidence) != 1 || !strings.Contains(view.Context, "three modules") || view.Degraded {
+		t.Fatalf("view=%+v", view)
 	}
 }
 
-func TestFastRecallMentleDegraded(t *testing.T) {
-	svc := &FastService{Gov: fakeGov{}, Searcher: nil}
-	view, err := svc.Recall(context.Background(), FastRequest{Query: "test", BudgetChars: 6000})
+func TestFastRecallMentleDegradedKeepsFrozenCore(t *testing.T) {
+	svc := &FastService{Frozen: staticFrozen{core: testCore()}}
+	view, err := svc.Recall(context.Background(), FastRequest{Query: "test", SessionID: "session-1", BudgetChars: 6000})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !view.Degraded {
-		t.Fatal("should be degraded")
+	if !view.Degraded || !strings.Contains(view.Context, "identity") {
+		t.Fatalf("view=%+v", view)
 	}
-	if len(view.Warnings) == 0 || !strings.Contains(view.Warnings[0], "mentle unavailable") {
-		t.Fatalf("warnings=%v", view.Warnings)
-	}
-	if len(view.Cards) != 0 {
-		t.Fatalf("cards=%+v", view.Cards)
-	}
-	if view.Context == "" {
-		t.Fatal("governance context should not be empty")
+	if len(view.Cards) != 0 || len(view.Evidence) != 0 {
+		t.Fatalf("unexpected retrieval output: %+v", view)
 	}
 }
 
 func TestFastRecallSearchError(t *testing.T) {
-	searcher := &fakeSearcher{cardErr: errors.New("connection refused")}
-	svc := &FastService{Gov: fakeGov{}, Searcher: searcher}
-	view, err := svc.Recall(context.Background(), FastRequest{Query: "test", BudgetChars: 6000})
+	svc := &FastService{Frozen: staticFrozen{core: testCore()}, Searcher: &fakeSearcher{cardErr: errors.New("connection refused")}}
+	view, err := svc.Recall(context.Background(), FastRequest{Query: "test", SessionID: "session-1", BudgetChars: 6000})
+	if err != nil || !view.Degraded || len(view.Warnings) == 0 {
+		t.Fatalf("view=%+v err=%v", view, err)
+	}
+}
+
+func TestFastRecallFrozenCoreProviderIsSessionScoped(t *testing.T) {
+	provider := staticFrozen{core: testCore()}
+	svc := &FastService{Frozen: provider}
+	view, err := svc.Recall(context.Background(), FastRequest{Query: "test", SessionID: "session-1", BudgetChars: 6000})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !view.Degraded {
-		t.Fatal("should be degraded on search error")
-	}
-	if len(view.Warnings) == 0 {
-		t.Fatal("should have warning")
+	if view.FrozenCore.SessionID != "session-1" {
+		t.Fatalf("frozen core=%+v", view.FrozenCore)
 	}
 }
 
 func TestFastRecallBudgetEnforced(t *testing.T) {
-	longExcerpt := strings.Repeat("x", 5000)
 	searcher := &fakeSearcher{
 		cards:    []facade.MemoryCard{{ID: "mem_1", Kind: "fact", CandidateScore: 0.9}},
-		evidence: []facade.EvidenceFragment{{CardID: "mem_1", Excerpt: longExcerpt, Validity: "active"}},
+		evidence: []facade.EvidenceFragment{{CardID: "mem_1", Excerpt: strings.Repeat("x", 5000), Validity: "active"}},
 	}
-	svc := &FastService{Gov: fakeGov{}, Searcher: searcher}
-	view, err := svc.Recall(context.Background(), FastRequest{Query: "test", BudgetChars: 500})
+	view, err := (&FastService{Searcher: searcher}).Recall(context.Background(), FastRequest{Query: "test", BudgetChars: 500})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,13 +114,11 @@ func TestFastRecallBudgetEnforced(t *testing.T) {
 }
 
 func TestFastRecallValidation(t *testing.T) {
-	svc := &FastService{Gov: fakeGov{}}
-	_, err := svc.Recall(context.Background(), FastRequest{Query: "", BudgetChars: 6000})
-	if err == nil {
+	svc := &FastService{}
+	if _, err := svc.Recall(context.Background(), FastRequest{Query: "", BudgetChars: 6000}); err == nil {
 		t.Fatal("empty query should error")
 	}
-	_, err = svc.Recall(context.Background(), FastRequest{Query: "test", BudgetChars: 10})
-	if err == nil {
+	if _, err := svc.Recall(context.Background(), FastRequest{Query: "test", BudgetChars: 10}); err == nil {
 		t.Fatal("budget below min should error")
 	}
 }

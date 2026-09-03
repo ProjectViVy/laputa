@@ -71,7 +71,7 @@ func CheckOutbound(payload map[string]any, evidenceRefs []string) (LeakageReport
 
 func isProhibitedRef(ref string) bool {
 	lower := strings.ToLower(ref)
-	prohibited := []string{".env", "token", "secret", "personality", ".laputa/sections/01"}
+	prohibited := []string{".env", "token", "secret", "personality", "legacy-persona-json"}
 	for _, p := range prohibited {
 		if strings.Contains(lower, p) {
 			return true

@@ -1,10 +1,13 @@
-# Garden config example (Phase 2+)
+# Garden config example
 
 server:
   addr: ":7373"
 
-governance:
-  store_dir: "~/.laputa/sections"
+persona:
+	store_dir: "~/.laputa/persona"
+
+state:
+	db: "~/.garden/garden.db"
 
 mentle:
   config_dir: "~/.mentle"

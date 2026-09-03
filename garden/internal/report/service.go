@@ -98,6 +98,7 @@ type Service struct {
 	memory    MemoryLister
 	Publisher Publisher
 	Enricher  Enricher
+	clock     func() time.Time
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
 }
@@ -125,6 +126,19 @@ func Open(path string, memory MemoryLister, publisher Publisher, enricher Enrich
 	s.wg.Add(1)
 	go s.loop(ctx)
 	return s, nil
+}
+
+// SetClock installs a deterministic clock for callers that need to exercise
+// time-window behavior. Production callers leave the clock unset.
+func (s *Service) SetClock(clock func() time.Time) {
+	s.clock = clock
+}
+
+func (s *Service) now() time.Time {
+	if s.clock != nil {
+		return s.clock().UTC()
+	}
+	return time.Now().UTC()
 }
 
 func migrateArtifactColumn(db *sql.DB) error {
@@ -155,7 +169,7 @@ func migrateArtifactColumn(db *sql.DB) error {
 func (s *Service) Close() error { s.cancel(); s.wg.Wait(); return s.db.Close() }
 func (s *Service) loop(ctx context.Context) {
 	defer s.wg.Done()
-	s.GenerateAll(ctx, time.Now().UTC())
+	s.GenerateAll(ctx, s.now())
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
 	for {
@@ -218,7 +232,7 @@ func (s *Service) Generate(ctx context.Context, cadence string, now time.Time) (
 		}
 	}
 	sum := sha256.Sum256([]byte(strings.Join(ids, "\n")))
-	r := Report{Cadence: cadence, WindowStart: start, WindowEnd: end, SourceIDs: ids, SourceHash: "sha256:" + hex.EncodeToString(sum[:]), Title: strings.Title(cadence) + " Garden Memory Report", Summary: summary.String(), Highlights: highlights, OpenQuestions: []string{}, GeneratedAt: time.Now().UTC(), Scope: "mentle_active", Completed: highlights, Decisions: decisions, Goals: []string{}, OpenLoops: []string{}, SourceRefs: ids, Generator: GeneratorDeterministic, Modules: []string{}}
+	r := Report{Cadence: cadence, WindowStart: start, WindowEnd: end, SourceIDs: ids, SourceHash: "sha256:" + hex.EncodeToString(sum[:]), Title: strings.Title(cadence) + " Garden Memory Report", Summary: summary.String(), Highlights: highlights, OpenQuestions: []string{}, GeneratedAt: s.now(), Scope: "mentle_active", Completed: highlights, Decisions: decisions, Goals: []string{}, OpenLoops: []string{}, SourceRefs: ids, Generator: GeneratorDeterministic, Modules: []string{}}
 	if s.Enricher != nil {
 		if enriched, eerr := s.Enricher.Enrich(ctx, r); eerr != nil {
 			log.Printf("report enrich %s: %v", cadence, eerr)
@@ -243,11 +257,6 @@ func (s *Service) Generate(ctx context.Context, cadence string, now time.Time) (
 	}
 	if affected, aerr := res.RowsAffected(); aerr == nil && affected == 0 {
 		return s.saved(ctx, cadence, r.SourceHash)
-	}
-	if s.Publisher != nil {
-		if perr := s.Publisher.Publish(ctx, r); perr != nil {
-			log.Printf("report publish %s: %v", cadence, perr)
-		}
 	}
 	return r, nil
 }

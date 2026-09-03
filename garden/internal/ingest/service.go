@@ -56,10 +56,20 @@ type Service struct {
 	queue    chan string
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
+	workerID string
 }
 
 type MemoryWriter interface {
 	CreateMemory(context.Context, facade.CreateMemoryRequest, string, string) (facade.Memory, error)
+}
+
+// SessionStateStore is an optional facade capability for durable ingest
+// boundaries. Keeping it separate from MemoryWriter lets lightweight test and
+// transient writers remain useful without granting them a raw DB handle.
+type SessionStateStore interface {
+	SaveSessionCursor(sessionID, timestamp string) error
+	AcquireSessionLease(ctx context.Context, sessionID, owner string, ttl time.Duration) (bool, error)
+	ReleaseSessionLease(ctx context.Context, sessionID, owner string) error
 }
 
 func Open(path string, memory MemoryWriter) (*Service, error) {
@@ -79,7 +89,7 @@ CREATE INDEX IF NOT EXISTS ingestion_status ON ingestions(status,created_at);`
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &Service{db: db, memory: memory, queue: make(chan string, 128), cancel: cancel}
+	s := &Service{db: db, memory: memory, queue: make(chan string, 128), cancel: cancel, workerID: "ingest-" + strings.ReplaceAll(uuid.NewString(), "-", "")}
 	s.wg.Add(1)
 	go s.worker(ctx)
 	rows, _ := db.Query(`SELECT ingestion_id FROM ingestions WHERE status IN ('accepted','running','spooled') ORDER BY created_at`)
@@ -192,8 +202,8 @@ func (s *Service) worker(ctx context.Context) {
 func (s *Service) process(ctx context.Context, id string) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, _ = s.db.ExecContext(ctx, `UPDATE ingestions SET status='running',updated_at=? WHERE ingestion_id=?`, now, id)
-	var session, event, content, hash string
-	if err := s.db.QueryRowContext(ctx, `SELECT session_id,event_id,content,content_hash FROM ingestions WHERE ingestion_id=?`, id).Scan(&session, &event, &content, &hash); err != nil {
+	var session, event, content, hash, occurredAt string
+	if err := s.db.QueryRowContext(ctx, `SELECT session_id,event_id,content,content_hash,occurred_at FROM ingestions WHERE ingestion_id=?`, id).Scan(&session, &event, &content, &hash, &occurredAt); err != nil {
 		s.fail(ctx, id, err)
 		return
 	}
@@ -201,10 +211,32 @@ func (s *Service) process(ctx context.Context, id string) {
 		s.spool(ctx, id, session, event, content, hash)
 		return
 	}
+	var state SessionStateStore
+	if candidate, ok := s.memory.(SessionStateStore); ok {
+		state = candidate
+		acquired, err := state.AcquireSessionLease(ctx, session, s.workerID, time.Minute)
+		if err != nil {
+			s.spool(ctx, id, session, event, content, hash)
+			return
+		}
+		if !acquired {
+			// Another process owns this session. Leave the row accepted so the
+			// owner can finish it; its durable lease is the retry boundary.
+			_, _ = s.db.ExecContext(ctx, `UPDATE ingestions SET status='accepted',updated_at=? WHERE ingestion_id=?`, time.Now().UTC().Format(time.RFC3339Nano), id)
+			return
+		}
+		defer func() { _ = state.ReleaseSessionLease(context.Background(), session, s.workerID) }()
+	}
 	m, err := s.memory.CreateMemory(ctx, facade.CreateMemoryRequest{Content: content, Kind: "source_artifact", Source: facade.MemorySource{Type: "session", SessionID: session, EventID: event}, Metadata: map[string]any{"content_hash": hash, "lifecycle": "stm", "collection": "working"}}, "session:"+event, hash)
 	if err != nil {
 		s.spool(ctx, id, session, event, content, hash)
 		return
+	}
+	if state != nil {
+		if err := state.SaveSessionCursor(session, occurredAt); err != nil {
+			warning := "session cursor save failed: " + err.Error()
+			_, _ = s.db.ExecContext(ctx, `UPDATE ingestions SET warnings=?,updated_at=? WHERE ingestion_id=?`, warning, time.Now().UTC().Format(time.RFC3339Nano), id)
+		}
 	}
 	now = time.Now().UTC().Format(time.RFC3339Nano)
 	_, _ = s.db.ExecContext(ctx, `UPDATE ingestions SET status='completed',memory_id=?,trace_id=?,error=NULL,updated_at=? WHERE ingestion_id=?`, m.ID, "run_"+id, now, id)

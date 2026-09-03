@@ -8,16 +8,29 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dashimaki/laputa/governance/rhythm"
 	"github.com/dashimaki/mentle/facade"
 )
 
 type fakeArtifactGen struct {
-	result *rhythm.ArtifactResult
+	result *ArtifactResult
 	err    error
 }
 
-func (f *fakeArtifactGen) GenerateArtifact(ctx context.Context, _ rhythm.RhythmKind, _ string) (*rhythm.ArtifactResult, error) {
+func dailyReportFixture() Report {
+	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+	return Report{
+		Cadence:       "daily",
+		WindowStart:   now.Add(-24 * time.Hour),
+		WindowEnd:     now,
+		SourceIDs:     []string{"mem_1"},
+		Summary:       "deterministic summary",
+		Completed:     []string{"fallback complete"},
+		Decisions:     []string{"chose x"},
+		Generator:     GeneratorDeterministic,
+	}
+}
+
+func (f *fakeArtifactGen) GenerateArtifact(ctx context.Context, _ string, _ string) (*ArtifactResult, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -31,7 +44,7 @@ func (f *fakeArtifactGen) GenerateArtifact(ctx context.Context, _ rhythm.RhythmK
 
 func TestLLMEnricherFillsArtifact(t *testing.T) {
 	long := strings.Repeat("x", 300)
-	enricher := &LLMEnricher{Gen: &fakeArtifactGen{result: &rhythm.ArtifactResult{
+	enricher := &LLMEnricher{Gen: &fakeArtifactGen{result: &ArtifactResult{
 		Goals:     []string{"finish gate b", long},
 		Completed: []string{"shipped dual write"},
 		Decisions: []string{},
@@ -67,7 +80,7 @@ func TestLLMEnricherBoundsLists(t *testing.T) {
 	for i := range many {
 		many[i] = "goal"
 	}
-	enricher := &LLMEnricher{Gen: &fakeArtifactGen{result: &rhythm.ArtifactResult{Goals: many}}}
+	enricher := &LLMEnricher{Gen: &fakeArtifactGen{result: &ArtifactResult{Goals: many}}}
 	out, err := enricher.Enrich(context.Background(), dailyReportFixture())
 	if err != nil {
 		t.Fatal(err)
@@ -104,17 +117,17 @@ func TestLLMEnricherTimeout(t *testing.T) {
 
 type blockingArtifactGen struct{ block time.Duration }
 
-func (b *blockingArtifactGen) GenerateArtifact(ctx context.Context, _ rhythm.RhythmKind, _ string) (*rhythm.ArtifactResult, error) {
+	func (b *blockingArtifactGen) GenerateArtifact(ctx context.Context, _ string, _ string) (*ArtifactResult, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-time.After(b.block):
-		return &rhythm.ArtifactResult{}, nil
+		return &ArtifactResult{}, nil
 	}
 }
 
 func TestLLMEnricherUnknownCadence(t *testing.T) {
-	enricher := &LLMEnricher{Gen: &fakeArtifactGen{result: &rhythm.ArtifactResult{}}}
+	enricher := &LLMEnricher{Gen: &fakeArtifactGen{result: &ArtifactResult{}}}
 	r := dailyReportFixture()
 	r.Cadence = "hourly"
 	if _, err := enricher.Enrich(context.Background(), r); err == nil {
@@ -124,7 +137,7 @@ func TestLLMEnricherUnknownCadence(t *testing.T) {
 
 func TestGenerateUsesEnricher(t *testing.T) {
 	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
-	enricher := &LLMEnricher{Gen: &fakeArtifactGen{result: &rhythm.ArtifactResult{Goals: []string{"ship reports"}, OpenLoops: []string{"wire console"}}}}
+	enricher := &LLMEnricher{Gen: &fakeArtifactGen{result: &ArtifactResult{Goals: []string{"ship reports"}, OpenLoops: []string{"wire console"}}}}
 	svc, err := Open(filepath.Join(t.TempDir(), "garden.db"), fakeLister{items: []facade.Memory{{ID: "mem_1", Content: "work", UpdatedAt: now}}}, nil, enricher)
 	if err != nil {
 		t.Fatal(err)

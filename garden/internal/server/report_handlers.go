@@ -34,8 +34,15 @@ func (s *Server) handleReportsList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleReportGenerate(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requirePrincipal(w, r, PrincipalUser, PrincipalOperator); !ok {
+		return
+	}
 	if s.Reports == nil {
 		writeError(w, http.StatusServiceUnavailable, errors.New("report service unavailable"))
+		return
+	}
+	if !personaContentTypeOK(r) {
+		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("content type must be application/json"))
 		return
 	}
 	var body struct {
@@ -45,7 +52,11 @@ func (s *Server) handleReportGenerate(w http.ResponseWriter, r *http.Request) {
 		writeRequestError(w, err)
 		return
 	}
-	rep, err := s.Reports.Generate(r.Context(), body.Cadence, time.Now().UTC())
+	now := time.Now
+	if s.now != nil {
+		now = s.now
+	}
+	rep, err := s.Reports.Generate(r.Context(), body.Cadence, now().UTC())
 	if errors.Is(err, report.ErrNotFound) {
 		writeJSON(w, http.StatusOK, map[string]any{"generated": false, "reason": "no source memories in window"})
 		return

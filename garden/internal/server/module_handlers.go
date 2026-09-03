@@ -26,8 +26,15 @@ func (s *Server) handleModulesList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleModuleCreate(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requirePrincipal(w, r, PrincipalUser, PrincipalOperator); !ok {
+		return
+	}
 	if s.Reports == nil {
 		writeError(w, http.StatusServiceUnavailable, errors.New("report service unavailable"))
+		return
+	}
+	if !personaContentTypeOK(r) {
+		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("content type must be application/json"))
 		return
 	}
 	var body struct {
@@ -47,8 +54,15 @@ func (s *Server) handleModuleCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleModuleUpdate(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requirePrincipal(w, r, PrincipalUser, PrincipalOperator); !ok {
+		return
+	}
 	if s.Reports == nil {
 		writeError(w, http.StatusServiceUnavailable, errors.New("report service unavailable"))
+		return
+	}
+	if !personaContentTypeOK(r) {
+		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("content type must be application/json"))
 		return
 	}
 	var body struct {

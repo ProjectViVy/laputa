@@ -11,19 +11,15 @@ import (
 
 	"github.com/dashimaki/garden/internal/evolution"
 	"github.com/dashimaki/garden/internal/evolution/hubtest"
-	"github.com/dashimaki/garden/internal/recall"
-	"github.com/dashimaki/laputa/governance"
 )
 
 func evomapTestServer(t *testing.T, hub *hubtest.MockHub) (*Server, *evolution.Store) {
+	return evomapTestServerWithPublish(t, hub, false)
+}
+
+func evomapTestServerWithPublish(t *testing.T, hub *hubtest.MockHub, publish bool) (*Server, *evolution.Store) {
 	t.Helper()
 	dir := t.TempDir()
-	store, err := governance.NewFileStore(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	engine := governance.NewEngine(store)
-	_ = engine.Initialize(context.Background())
 
 	evoStore, err := evolution.OpenStore(filepath.Join(dir, "evo.db"))
 	if err != nil {
@@ -46,12 +42,15 @@ func evomapTestServer(t *testing.T, hub *hubtest.MockHub) (*Server, *evolution.S
 	if _, err := client.EnsureRegistered(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	provider := evolution.NewEvoMapProvider(client, evoStore, evolution.DefaultProviderLimits(), false)
+	provider := evolution.NewEvoMapProvider(client, evoStore, evolution.DefaultProviderLimits(), publish)
 	evoService := &evolution.Service{Provider: provider, Store: evoStore, Events: evoEvents, Hub: evolution.DefaultHubPolicy()}
 	return &Server{
-		FastRecall: &recall.FastService{Gov: engine, Searcher: fakeCardSearcher{}},
-		Evolution:  evoService,
-		Addr:       ":0",
+		Evolution: evoService,
+		Capabilities: CapabilityConfig{
+			UserToken:  "user-secret",
+			AgentToken: "agent-secret",
+		},
+		Addr: ":0",
 	}, evoStore
 }
 
@@ -96,8 +95,10 @@ func TestEvolutionRunFlowViaHTTP(t *testing.T) {
 	defer hub.Close()
 	srv, evoStore := evomapTestServer(t, hub)
 
-	body := `{"trigger":"test failure in recall pipeline","outcome":"fast recall failed to rank the expected card","trace_ref":"trace_1","evidence_refs":["ref_1"],"policy":{"publication_allowed":false}}`
+	body := `{"trigger":"test failure in recall pipeline","outcome":"fast recall failed to rank the expected card","trace_refs":["trace_1"],"evidence_refs":["ref_1"]}`
 	req := httptest.NewRequest(http.MethodPost, "/v2/evolution/runs", bytes.NewBufferString(body))
+	req.Header.Set("Authorization", "Bearer agent-secret")
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusAccepted {
@@ -134,9 +135,44 @@ func TestEvolutionRunFlowViaHTTP(t *testing.T) {
 	}
 	proposalBody := `{"run_id":"` + run.RunID + `","candidate_id":"cand_http_1"}`
 	req = httptest.NewRequest(http.MethodPost, "/v2/evolution/proposals", bytes.NewBufferString(proposalBody))
+	req.Header.Set("Authorization", "Bearer user-secret")
+	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
 	srv.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("proposal status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestEvolutionCandidateRouteRequiresAgentOrUserCapability(t *testing.T) {
+	hub := hubtest.New()
+	defer hub.Close()
+	srv, _ := evomapTestServer(t, hub)
+
+	req := httptest.NewRequest(http.MethodPost, "/v2/evolution/runs", bytes.NewBufferString(`{"trigger":"unauthenticated"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestEvolutionCandidateRouteCannotEnableHubPublication(t *testing.T) {
+	hub := hubtest.New()
+	defer hub.Close()
+	srv, _ := evomapTestServerWithPublish(t, hub, true)
+
+	body := `{"trigger":"candidate publication gate","outcome":"bounded input","publication_allowed":true}`
+	req := httptest.NewRequest(http.MethodPost, "/v2/evolution/runs", bytes.NewBufferString(body))
+	req.Header.Set("Authorization", "Bearer agent-secret")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(hub.Published) != 0 {
+		t.Fatalf("publication calls=%d, want 0", len(hub.Published))
 	}
 }

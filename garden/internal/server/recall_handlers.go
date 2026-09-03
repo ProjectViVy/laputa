@@ -8,6 +8,9 @@ import (
 )
 
 func (s *Server) handleFastRecall(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireReadPrincipal(w, r, PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator); !ok {
+		return
+	}
 	if s.FastRecall == nil {
 		writeError(w, http.StatusServiceUnavailable, errors.New("recall service unavailable"))
 		return
@@ -26,6 +29,9 @@ func (s *Server) handleFastRecall(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeepRecall(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireReadPrincipal(w, r, PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator); !ok {
+		return
+	}
 	if s.DeepRecall == nil {
 		writeError(w, http.StatusServiceUnavailable, errors.New("deep recall service unavailable"))
 		return
@@ -44,6 +50,9 @@ func (s *Server) handleDeepRecall(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRecallTrace(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireReadPrincipal(w, r, PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator); !ok {
+		return
+	}
 	if s.TraceStore == nil {
 		writeError(w, http.StatusServiceUnavailable, errors.New("trace store unavailable"))
 		return

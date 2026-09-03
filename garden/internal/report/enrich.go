@@ -5,21 +5,29 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/dashimaki/laputa/governance/rhythm"
 )
 
 const defaultEnrichTimeout = 30 * time.Second
 
-// Enricher upgrades a deterministic report artifact before persistence.
 type Enricher interface {
-	Enrich(ctx context.Context, r Report) (Report, error)
+	Enrich(context.Context, Report) (Report, error)
 }
 
-// LLMEnricher fills goals/completed/decisions/open_loops via an LLM.
-// Any failure leaves the deterministic artifact untouched (ADR-0005 §5).
+// ArtifactResult and ArtifactGenerator are Garden-owned boundaries for an
+// optional report enrichment provider. They carry no Persona authority data.
+type ArtifactResult struct {
+	Goals     []string `json:"goals"`
+	Completed []string `json:"completed"`
+	Decisions []string `json:"decisions"`
+	OpenLoops []string `json:"open_loops"`
+}
+
+type ArtifactGenerator interface {
+	GenerateArtifact(context.Context, string, string) (*ArtifactResult, error)
+}
+
 type LLMEnricher struct {
-	Gen     rhythm.ArtifactGenerator
+	Gen     ArtifactGenerator
 	Timeout time.Duration
 }
 
@@ -30,26 +38,21 @@ func (e *LLMEnricher) Enrich(ctx context.Context, r Report) (Report, error) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	var kind rhythm.RhythmKind
-	switch r.Cadence {
-	case "daily":
-		kind = rhythm.RhythmDaily
-	case "weekly":
-		kind = rhythm.RhythmWeekly
-	case "monthly":
-		kind = rhythm.RhythmMonthly
-	default:
+	if r.Cadence != "daily" && r.Cadence != "weekly" && r.Cadence != "monthly" {
 		return r, fmt.Errorf("report: unknown cadence %q", r.Cadence)
 	}
-	res, err := e.Gen.GenerateArtifact(ctx, kind, buildArtifactPrompt(r))
+	result, err := e.Gen.GenerateArtifact(ctx, r.Cadence, buildArtifactPrompt(r))
 	if err != nil {
 		return r, err
 	}
+	if result == nil {
+		return r, fmt.Errorf("report: enrichment returned no result")
+	}
 	out := r
-	out.Goals = boundList(res.Goals)
-	out.Completed = firstNonEmpty(boundList(res.Completed), r.Completed)
-	out.Decisions = firstNonEmpty(boundList(res.Decisions), r.Decisions)
-	out.OpenLoops = boundList(res.OpenLoops)
+	out.Goals = boundList(result.Goals)
+	out.Completed = firstNonEmpty(boundList(result.Completed), r.Completed)
+	out.Decisions = firstNonEmpty(boundList(result.Decisions), r.Decisions)
+	out.OpenLoops = boundList(result.OpenLoops)
 	out.Generator = GeneratorLLM
 	return out, nil
 }
@@ -67,8 +70,8 @@ func buildArtifactPrompt(r Report) string {
 	}
 	if len(r.Decisions) > 0 {
 		b.WriteString("Known decisions:\n")
-		for _, d := range r.Decisions {
-			b.WriteString("- " + d + "\n")
+		for _, decision := range r.Decisions {
+			b.WriteString("- " + decision + "\n")
 		}
 	}
 	return b.String()
@@ -81,10 +84,9 @@ func boundList(items []string) []string {
 			break
 		}
 		item = strings.TrimSpace(item)
-		if item == "" {
-			continue
+		if item != "" {
+			out = append(out, truncate(item, 240))
 		}
-		out = append(out, truncate(item, 240))
 	}
 	return out
 }

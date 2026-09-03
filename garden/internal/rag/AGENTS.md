@@ -1,134 +1,27 @@
 <!-- Parent: ../AGENTS.md -->
 
-# garden/internal/rag — Agentic Recall Planning & LLM Integration
+# garden/internal/rag — Recall Planning
 
-**Generated:** 2026-08-01  
-**Purpose:** Recall orchestration with deterministic and LLM-based planning
+This package provides deterministic and optional LLM-assisted planning for explicit Deep Recall. Fast Recall remains deterministic and does not call the planner, KG or timeline.
 
----
+## Boundaries
 
-## Purpose
+- Recall consumes session-frozen `personactx.FrozenCore` and bounded Mentle cards/evidence through narrow interfaces.
+- Runtime evidence/scope/privacy policy belongs to Garden; it does not become a Persona authority projection.
+- WORLD and ACTMEM tool services must not be dependencies of planner, Fast/Deep Recall or ContextView assembly.
+- Mentle cards are discovery candidates; full evidence is read only after selection and budget enforcement.
+- LLM failure degrades explicitly to the deterministic planner. It does not permit a JSON Governance fallback.
 
-The `rag/` package implements recall planning and LLM integration:
+## Verification
 
-- **Deterministic planner** — keyword matching, lexical ranking (always available)
-- **OpenAI-compatible LLM planner** — configurable endpoint for advanced intent resolution
-- **Governance policy enforcement** — respect denied sources, wings, rooms
-- **Graceful degradation** — deterministic planner used if LLM unavailable
-- **Service interface** — high-level recall API used by router
-
----
-
-## Structure
-
-```
-rag/
-├── planner.go          # Planner interface (deterministic + LLM)
-├── planner_test.go
-├── openai.go           # OpenAI-compatible LLM adapter
-├── openai_test.go
-├── policy.go           # Governance policy enforcement
-├── service.go          # High-level recall service
-├── service_test.go
-└── types.go            # Shared types (PlanResult, RecallRequest, etc.)
-```
-
----
-
-## Key Components
-
-### Planner Interface
-
-```go
-type Planner interface {
-    Plan(ctx context.Context, intent string, scope string) (PlanResult, error)
-    Degraded() bool
-}
-
-type PlanResult struct {
-    SearchTerms  []string
-    Wings        []string
-    Rooms        []string
-    UseKG        bool
-    UseTimeline  bool
-    EstimatedCost int
-}
-```
-
-### Deterministic Planner
-
-Always available fallback:
-- Keyword extraction from intent
-- Frequency analysis of terms
-- Simple wing/room suggestions
-- No external calls
-
-### OpenAI Planner
-
-LLM-based planning for complex intent:
-- Configurable base URL, model, API key
-- Prompt engineering for deterministic output
-- Timeout protection
-- Automatic fallback to deterministic planner on error
-- Degradation flag in response
-
-### Policy Enforcement
-
-Applies governance constraints:
-- Filter wings by authority
-- Exclude denied sources
-- Respect scope restrictions
-- Budget enforcement (token/cost limits)
-
-### Recall Service
-
-High-level API combining planner + policy + backend:
-- FastRecall(ctx, request) — deterministic, no LLM, ~150ms
-- DeepRecall(ctx, request) — explicit expensive recall, with full trace
-- Both return ContextView with cards, evidence, and trace
-
----
-
-## Configuration
-
-Environment variables:
-- `GARDEN_RAG_BASE_URL` — OpenAI-compatible endpoint
-- `GARDEN_RAG_API_KEY` — API key
-- `GARDEN_RAG_MODEL` — Model name (default: gpt-4)
-- `GARDEN_RAG_TIMEOUT` — LLM request timeout (default: 10s)
-
----
-
-## Testing
+- Fast Recall never invokes planner/KG/timeline.
+- Deep Recall emits a trace for success and degraded paths.
+- Context rendering contains Frozen Core and selected bounded evidence only.
+- Tests assert WORLD/ACTMEM fields are structurally absent, not merely empty.
 
 ```bash
 cd garden
-GOSUMDB=off go test -v ./internal/rag/...
+GOSUMDB=off go test ./internal/rag/... ./internal/recall/...
 ```
 
-**Behavioral tests:**
-
-- Deterministic planner runs without external calls
-- OpenAI planner respects timeout and falls back to deterministic
-- Policy filtering removes denied sources
-- Wing/room filtering respects authority
-- FastRecall never calls planner or KG
-- DeepRecall always generates RecallTrace
-- Degradation flag accurate when LLM unavailable
-
----
-
-## Conventions
-
-- Planner interface allows dependency injection for testing
-- All LLM calls are timeoutted
-- Errors are wrapped with context
-- Degradation is reported, not silent
-
----
-
-## MANUAL
-
-Keep policy enforcement separate from planner logic. New LLM integrations go to openai.go or new adapter files.
-
-Parent reference: ../AGENTS.md
+Parent reference: `../AGENTS.md`

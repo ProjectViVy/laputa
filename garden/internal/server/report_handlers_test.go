@@ -27,12 +27,21 @@ func reportTestServer(t *testing.T, items []facade.Memory) *Server {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = svc.Close() })
-	return &Server{Reports: svc, Addr: ":0"}
+	return &Server{Reports: svc, Capabilities: CapabilityConfig{UserToken: "user-secret", OperatorToken: "operator-secret"}, Addr: ":0"}
+}
+
+func reportRequest(method, path, body string) *http.Request {
+	req := httptest.NewRequest(method, path, bytes.NewBufferString(body))
+	if method != http.MethodGet {
+		req.Header.Set("Authorization", "Bearer user-secret")
+		req.Header.Set("Content-Type", "application/json")
+	}
+	return req
 }
 
 func generateDaily(t *testing.T, srv *Server) {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/v2/reports/generate", bytes.NewBufferString(`{"cadence":"daily"}`))
+	req := reportRequest(http.MethodPost, "/v2/reports/generate", `{"cadence":"daily"}`)
 	rec := httptest.NewRecorder()
 	srv.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -45,7 +54,7 @@ func TestReportGenerateEndpoint(t *testing.T) {
 	srv := reportTestServer(t, []facade.Memory{{ID: "mem_1", Kind: "fact", Content: "did report work", UpdatedAt: now}})
 	generateDaily(t, srv)
 
-	req := httptest.NewRequest(http.MethodPost, "/v2/reports/generate", bytes.NewBufferString(`{"cadence":"daily"}`))
+	req := reportRequest(http.MethodPost, "/v2/reports/generate", `{"cadence":"daily"}`)
 	rec := httptest.NewRecorder()
 	srv.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -63,7 +72,7 @@ func TestReportGenerateEndpoint(t *testing.T) {
 	}
 
 	empty := reportTestServer(t, nil)
-	req = httptest.NewRequest(http.MethodPost, "/v2/reports/generate", bytes.NewBufferString(`{"cadence":"daily"}`))
+	req = reportRequest(http.MethodPost, "/v2/reports/generate", `{"cadence":"daily"}`)
 	rec = httptest.NewRecorder()
 	empty.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -77,7 +86,7 @@ func TestReportGenerateEndpoint(t *testing.T) {
 		t.Fatal("empty window must not generate")
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v2/reports/generate", bytes.NewBufferString(`{"cadence":"hourly"}`))
+	req = reportRequest(http.MethodPost, "/v2/reports/generate", `{"cadence":"hourly"}`)
 	rec = httptest.NewRecorder()
 	srv.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -190,7 +199,7 @@ func TestReportOrientationEndpoint(t *testing.T) {
 }
 
 func TestReportEndpointsUnavailable(t *testing.T) {
-	srv := &Server{Addr: ":0"}
+	srv := &Server{Addr: ":0", Capabilities: CapabilityConfig{UserToken: "user-secret", OperatorToken: "operator-secret"}}
 	for _, route := range []struct {
 		method, path, body string
 	}{
@@ -202,7 +211,7 @@ func TestReportEndpointsUnavailable(t *testing.T) {
 		{http.MethodPost, "/v2/reports/modules", `{"kind":"ambition","content":"x"}`},
 		{http.MethodPatch, "/v2/reports/modules/mod_1", `{"status":"dismissed"}`},
 	} {
-		req := httptest.NewRequest(route.method, route.path, bytes.NewBufferString(route.body))
+		req := reportRequest(route.method, route.path, route.body)
 		rec := httptest.NewRecorder()
 		srv.HTTPHandler().ServeHTTP(rec, req)
 		if rec.Code != http.StatusServiceUnavailable {
@@ -215,7 +224,7 @@ func TestModuleEndpointsLifecycle(t *testing.T) {
 	srv := reportTestServer(t, nil)
 
 	create := func(kind, content string) (int, string) {
-		req := httptest.NewRequest(http.MethodPost, "/v2/reports/modules", bytes.NewBufferString(`{"kind":"`+kind+`","content":"`+content+`"}`))
+		req := reportRequest(http.MethodPost, "/v2/reports/modules", `{"kind":"`+kind+`","content":"`+content+`"}`)
 		rec := httptest.NewRecorder()
 		srv.HTTPHandler().ServeHTTP(rec, req)
 		return rec.Code, rec.Body.String()
@@ -257,14 +266,14 @@ func TestModuleEndpointsLifecycle(t *testing.T) {
 		t.Fatalf("list all code=%d items=%+v", code, items)
 	}
 
-	req := httptest.NewRequest(http.MethodPatch, "/v2/reports/modules/"+amb.ID, bytes.NewBufferString(`{"content":"become the best gardener in the world"}`))
+	req := reportRequest(http.MethodPatch, "/v2/reports/modules/"+amb.ID, `{"content":"become the best gardener in the world"}`)
 	rec := httptest.NewRecorder()
 	srv.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("patch edit status=%d body=%s", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPatch, "/v2/reports/modules/"+amb.ID, bytes.NewBufferString(`{"status":"dismissed"}`))
+	req = reportRequest(http.MethodPatch, "/v2/reports/modules/"+amb.ID, `{"status":"dismissed"}`)
 	rec = httptest.NewRecorder()
 	srv.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -282,7 +291,7 @@ func TestModuleEndpointsLifecycle(t *testing.T) {
 
 func TestModuleEndpointsValidation(t *testing.T) {
 	srv := reportTestServer(t, nil)
-	req := httptest.NewRequest(http.MethodPost, "/v2/reports/modules", bytes.NewBufferString(`{"kind":"ambition","content":"exists"}`))
+	req := reportRequest(http.MethodPost, "/v2/reports/modules", `{"kind":"ambition","content":"exists"}`)
 	rec := httptest.NewRecorder()
 	srv.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
@@ -307,7 +316,7 @@ func TestModuleEndpointsValidation(t *testing.T) {
 		{http.MethodPatch, "/v2/reports/modules/" + seed.ID, `{"status":"bogus"}`, http.StatusBadRequest},
 	}
 	for _, c := range cases {
-		req := httptest.NewRequest(c.method, c.path, bytes.NewBufferString(c.body))
+		req := reportRequest(c.method, c.path, c.body)
 		rec := httptest.NewRecorder()
 		srv.HTTPHandler().ServeHTTP(rec, req)
 		if rec.Code != c.want {
@@ -326,19 +335,28 @@ func TestMonthlyReportModulesViaHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	now := time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)
+	svc.SetClock(func() time.Time { return now })
 	t.Cleanup(func() { _ = svc.Close() })
-	srv := &Server{Reports: svc, Addr: ":0"}
+	srv := &Server{
+		Reports:      svc,
+		Capabilities: CapabilityConfig{UserToken: "user-secret", OperatorToken: "operator-secret"},
+		Addr:         ":0",
+		now: func() time.Time {
+			return now
+		},
+	}
 
-	req := httptest.NewRequest(http.MethodPost, "/v2/reports/modules", bytes.NewBufferString(`{"kind":"ambition","content":"ship gate f"}`))
+	req := reportRequest(http.MethodPost, "/v2/reports/modules", `{"kind":"ambition","content":"ship gate f"}`)
 	rec := httptest.NewRecorder()
 	srv.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create status=%d body=%s", rec.Code, rec.Body.String())
 	}
 
-	lister.items = []facade.Memory{{ID: "mem_1", Content: "august work", UpdatedAt: time.Date(2026, 8, 2, 12, 0, 0, 0, time.UTC)}}
+	lister.items = []facade.Memory{{ID: "mem_1", Content: "august work", UpdatedAt: now}}
 
-	req = httptest.NewRequest(http.MethodPost, "/v2/reports/generate", bytes.NewBufferString(`{"cadence":"monthly"}`))
+	req = reportRequest(http.MethodPost, "/v2/reports/generate", `{"cadence":"monthly"}`)
 	rec = httptest.NewRecorder()
 	srv.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

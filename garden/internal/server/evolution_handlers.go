@@ -56,16 +56,24 @@ func (s *Server) handleEvolutionListProposals(w http.ResponseWriter, r *http.Req
 }
 
 func (s *Server) handleEvolutionStartRun(w http.ResponseWriter, r *http.Request) {
+	principal, ok := s.requirePrincipal(w, r, PrincipalUser, PrincipalAgent)
+	if !ok {
+		return
+	}
 	if s.Evolution == nil {
 		writeError(w, http.StatusServiceUnavailable, errors.New("evolution service unavailable"))
 		return
 	}
-	var body evolution.EvolutionEvidenceBundle
+	if !personaContentTypeOK(r) {
+		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("content type must be application/json"))
+		return
+	}
+	var body evolution.EvolutionCandidateInput
 	if err := decodeJSON(w, r, 1<<20, &body); err != nil {
 		writeRequestError(w, err)
 		return
 	}
-	run, err := s.Evolution.StartRun(r.Context(), body, auditActor(r))
+	run, err := s.Evolution.StartRunFromCandidateInput(r.Context(), body, auditLabel(r, principal))
 	if errors.Is(err, evolution.ErrProviderUnavailable) {
 		writeError(w, http.StatusServiceUnavailable, err)
 		return
@@ -114,8 +122,16 @@ func (s *Server) handleEvolutionGetCandidate(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *Server) handleEvolutionCreateProposal(w http.ResponseWriter, r *http.Request) {
+	principal, ok := s.requirePrincipal(w, r, PrincipalUser, PrincipalAgent)
+	if !ok {
+		return
+	}
 	if s.Evolution == nil {
 		writeError(w, http.StatusServiceUnavailable, errors.New("evolution service unavailable"))
+		return
+	}
+	if !personaContentTypeOK(r) {
+		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("content type must be application/json"))
 		return
 	}
 	var body struct {
@@ -126,7 +142,7 @@ func (s *Server) handleEvolutionCreateProposal(w http.ResponseWriter, r *http.Re
 		writeRequestError(w, err)
 		return
 	}
-	proposal, err := s.Evolution.CreateProposal(r.Context(), body.RunID, body.CandidateID, auditActor(r))
+	proposal, err := s.Evolution.CreateProposal(r.Context(), body.RunID, body.CandidateID, auditLabel(r, principal))
 	if errors.Is(err, evolution.ErrCandidateNotFound) || errors.Is(err, evolution.ErrRunNotFound) {
 		writeError(w, http.StatusNotFound, err)
 		return
@@ -157,8 +173,16 @@ func (s *Server) handleEvolutionGetProposal(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) handleEvolutionReviewProposal(w http.ResponseWriter, r *http.Request) {
+	principal, ok := s.requirePrincipal(w, r, PrincipalUser, PrincipalOperator)
+	if !ok {
+		return
+	}
 	if s.Evolution == nil {
 		writeError(w, http.StatusServiceUnavailable, errors.New("evolution service unavailable"))
+		return
+	}
+	if !personaContentTypeOK(r) {
+		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("content type must be application/json"))
 		return
 	}
 	proposalID := r.PathValue("proposal_id")
@@ -170,7 +194,7 @@ func (s *Server) handleEvolutionReviewProposal(w http.ResponseWriter, r *http.Re
 		writeRequestError(w, err)
 		return
 	}
-	proposal, err := s.Evolution.ReviewProposal(r.Context(), proposalID, body.Decision, auditActor(r), body.Note)
+	proposal, err := s.Evolution.ReviewProposal(r.Context(), proposalID, body.Decision, auditLabel(r, principal), body.Note)
 	if errors.Is(err, evolution.ErrProposalNotFound) {
 		writeError(w, http.StatusNotFound, err)
 		return

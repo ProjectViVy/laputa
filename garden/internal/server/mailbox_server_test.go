@@ -19,7 +19,7 @@ func newMailboxTestServer(t *testing.T) (*Server, *mailbox.Store) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { store.Close() })
-	return &Server{Mailbox: store}, store
+	return &Server{Mailbox: store, Capabilities: CapabilityConfig{UserToken: "user-secret"}}, store
 }
 
 func TestMailboxHandlersReturn503WhenUnavailable(t *testing.T) {
@@ -57,6 +57,8 @@ func TestMailboxInboxListAndReview(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/v2/mailbox/items/"+item.ID+"/approve", bytes.NewBufferString(`{"reason":"checked"}`))
 	req.SetPathValue("id", item.ID)
+	req.Header.Set("Authorization", "Bearer user-secret")
+	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
 	srv.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -69,6 +71,8 @@ func TestMailboxInboxListAndReview(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/v2/mailbox/items/"+item.ID+"/reject", bytes.NewBufferString(`{}`))
 	req.SetPathValue("id", item.ID)
+	req.Header.Set("Authorization", "Bearer user-secret")
+	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
 	srv.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusConflict {
@@ -80,6 +84,8 @@ func TestMailboxApproveUnknownItemIs404(t *testing.T) {
 	srv, _ := newMailboxTestServer(t)
 	req := httptest.NewRequest(http.MethodPost, "/v2/mailbox/items/mbx_missing/approve", bytes.NewBufferString(`{}`))
 	req.SetPathValue("id", "mbx_missing")
+	req.Header.Set("Authorization", "Bearer user-secret")
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {

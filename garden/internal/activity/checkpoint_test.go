@@ -3,43 +3,23 @@ package activity
 import (
 	"context"
 	"testing"
-
-	"github.com/dashimaki/laputa/governance"
 )
 
-type fakeGovWriter struct {
-	sections map[governance.SectionName]map[string]any
-}
-
-func (f *fakeGovWriter) GetSection(_ context.Context, name governance.SectionName) (map[string]any, error) {
-	if data, ok := f.sections[name]; ok {
-		return data, nil
-	}
-	return map[string]any{}, nil
-}
-
-func (f *fakeGovWriter) SetSection(_ context.Context, name governance.SectionName, data map[string]any) error {
-	if f.sections == nil {
-		f.sections = map[governance.SectionName]map[string]any{}
-	}
-	f.sections[name] = data
-	return nil
-}
-
 func TestCheckpointSaveAndLoad(t *testing.T) {
-	gov := &fakeGovWriter{sections: map[governance.SectionName]map[string]any{
-		governance.SectionMemoryMD: {},
-	}}
+	store, err := OpenCheckpointStore(t.TempDir() + "\\garden.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
 	ws := NewWorkingSet()
 	ws.Update("project:garden", []string{"mem_1", "mem_2"}, []string{"ref_a"})
-
-	cp := &Checkpointer{Gov: gov, WS: ws}
+	cp := &Checkpointer{Store: store, WS: ws}
 	if err := cp.Save(context.Background(), "project:garden"); err != nil {
 		t.Fatal(err)
 	}
 
 	ws2 := NewWorkingSet()
-	cp2 := &Checkpointer{Gov: gov, WS: ws2}
+	cp2 := &Checkpointer{Store: store, WS: ws2}
 	if err := cp2.Load(context.Background(), "project:garden"); err != nil {
 		t.Fatal(err)
 	}
@@ -48,32 +28,60 @@ func TestCheckpointSaveAndLoad(t *testing.T) {
 		t.Fatalf("restored=%v", snap)
 	}
 	if len(snap.EvidenceRefs) != 1 || snap.EvidenceRefs[0] != "ref_a" {
-		t.Fatalf("refs=%v", snap.EvidenceRefs)
+		t.Fatalf("refs=%v", snap)
 	}
 }
 
-func TestCheckpointNilGov(t *testing.T) {
+func TestCheckpointSurvivesStoreRestart(t *testing.T) {
+	path := t.TempDir() + "\\garden.db"
+	store, err := OpenCheckpointStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws := NewWorkingSet()
-	cp := &Checkpointer{Gov: nil, WS: ws}
+	ws.Update("scope", []string{"card"}, []string{"evidence"})
+	if err := (&Checkpointer{Store: store, WS: ws}).Save(context.Background(), "scope"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err = OpenCheckpointStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	restored := NewWorkingSet()
+	if err := (&Checkpointer{Store: store, WS: restored}).Load(context.Background(), "scope"); err != nil {
+		t.Fatal(err)
+	}
+	if got := restored.Get("scope"); len(got.ActiveCardIDs) != 1 || got.ActiveCardIDs[0] != "card" {
+		t.Fatalf("restored=%v", got)
+	}
+}
+
+func TestCheckpointUnavailable(t *testing.T) {
+	ws := NewWorkingSet()
+	cp := &Checkpointer{Store: nil, WS: ws}
 	if err := cp.Save(context.Background(), ""); err == nil {
-		t.Fatal("expected error for nil gov")
+		t.Fatal("expected unavailable error")
 	}
 	if err := cp.Load(context.Background(), ""); err == nil {
-		t.Fatal("expected error for nil gov")
+		t.Fatal("expected unavailable error")
 	}
 }
 
 func TestCheckpointLoadEmpty(t *testing.T) {
-	gov := &fakeGovWriter{sections: map[governance.SectionName]map[string]any{
-		governance.SectionMemoryMD: {},
-	}}
-	ws := NewWorkingSet()
-	cp := &Checkpointer{Gov: gov, WS: ws}
-	if err := cp.Load(context.Background(), "scope"); err != nil {
+	store, err := OpenCheckpointStore(t.TempDir() + "\\garden.db")
+	if err != nil {
 		t.Fatal(err)
 	}
-	snap := ws.Get("scope")
-	if len(snap.ActiveCardIDs) != 0 {
-		t.Fatalf("expected empty, got %v", snap)
+	defer store.Close()
+	ws := NewWorkingSet()
+	if err := (&Checkpointer{Store: store, WS: ws}).Load(context.Background(), "scope"); err != nil {
+		t.Fatal(err)
+	}
+	if got := ws.Get("scope"); len(got.ActiveCardIDs) != 0 {
+		t.Fatalf("expected empty, got %v", got)
 	}
 }

@@ -2,63 +2,97 @@ package activity
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"time"
 
-	"github.com/dashimaki/laputa/governance"
+	_ "github.com/mattn/go-sqlite3"
 )
 
-type GovernanceWriter interface {
-	GetSection(context.Context, governance.SectionName) (map[string]any, error)
-	SetSection(context.Context, governance.SectionName, map[string]any) error
+// CheckpointStore keeps runtime WorkingSet state in Garden's SQLite database.
+// It is intentionally separate from Laputa authority and ACTMEM.
+type CheckpointStore struct {
+	db *sql.DB
+}
+
+func OpenCheckpointStore(path string) (*CheckpointStore, error) {
+	db, err := sql.Open("sqlite3", path+"?_busy_timeout=5000&_journal_mode=WAL")
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS garden_checkpoints(
+ scope TEXT PRIMARY KEY,
+ snapshot_json TEXT NOT NULL,
+ checkpoint_at TEXT NOT NULL
+);`)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	return &CheckpointStore{db: db}, nil
+}
+
+func (s *CheckpointStore) Save(ctx context.Context, scope string, snapshot ScopeSnapshot) error {
+	if s == nil || s.db == nil {
+		return errors.New("checkpoint store unavailable")
+	}
+	if scope == "" {
+		scope = "_default"
+	}
+	raw, err := json.Marshal(snapshot)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO garden_checkpoints(scope,snapshot_json,checkpoint_at)
+VALUES(?,?,CURRENT_TIMESTAMP)
+ON CONFLICT(scope) DO UPDATE SET snapshot_json=excluded.snapshot_json, checkpoint_at=excluded.checkpoint_at`, scope, string(raw))
+	return err
+}
+
+func (s *CheckpointStore) Load(ctx context.Context, scope string) (ScopeSnapshot, bool, error) {
+	if s == nil || s.db == nil {
+		return ScopeSnapshot{}, false, errors.New("checkpoint store unavailable")
+	}
+	if scope == "" {
+		scope = "_default"
+	}
+	var raw string
+	err := s.db.QueryRowContext(ctx, `SELECT snapshot_json FROM garden_checkpoints WHERE scope=?`, scope).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ScopeSnapshot{}, false, nil
+	}
+	if err != nil {
+		return ScopeSnapshot{}, false, err
+	}
+	var snapshot ScopeSnapshot
+	if err := json.Unmarshal([]byte(raw), &snapshot); err != nil {
+		return ScopeSnapshot{}, false, fmt.Errorf("checkpoint snapshot is malformed: %w", err)
+	}
+	return snapshot, true, nil
+}
+
+func (s *CheckpointStore) Close() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	return s.db.Close()
 }
 
 type Checkpointer struct {
-	Gov GovernanceWriter
-	WS  *WorkingSet
+	Store *CheckpointStore
+	WS    *WorkingSet
 }
 
 func (c *Checkpointer) Save(ctx context.Context, scope string) error {
-	if c.Gov == nil {
-		return fmt.Errorf("governance unavailable")
+	if c == nil || c.Store == nil {
+		return errors.New("checkpoint store unavailable")
 	}
 	if c.WS == nil {
-		return fmt.Errorf("working set unavailable")
+		return errors.New("working set unavailable")
 	}
-	snap := c.WS.Snapshot(scope)
-	section, err := c.Gov.GetSection(ctx, governance.SectionMemoryMD)
-	if err != nil {
-		return err
-	}
-	if section == nil {
-		section = map[string]any{}
-	}
-	workingSets, _ := section["working_sets"].(map[string]any)
-	if workingSets == nil {
-		workingSets = map[string]any{}
-	}
-	raw, err := json.Marshal(snap)
-	if err != nil {
-		return err
-	}
-	var snapMap map[string]any
-	if err := json.Unmarshal(raw, &snapMap); err != nil {
-		return err
-	}
-	key := scope
-	if key == "" {
-		key = "_default"
-	}
-	workingSets[key] = snapMap
-	section["working_sets"] = workingSets
-	meta, _ := section["_meta"].(map[string]any)
-	if meta == nil {
-		meta = map[string]any{}
-	}
-	meta["checkpoint_at"] = time.Now().UTC().Format(time.RFC3339Nano)
-	section["_meta"] = meta
-	if err := c.Gov.SetSection(ctx, governance.SectionMemoryMD, section); err != nil {
+	if err := c.Store.Save(ctx, scope, c.WS.Snapshot(scope)); err != nil {
 		return err
 	}
 	c.WS.MarkCheckpoint(scope)
@@ -66,36 +100,18 @@ func (c *Checkpointer) Save(ctx context.Context, scope string) error {
 }
 
 func (c *Checkpointer) Load(ctx context.Context, scope string) error {
-	if c.Gov == nil {
-		return fmt.Errorf("governance unavailable")
+	if c == nil || c.Store == nil {
+		return errors.New("checkpoint store unavailable")
 	}
 	if c.WS == nil {
-		return fmt.Errorf("working set unavailable")
+		return errors.New("working set unavailable")
 	}
-	section, err := c.Gov.GetSection(ctx, governance.SectionMemoryMD)
+	snapshot, found, err := c.Store.Load(ctx, scope)
 	if err != nil {
 		return err
 	}
-	workingSets, _ := section["working_sets"].(map[string]any)
-	if workingSets == nil {
-		return nil
+	if found {
+		c.WS.Restore(scope, snapshot)
 	}
-	key := scope
-	if key == "" {
-		key = "_default"
-	}
-	raw, ok := workingSets[key]
-	if !ok {
-		return nil
-	}
-	rawJSON, err := json.Marshal(raw)
-	if err != nil {
-		return err
-	}
-	var snap ScopeSnapshot
-	if err := json.Unmarshal(rawJSON, &snap); err != nil {
-		return err
-	}
-	c.WS.Restore(scope, snap)
 	return nil
 }

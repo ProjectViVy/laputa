@@ -76,12 +76,19 @@ func (s *DeepService) Recall(ctx context.Context, req DeepRequest) (DeepResponse
 	if caps["timeline"] {
 		tb.trace.SourceSet = append(tb.trace.SourceSet, "timeline")
 	}
-	tb.trace.SourceSet = append(tb.trace.SourceSet, "cards", "governance")
-	if s.Fast != nil && s.Fast.World != nil {
-		tb.trace.SourceSet = append(tb.trace.SourceSet, "world")
-	}
+	tb.trace.SourceSet = append(tb.trace.SourceSet, "cards", "frozen_core")
 
 	seedStart := time.Now()
+	if s.Fast == nil {
+		tb.step("fast_seed", "error", time.Since(seedStart), "fast_unavailable")
+		trace := tb.finish(true, "fast recall unavailable")
+		s.saveTrace(ctx, trace)
+		return DeepResponse{ContextView: ContextView{
+			TraceID: trace.TraceID, Scope: req.Scope, Mode: "deep", BudgetChars: req.BudgetChars,
+			Degraded: true, Warnings: []string{"fast recall unavailable"},
+			Cards: []facade.MemoryCard{}, Evidence: []facade.EvidenceFragment{},
+		}, Trace: trace}, nil
+	}
 	seed, err := s.Fast.Recall(ctx, FastRequest{
 		Query:       req.Query,
 		Scope:       req.Scope,
@@ -107,13 +114,6 @@ func (s *DeepService) Recall(ctx context.Context, req DeepRequest) (DeepResponse
 		}, nil
 	}
 	tb.step("fast_seed", "ok", time.Since(seedStart), "")
-	if s.Fast != nil && s.Fast.World != nil {
-		status := "ok"
-		if len(seed.World) == 0 {
-			status = "empty"
-		}
-		tb.step("world_projection", status, 0, "")
-	}
 	for _, card := range seed.Cards {
 		tb.trace.CandidateIDs = append(tb.trace.CandidateIDs, card.ID)
 	}
@@ -132,7 +132,7 @@ func (s *DeepService) Recall(ctx context.Context, req DeepRequest) (DeepResponse
 		} else {
 			tb.step("planner", "ok", time.Since(planStart), "")
 			entities = mergeEntities(entities, plan.Entities, maxPlanEntities)
-			if len(plan.Queries) > 0 && s.Fast.Searcher != nil {
+			if len(plan.Queries) > 0 && s.Fast != nil && s.Fast.Searcher != nil {
 				s.expandCards(ctx, &resp, plan.Queries, req.Scope, tb)
 			}
 		}
