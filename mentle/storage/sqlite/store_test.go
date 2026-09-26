@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"bytes"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -108,6 +109,68 @@ func TestOpenPortableFileAndConnectionPragmas(t *testing.T) {
 	}
 	if value != "kept" {
 		t.Fatalf("legacy value = %q", value)
+	}
+}
+
+// This fixture was created by Python's stdlib sqlite3, not by Open or modernc.
+// Copy it so WAL mode and writes cannot alter the checked-in external file.
+func TestOpenExternalV1SQLiteFile(t *testing.T) {
+	fixture, err := os.ReadFile(filepath.Join("testdata", "external_v1.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasPrefix(fixture, []byte("SQLite format 3\x00")) {
+		t.Fatal("external v1 fixture is not a SQLite database")
+	}
+	path := filepath.Join(t.TempDir(), "external_v1.sqlite")
+	if err := os.WriteFile(path, fixture, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var version int
+	if err := db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version != 1 {
+		t.Fatalf("user_version = %d, want 1", version)
+	}
+	var content string
+	if err := db.QueryRow(`SELECT content FROM legacy_notes WHERE id = 7`).Scan(&content); err != nil {
+		t.Fatal(err)
+	}
+	if content != "written by external sqlite3" {
+		t.Fatalf("legacy content = %q", content)
+	}
+	if _, err := db.Exec(`INSERT INTO legacy_notes(id, content) VALUES (8, 'written by mentle')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	for id, want := range map[int]string{7: "written by external sqlite3", 8: "written by mentle"} {
+		var got string
+		if err := reopened.QueryRow(`SELECT content FROM legacy_notes WHERE id = ?`, id).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("note %d = %q, want %q", id, got, want)
+		}
+	}
+	if err := reopened.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version != 1 {
+		t.Errorf("reopened user_version = %d, want 1", version)
 	}
 }
 
