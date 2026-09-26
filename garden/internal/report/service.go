@@ -99,6 +99,7 @@ type Service struct {
 	Publisher Publisher
 	Enricher  Enricher
 	clock     func() time.Time
+	clockMu   sync.RWMutex
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
 }
@@ -131,12 +132,17 @@ func Open(path string, memory MemoryLister, publisher Publisher, enricher Enrich
 // SetClock installs a deterministic clock for callers that need to exercise
 // time-window behavior. Production callers leave the clock unset.
 func (s *Service) SetClock(clock func() time.Time) {
+	s.clockMu.Lock()
 	s.clock = clock
+	s.clockMu.Unlock()
 }
 
 func (s *Service) now() time.Time {
-	if s.clock != nil {
-		return s.clock().UTC()
+	s.clockMu.RLock()
+	clock := s.clock
+	s.clockMu.RUnlock()
+	if clock != nil {
+		return clock().UTC()
 	}
 	return time.Now().UTC()
 }

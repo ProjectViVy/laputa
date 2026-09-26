@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,15 +15,26 @@ import (
 	"github.com/dashimaki/mentle/facade"
 )
 
-type srvReportLister struct{ items []facade.Memory }
+type srvReportLister struct {
+	mu    sync.RWMutex
+	items []facade.Memory
+}
 
-func (l srvReportLister) ListMemories(context.Context, facade.ListMemoryOptions) (facade.MemoryPage, error) {
-	return facade.MemoryPage{Items: l.items}, nil
+func (l *srvReportLister) ListMemories(context.Context, facade.ListMemoryOptions) (facade.MemoryPage, error) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return facade.MemoryPage{Items: append([]facade.Memory(nil), l.items...)}, nil
+}
+
+func (l *srvReportLister) setItems(items []facade.Memory) {
+	l.mu.Lock()
+	l.items = append([]facade.Memory(nil), items...)
+	l.mu.Unlock()
 }
 
 func reportTestServer(t *testing.T, items []facade.Memory) *Server {
 	t.Helper()
-	svc, err := report.Open(filepath.Join(t.TempDir(), "garden.db"), srvReportLister{items}, nil, nil)
+	svc, err := report.Open(filepath.Join(t.TempDir(), "garden.db"), &srvReportLister{items: items}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -354,7 +366,7 @@ func TestMonthlyReportModulesViaHTTP(t *testing.T) {
 		t.Fatalf("create status=%d body=%s", rec.Code, rec.Body.String())
 	}
 
-	lister.items = []facade.Memory{{ID: "mem_1", Content: "august work", UpdatedAt: now}}
+	lister.setItems([]facade.Memory{{ID: "mem_1", Content: "august work", UpdatedAt: now}})
 
 	req = reportRequest(http.MethodPost, "/v2/reports/generate", `{"cadence":"monthly"}`)
 	rec = httptest.NewRecorder()
