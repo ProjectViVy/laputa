@@ -19,7 +19,8 @@ Read ADR-0012 before implementing any Laputa, Persona, ACTMEM, ContextView, Evol
 | 0012 | Accepted | Garden-Laputa contract: seven Markdown authority files, `ACTMEM.MD`, tool-only WORLD/ACTMEM, EvoMap ownership of capability artifacts, deletion-first implementation |
 | 0013 | Accepted design | Replacement packages, deletion order, HTTP/Console boundary, EvoMap candidate input, and first vertical-slice acceptance matrix |
 | 0014 | Accepted | Canonical SQLite memory authority, transactional index outbox, disposable indexes, safe staged rebuild and Facade-only mutation |
-| 0015 | Accepted | `laputa-agent/1` external access plane: canonical REST, thin MCP adapter, typed SDK and AGENT-VIVY built-in preferred MemoryPort lifecycle bridge; no new authority or automatic protected context |
+| 0015 | Accepted, refined by 0016 | External `laputa-agent/1` REST/MCP wire profile, typed SDK and host lifecycle; Vivy transport default no longer frozen to REST |
+| 0016 | Accepted direction | Three embeddable domain libraries plus one Laputa application; one policy/conformance path for embedded and wire adapters |
 | 0006 | Accepted | Raw-first semantic ingestion and bounded evidence reads. |
 | 0007 | Accepted, refined | EvoMap mailbox. Its state and privacy rules remain active; it owns no Laputa authority. |
 | 0009 | Accepted | Human report modules outside Laputa authority. |

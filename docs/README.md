@@ -10,14 +10,16 @@ This directory is the canonical entry point for Garden MemoryOS documentation.
 1. [ADR-0012: Laputa Markdown Clean Break](./architecture/0012-laputa-markdown-clean-break.md) — authority files, ACTMEM, context lanes, EvoMap boundary, deletions, and implementation gate.
 2. [ADR-0013: Laputa Clean-Break Implementation Architecture](./architecture/0013-laputa-clean-break-implementation-architecture.md) — replacement packages, deletion order, API boundary, Console workspaces, and acceptance matrix.
 3. [ADR-0014: Mentle Canonical Authority](./architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md) — canonical SQLite, transactional index outbox, disposable indexes and safe rebuild.
-4. [ADR-0015: Laputa External Agent Contract](./architecture/0015-laputa-external-agent-contract.md) — accepted `laputa-agent/1` REST/MCP/SDK/lifecycle decision.
-5. [Laputa External Agent SDK package](./bmad/laputa-external-agent-sdk-2026-09/) — PRD, contract, epics, sprint status and implementation records; Wave 1 worktree changes are not part of main.
-6. [Garden Authority & Recovery planning package](./bmad/garden-authority-recovery-2026-09/) — completed clean-break PRD, API contract, Epics, test inventory, TODOLIST and GOAL execution runbook.
-7. [Console Frontend Pre-Design](./design/garden-memoryos-console-frontend-pre-design.md) — four-workspace information architecture, data/state rules, UI migration, and acceptance criteria.
-8. [ADR-0007: EvoMap Mailbox](./architecture/0007-evomap-mailbox.md) — durable mailbox and privacy-state semantics, constrained by ADR-0012.
-9. [ADR-0010: EvoMap Hub Transport](./architecture/0010-evomap-hub-transport-provider.md) — Hub transport and publication gates, constrained by ADR-0012.
-10. [ADR-0006: Semantic Ingestion](./architecture/0006-semantic-ingestion-and-obsidian-adapter.md) — raw-first evidence boundary.
-11. [ADR-0011: Recoverable Indexing and Evidence Contract](./architecture/0011-recoverable-indexing-and-evidence-contract.md) — proposed evidence/recovery work, refined by ADR-0014.
+4. [ADR-0016: Embeddable Laputa Libraries and Modular Monolith](./architecture/0016-laputa-embeddable-modular-monolith.md) — three reusable libraries plus one application; refines Vivy transport decision.
+5. [Laputa modular-monolith execution baseline](./bmad/laputa-modular-monolith-2026-09/) — ownership, dependency waves and conformance gates under ADR-0016.
+6. [ADR-0015: Laputa External Agent Contract](./architecture/0015-laputa-external-agent-contract.md) — external `laputa-agent/1` wire profile, refined by ADR-0016.
+7. [Laputa External Agent SDK package](./bmad/laputa-external-agent-sdk-2026-09/) — historical REST-first execution baseline; replan under ADR-0016 before further integration.
+8. [Garden Authority & Recovery planning package](./bmad/garden-authority-recovery-2026-09/) — completed clean-break PRD, API contract, Epics, test inventory, TODOLIST and GOAL execution runbook.
+9. [Console Frontend Pre-Design](./design/garden-memoryos-console-frontend-pre-design.md) — four-workspace information architecture, data/state rules, UI migration, and acceptance criteria.
+10. [ADR-0007: EvoMap Mailbox](./architecture/0007-evomap-mailbox.md) — durable mailbox and privacy-state semantics, constrained by ADR-0012.
+11. [ADR-0010: EvoMap Hub Transport](./architecture/0010-evomap-hub-transport-provider.md) — Hub transport and publication gates, constrained by ADR-0012.
+12. [ADR-0006: Semantic Ingestion](./architecture/0006-semantic-ingestion-and-obsidian-adapter.md) — raw-first evidence boundary.
+13. [ADR-0011: Recoverable Indexing and Evidence Contract](./architecture/0011-recoverable-indexing-and-evidence-contract.md) — proposed evidence/recovery work, refined by ADR-0014.
 
 ## Active Documents
 
@@ -26,8 +28,10 @@ This directory is the canonical entry point for Garden MemoryOS documentation.
 | [ADR-0012: Laputa Markdown Clean Break](./architecture/0012-laputa-markdown-clean-break.md) | Current Garden-Laputa product contract: seven Markdown authority files, `ACTMEM.MD`, tool-only WORLD/ACTMEM, EvoMap capability ownership, clean-break deletion rules | accepted |
 | [ADR-0013: Laputa Clean-Break Implementation Architecture](./architecture/0013-laputa-clean-break-implementation-architecture.md) | Accepted implementation design: Markdown store, Persona review/history, ACTMEM tools, Frozen Core, deletion order, HTTP and Console replacement | accepted design |
 | [ADR-0014: Mentle Canonical Authority](./architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md) | Canonical SQLite authority, transactional index outbox, rebuildable derived indexes and non-destructive repair | accepted |
-| [ADR-0015: Laputa External Agent Contract](./architecture/0015-laputa-external-agent-contract.md) | `laputa-agent/1` access-plane: canonical REST, thin MCP, typed SDK and native lifecycle adapters | accepted; implementation partial in separate worktree |
-| [Laputa External Agent SDK BMAD package](./bmad/laputa-external-agent-sdk-2026-09/) | PRD, API contract, Story graph, conformance matrix, sprint status and subagent TODOLIST; separate Wave 1 worktree is not merged into main | Wave 0 complete; Wave 1 in progress |
+| [ADR-0016: Embeddable Laputa Libraries and Modular Monolith](./architecture/0016-laputa-embeddable-modular-monolith.md) | Importable Laputa/Mentle/Garden domain stack and one Laputa application; in-process Vivy option with shared conformance | accepted direction; incremental implementation |
+| [Modular-monolith execution baseline](./bmad/laputa-modular-monolith-2026-09/) | Owned waves M0–M5 and explicit conformance/release gates | M1 in progress |
+| [ADR-0015: Laputa External Agent Contract](./architecture/0015-laputa-external-agent-contract.md) | External `laputa-agent/1` REST/MCP wire profile and native adapters | accepted; Vivy transport refined by ADR-0016 |
+| [Laputa External Agent SDK BMAD package](./bmad/laputa-external-agent-sdk-2026-09/) | Prior REST-first story baseline; isolate its uncommitted Wave 1 worktree before integration | replanning under ADR-0016 |
 | [Authority & Recovery GOAL package](./bmad/garden-authority-recovery-2026-09/) | Execution contract, frozen API, Story graph, tests, dirty-tree controls, Wave gates and implementation evidence | executed; complete |
 | [Operator Runbook](./bmad/garden-authority-recovery-2026-09/operator-runbook.md) | Canonical backup, derived-index rebuild, live health and rollback procedures | active |
 | [Console Frontend Pre-Design](./design/garden-memoryos-console-frontend-pre-design.md) | Overall Console design: Persona, Memory, Evolution, Chat Approval workspaces and legacy UI removal | implemented |

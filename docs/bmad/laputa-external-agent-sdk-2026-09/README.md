@@ -1,5 +1,7 @@
 # Laputa External Agent SDK
 
+> Historical REST-first execution baseline. [ADR-0016](../../architecture/0016-laputa-embeddable-modular-monolith.md) now governs the library + application split and refines Vivy's transport decision; the status and default transport below describe the prior plan, not the current modular-monolith gate.
+
 BMAD project-sized planning package for the post-clean-break external Agent access plane.
 
 **Status:** Wave 0 complete; Wave 1 in progress (per `sprint-status.yaml`)  

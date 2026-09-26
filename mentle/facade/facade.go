@@ -21,7 +21,9 @@ import (
 
 // Options configures facade initialization.
 type Options struct {
-	ConfigDir string
+	ConfigDir  string
+	PalacePath string
+	ModelsDir  string
 }
 
 // Service aggregates mentle internal components for garden and cmd/server.
@@ -48,6 +50,13 @@ func (s *Service) Init(ctx context.Context, opts Options) error {
 	cfg, err := config.Load(opts.ConfigDir)
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
+	}
+
+	if opts.PalacePath != "" {
+		cfg.PalacePath = opts.PalacePath
+	}
+	if opts.ModelsDir != "" {
+		cfg.ModelsDir = opts.ModelsDir
 	}
 
 	modelsDir := cfg.GetModelsDir()

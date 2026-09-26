@@ -1,6 +1,6 @@
 # ADR-0015: Laputa External Agent Contract and Lifecycle SDK
 
-**Status:** accepted  
+**Status:** accepted; Vivy default transport and in-process access precedence refined by [ADR-0016](0016-laputa-embeddable-modular-monolith.md)  
 **Date:** 2026-09-04  
 **Decision owner:** project owner  
 **Accepted by:** owner authorization on 2026-09-04  
@@ -29,10 +29,10 @@ laputa-agent/1 contract
   ├── canonical Garden REST profile
   ├── thin garden-mcp adapter
   └── native host lifecycle adapters
-        └── first reference: AGENT-VIVY MemoryPort → Garden REST
+        └── first reference: AGENT-VIVY MemoryPort (transport revised in ADR-0016)
 ```
 
-REST is canonical. MCP maps its tools to the same domain result/error contract. A native host adapter consumes the typed SDK and maps existing host lifecycle identity; it does not manufacture a second Session or Run model.
+REST is the canonical external wire profile. MCP maps its tools to the same domain result/error contract. Under ADR-0016, the same domain services also have a policy-equivalent in-process composition for Go hosts; a native host adapter maps existing lifecycle identity without manufacturing a second Session or Run model.
 
 ### 2. Freeze a scoped `laputa-agent/1` contract
 
@@ -82,7 +82,7 @@ An Agent may create Persona proposals when its capability allows it, but cannot 
 
 ### 7. First-party conformance host is AGENT-VIVY
 
-AGENT-VIVY ships Laputa as its built-in preferred `MemoryPort` provider. It is an internal first-party capability, not its user-plugin ABI. Its default transport is `laputa-sdk-go` over Garden canonical REST; it does not use model-visible MCP for pre-run bootstrap or terminal capture:
+AGENT-VIVY is the first-party conformance host. Its target integration is an internal `MemoryPort` provider, not its user-plugin ABI; no live Vivy provider is claimed by this ADR. This ADR originally selected `laputa-sdk-go` over Garden REST as the default transport. ADR-0016 replaces that default-only decision with an embeddable-domain target; Vivy's shipped default is not changed until shared conformance and operational evidence establish it. Neither mode uses model-visible MCP for pre-run bootstrap or terminal capture. The original REST adapter sketch remains a supported external-transport option:
 
 ```text
 agent-vivy/internal/memory/
