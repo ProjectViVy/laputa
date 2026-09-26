@@ -17,20 +17,24 @@ func (s *Service) DrainSpool(ctx context.Context) (int, error) {
 	}
 	drained := 0
 	for _, entry := range pending {
-		_, err := s.memory.CreateMemory(ctx, facade.CreateMemoryRequest{
+		memory, err := s.memory.CreateMemory(ctx, facade.CreateMemoryRequest{
 			Content:  entry.Content,
 			Kind:     entry.Kind,
 			Source:   facade.MemorySource{Type: "session", SessionID: entry.SessionID, EventID: entry.EventID},
 			Metadata: map[string]any{"content_hash": entry.ContentHash, "lifecycle": "stm", "collection": "working"},
 		}, "session:"+entry.EventID, entry.ContentHash)
 		if err != nil {
-			break
-		}
-		if err := s.Spool.MarkDrained(ctx, entry.EventID, entry.ContentHash); err != nil {
-			break
+			return drained, err
 		}
 		now := time.Now().UTC().Format(time.RFC3339Nano)
-		_, _ = s.db.ExecContext(ctx, `UPDATE ingestions SET status='completed',error=NULL,updated_at=? WHERE event_id=? AND status='spooled'`, now, entry.EventID)
+		if _, err := s.db.ExecContext(ctx, `UPDATE ingestions SET status='completed',memory_id=?,error=NULL,updated_at=? WHERE event_id=? AND status='spooled'`, memory.ID, now, entry.EventID); err != nil {
+			return drained, err
+		}
+		// Persist the canonical result before draining the spool. A failed mark
+		// leaves a retryable entry rather than losing recovery on a DB error.
+		if err := s.Spool.MarkDrained(ctx, entry.EventID, entry.ContentHash); err != nil {
+			return drained, err
+		}
 		drained++
 	}
 	return drained, nil
