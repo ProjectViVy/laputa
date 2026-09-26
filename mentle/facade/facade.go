@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/dashimaki/mentle/internal/palace"
 	"github.com/dashimaki/mentle/internal/search"
 	govector "github.com/dashimaki/mentle/storage/govector"
+	"github.com/dashimaki/mentle/storage/sqlite"
 )
 
 // Options configures facade initialization.
@@ -26,6 +28,9 @@ type Options struct {
 	ModelsDir  string
 	// RequireLocalModel disables cwd fallback and downloads; ModelsDir must be explicit.
 	RequireLocalModel bool
+	// LexicalOnly opens an existing canonical catalog read-only and builds only
+	// an in-memory BM25 projection; it never loads or downloads a model.
+	LexicalOnly bool
 }
 
 // Service aggregates mentle internal components for garden and cmd/server.
@@ -44,11 +49,18 @@ type Service struct {
 	Diary             *diary.Diary
 	PalacePath        string
 	Catalog           *Catalog
+	lexicalOnly       bool
 	mutationMu        sync.Mutex
 }
 
 // Init loads config and wires the same components as cmd/server.
 func (s *Service) Init(ctx context.Context, opts Options) error {
+	if opts.LexicalOnly {
+		if opts.RequireLocalModel {
+			return fmt.Errorf("LexicalOnly and RequireLocalModel cannot both be enabled")
+		}
+		return s.initLexicalOnly(ctx, opts)
+	}
 	var cfg *config.Config
 	if opts.ConfigDir == "" && opts.PalacePath != "" && opts.ModelsDir != "" {
 		// Fully specified embedded paths must not consult ambient config or env.
@@ -163,6 +175,37 @@ func (s *Service) Init(ctx context.Context, opts Options) error {
 	return nil
 }
 
+// initLexicalOnly never opens models or persistent derived indexes and does not
+// run the index outbox. Canonical SQLite must already exist and is opened with
+// SQLite's read-only mode so even unguarded maintenance cannot mutate it.
+func (s *Service) initLexicalOnly(ctx context.Context, opts Options) error {
+	if strings.TrimSpace(opts.PalacePath) == "" {
+		return fmt.Errorf("lexical-only requires an explicit palace path")
+	}
+	palacePath := expandPalacePath(opts.PalacePath)
+	canonicalPath := filepath.Join(palacePath, "canonical.sqlite3")
+	if info, err := os.Stat(canonicalPath); err != nil {
+		return fmt.Errorf("canonical catalog: %w", err)
+	} else if info.IsDir() {
+		return fmt.Errorf("canonical catalog is a directory: %s", canonicalPath)
+	}
+	db, err := sqlite.OpenReadOnly(canonicalPath)
+	if err != nil {
+		return fmt.Errorf("canonical catalog: %w", err)
+	}
+	s.Catalog = &Catalog{db: db}
+	s.Hybrid = hybrid.NewSearcher(unavailableVectorStore{}, nil, 0)
+	s.PalacePath = palacePath
+	s.lexicalOnly = true
+	snapshot, err := s.readCanonicalSnapshot(ctx)
+	if err != nil {
+		_ = s.Close()
+		return fmt.Errorf("canonical snapshot for lexical index: %w", err)
+	}
+	s.Hybrid.RebuildBM25FromDrawers(snapshot.Drawers)
+	return nil
+}
+
 // Close releases resources held by the service.
 func (s *Service) Close() error {
 	var closeErr error
@@ -173,8 +216,9 @@ func (s *Service) Close() error {
 	if s.Searcher != nil {
 		closeErr = s.Searcher.Close()
 		s.Searcher = nil
-		s.Hybrid = nil
 	}
+	s.Hybrid = nil
+	s.lexicalOnly = false
 	if s.Embedder != nil {
 		s.Embedder.Close()
 		s.Embedder = nil

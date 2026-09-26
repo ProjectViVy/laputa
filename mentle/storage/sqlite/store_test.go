@@ -180,3 +180,63 @@ func TestOpenInvalidPathReturnsError(t *testing.T) {
 		t.Fatal("expected open error")
 	}
 }
+
+func TestOpenReadOnlyDeniesSQLWritesAndPreservesJournal(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "catalog # & spaces.sqlite3")
+	writable, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writable.Exec(`CREATE TABLE retained (value TEXT); INSERT INTO retained VALUES ('kept')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writable.Exec(`PRAGMA journal_mode=DELETE`); err != nil {
+		t.Fatal(err)
+	}
+	if err := writable.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := OpenReadOnly(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var value, journal string
+	if err := db.QueryRow(`SELECT value FROM retained`).Scan(&value); err != nil {
+		t.Fatal(err)
+	}
+	if value != "kept" {
+		t.Fatalf("value = %q", value)
+	}
+	if err := db.QueryRow(`PRAGMA journal_mode`).Scan(&journal); err != nil {
+		t.Fatal(err)
+	}
+	if journal != "delete" {
+		t.Fatalf("read-only open changed journal mode to %q", journal)
+	}
+	var queryOnly int
+	if err := db.QueryRow(`PRAGMA query_only`).Scan(&queryOnly); err != nil {
+		t.Fatal(err)
+	}
+	if queryOnly != 1 {
+		t.Fatalf("query_only = %d", queryOnly)
+	}
+	if _, err := db.Exec(`INSERT INTO retained VALUES ('illegal')`); err == nil {
+		t.Fatal("SQL write succeeded on read-only connection")
+	}
+	if _, err := db.Exec(`CREATE TABLE illegal (id INTEGER)`); err == nil {
+		t.Fatal("DDL succeeded on read-only connection")
+	}
+}
+
+func TestOpenReadOnlyDoesNotCreateMissingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing.sqlite3")
+	if db, err := OpenReadOnly(path); err == nil {
+		db.Close()
+		t.Fatal("opened missing database")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("missing database created: %v", err)
+	}
+}

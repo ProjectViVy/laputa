@@ -19,6 +19,7 @@ var (
 	ErrVersionConflict            = errors.New("version conflict")
 	ErrIdempotencyConflict        = errors.New("idempotency conflict")
 	ErrUnavailable                = errors.New("mentle unavailable")
+	ErrReadOnly                   = errors.New("mentle lexical-only service is read-only")
 	ErrEmbeddingDimensionMismatch = errors.New("embedding dimension mismatch")
 	ErrEmbeddingMetricMismatch    = errors.New("embedding metric mismatch")
 	ErrEmbeddingIdentityMismatch  = errors.New("embedding identity mismatch")
@@ -262,6 +263,9 @@ func (c *Catalog) GetSessionCursor(sessionID string) (string, error) {
 // SaveSessionCursor persists the monotonic source boundary through the
 // facade, so ingest adapters never need a raw canonical database handle.
 func (s *Service) SaveSessionCursor(sessionID, timestamp string) error {
+	if s != nil && s.lexicalOnly {
+		return ErrReadOnly
+	}
 	if s == nil || s.Catalog == nil {
 		return ErrUnavailable
 	}
@@ -278,6 +282,9 @@ func (s *Service) GetSessionCursor(sessionID string) (string, error) {
 
 // AcquireSessionLease obtains a crash-reclaimable lease through the facade.
 func (s *Service) AcquireSessionLease(ctx context.Context, sessionID, owner string, ttl time.Duration) (bool, error) {
+	if s != nil && s.lexicalOnly {
+		return false, ErrReadOnly
+	}
 	if s == nil || s.Catalog == nil {
 		return false, ErrUnavailable
 	}
@@ -286,6 +293,9 @@ func (s *Service) AcquireSessionLease(ctx context.Context, sessionID, owner stri
 
 // ReleaseSessionLease releases a lease previously acquired by owner.
 func (s *Service) ReleaseSessionLease(ctx context.Context, sessionID, owner string) error {
+	if s != nil && s.lexicalOnly {
+		return ErrReadOnly
+	}
 	if s == nil || s.Catalog == nil {
 		return ErrUnavailable
 	}
@@ -372,6 +382,9 @@ func sameEmbeddingIdentity(left, right embedder.Identity) bool {
 // commit. A mismatch schedules an explicit reindex request, but never permits
 // mixed vectors into the disposable index.
 func (s *Service) ensureEmbeddingIdentity() error {
+	if s != nil && s.lexicalOnly {
+		return ErrReadOnly
+	}
 	current, ok := s.runtimeEmbeddingIdentity()
 	if !ok || s.Catalog == nil {
 		return nil
@@ -403,6 +416,9 @@ func (s *Service) ensureEmbeddingIdentity() error {
 }
 
 func (s *Service) CreateMemory(ctx context.Context, req CreateMemoryRequest, idempotencyKey, bodyHash string) (Memory, error) {
+	if s != nil && s.lexicalOnly {
+		return Memory{}, ErrReadOnly
+	}
 	if s.Catalog == nil || s.Hybrid == nil {
 		return Memory{}, ErrUnavailable
 	}
@@ -500,6 +516,9 @@ func (s *Service) GetMemory(ctx context.Context, id string) (Memory, error) {
 }
 
 func (s *Service) UpdateMemory(ctx context.Context, id string, req UpdateMemoryRequest) (Memory, error) {
+	if s != nil && s.lexicalOnly {
+		return Memory{}, ErrReadOnly
+	}
 	if s.Catalog == nil {
 		return Memory{}, ErrUnavailable
 	}
@@ -569,6 +588,9 @@ func (s *Service) UpdateMemory(ctx context.Context, id string, req UpdateMemoryR
 }
 
 func (s *Service) DeleteMemory(ctx context.Context, id string, expectedVersion int, actor, requestID string, reasons ...string) (DeleteResult, error) {
+	if s != nil && s.lexicalOnly {
+		return DeleteResult{}, ErrReadOnly
+	}
 	if s.Catalog == nil {
 		return DeleteResult{}, ErrUnavailable
 	}
