@@ -10,9 +10,16 @@ import (
 )
 
 func TestNewLocalMissingModelDoesNotUseBundledCWD(t *testing.T) {
-	if _, err := os.Stat(filepath.Join("models", "onnx", "model.onnx")); err != nil {
-		t.Skipf("bundled cwd model unavailable: %v", err)
+	cwd := t.TempDir()
+	bundled := filepath.Join(cwd, "models", "onnx", "model.onnx")
+	if err := os.MkdirAll(filepath.Dir(bundled), 0o755); err != nil {
+		t.Fatal(err)
 	}
+	if err := os.WriteFile(bundled, []byte("fake model"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(cwd)
+
 	missing := filepath.Join(t.TempDir(), "absent")
 	emb, err := NewLocal("", missing)
 	if emb != nil {
