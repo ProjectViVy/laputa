@@ -31,7 +31,7 @@ view, err := session.Bootstrap(ctx, agentapi.BootstrapRequest{
 | --- | --- | --- |
 | 首次模型请求前 | `BindSession(hostSessionID)` → `Bootstrap` | Frozen Core 只含六槽；WORLD/ACTMEM 不进入自动上下文；预算限制/降级状态照实传给模型上下文装配。 |
 | 需要候选时 | `FastRecall`；显式工具调用可用 `ReadPersona`、`ReadActmem`、`SearchCards`、`ReadEvidence`、`IndexHealth` | Context Source 仅消费候选，不把其当作终态捕获钩子；显式 WORLD/ACTMEM 读取必须通过固定 principal 校验。 |
-| Run/Journal 已持久记录终态后 | `Capture` → 必要时 `CaptureStatus(ingestionID,eventID)` | 只传 `completed/failed/canceled`；用 Journal 的 durable `run_id` 与单调 `event_seq` 建稳定事件身份，原文 SHA-256 为 `sha256:<hex>`；同事件同内容重放同 receipt，改内容冲突；非终态不捕获。 |
+| Run/Journal 已持久记录终态后 | `Capture` → 必要时 `CaptureStatus(ingestionID,eventID)` | 只传 `completed/failed/canceled`；宿主提供 Journal 的 durable `run_id` 与单调 `event_seq`，Garden 在持久 event ID 前加入固定的 profile/agent/platform/session 命名空间；原文 SHA-256 为 `sha256:<hex>`；同事件同内容重放同 receipt，改内容冲突；非终态不捕获。 |
 
 Vivy **还需**自己把上述三处接入 MemoryPort、模型请求装配和 Run/Journal 终态回调，并决定重试任务由谁发起。Garden 已持久化 ingest 状态与 event identity，不允许另建绕过 Garden 的写队列或双写 Persona/Mentle 权威。捕获被接纳不表示向量索引也已完成；查询 `IndexHealth`/派生 outbox 状态后才可声明派生健康。无模型时不应把 spool 收件说成已写入 canonical。
 
