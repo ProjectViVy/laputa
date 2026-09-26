@@ -79,7 +79,31 @@ func (s *Searcher) Search(ctx context.Context, query string, wing, room string, 
 }
 
 // SearchScored performs hybrid search and retains RRF score provenance.
+// With no embedder it searches only the BM25 projection and returns BM25 scores.
 func (s *Searcher) SearchScored(ctx context.Context, query string, wing, room string, nResults int) ([]ScoredDrawer, error) {
+	if s.embedder == nil {
+		filter := map[string]any{}
+		if wing != "" {
+			filter["wing"] = wing
+		}
+		if room != "" {
+			filter["room"] = room
+		}
+		// Filter before limiting so out-of-scope matches cannot crowd out
+		// valid lexical matches. This path never touches the vector store.
+		matches := s.filterBM25Results(s.BM25Search(query, 0), filter)
+		if nResults > 0 && len(matches) > nResults {
+			matches = matches[:nResults]
+		}
+		lexical := make([]fusedDoc, 0, len(matches))
+		for _, match := range matches {
+			lexical = append(lexical, fusedDoc{
+				ID: match.ID, Score: match.Score, Payload: match.Payload, Channels: []string{"bm25"},
+			})
+		}
+		return scoredDrawers(lexical), nil
+	}
+
 	// 1. Vector search.
 	vector, err := s.embedder.CreateEmbedding(ctx, query)
 	if err != nil {
@@ -110,7 +134,11 @@ func (s *Searcher) SearchScored(ctx context.Context, query string, wing, room st
 	// 4. Fuse scores using Reciprocal Rank Fusion (RRF).
 	fused := s.fuseScores(vectorResults, bm25Results, nResults)
 
-	// 5. Convert to drawers.
+	return scoredDrawers(fused), nil
+}
+
+// scoredDrawers preserves payload fields and score provenance across retrieval paths.
+func scoredDrawers(fused []fusedDoc) []ScoredDrawer {
 	drawers := make([]ScoredDrawer, 0, len(fused))
 	for _, f := range fused {
 		d := search.Drawer{
@@ -134,11 +162,14 @@ func (s *Searcher) SearchScored(ctx context.Context, query string, wing, room st
 		drawers = append(drawers, ScoredDrawer{Drawer: d, Score: f.Score, Channels: f.Channels})
 	}
 
-	return drawers, nil
+	return drawers
 }
 
 // Store adds a drawer to both the vector store and BM25 index.
 func (s *Searcher) Store(ctx context.Context, drawer palace.Drawer) error {
+	if s == nil || s.embedder == nil || s.store == nil {
+		return fmt.Errorf("hybrid: vector write unavailable without an embedder and store")
+	}
 	vector, err := s.embedder.CreateEmbedding(ctx, drawer.Content)
 	if err != nil {
 		return err
@@ -167,6 +198,9 @@ func (s *Searcher) Store(ctx context.Context, drawer palace.Drawer) error {
 
 // StoreVectors stores pre-computed embeddings and indexes content in BM25.
 func (s *Searcher) StoreVectors(ids []string, vectors [][]float32, payloads []map[string]any) error {
+	if s == nil || s.embedder == nil || s.store == nil {
+		return fmt.Errorf("hybrid: vector write unavailable without an embedder and store")
+	}
 	if len(ids) != len(vectors) || len(ids) != len(payloads) {
 		return fmt.Errorf("mismatched lengths: ids=%d vectors=%d payloads=%d", len(ids), len(vectors), len(payloads))
 	}
