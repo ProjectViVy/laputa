@@ -1,6 +1,6 @@
 # ADR-0016: Embeddable Laputa Libraries and Modular Monolith
 
-**Status:** accepted direction; implementation incremental
+**Status:** accepted direction; M1–M3 implemented in part, M4–M5 gated
 **Date:** 2026-09-27
 **Decision owner:** project owner
 **Refines:** ADR-0012, ADR-0013, ADR-0014
@@ -33,6 +33,12 @@ External REST and MCP remain supported adapters. One domain contract (DTO/error,
 5. Decide Vivy default mode from conformance and observed startup/latency/operability measurements. Until then, no change to its shipped provider default is claimed. Document migration of any in-flight ADR-0015 branch as explicit owned hunks, never overwrite or merge dirty worktrees implicitly.
 
 The original `feat/laputa-agent-sdk` worktree has uncommitted changes and is **not** part of this branch; its binding/capture tests are candidate evidence, not already integrated code. The root Garden working tree also has unrelated edits. Neither tree may be reset, cleaned or rebased for this work without a separate review.
+
+## Implementation snapshot (2026-09-27)
+
+The dedicated `feat/laputa-modular-monolith` worktree now contains explicit Mentle palace/model paths, strict local-model startup, a pure-Go SQLite driver for Mentle and Garden state stores, and a fail-closed BM25-only search path. Garden has an importable `garden/agentapi` client with trusted single-profile identity, bound sessions, bounded bootstrap/recall, explicit reads, durable terminal capture and status; `internal/runtimecore` is shared by the monolith. Existing HTTP recall and session-ingest paths route through shared services. An independent local-replacement Go consumer exercises offline `CGO_ENABLED=0` open/bind/recall/capture/replay/restart. This is **local importability**, not remote module publication or Vivy integration.
+
+The REST↔embedded fixtures cover automatic context, explicit WORLD/ACTMEM, session freezing, budgets and principal denial. MCP tests preserve backend error envelopes and pin its existing tools, but MCP is not yet a cross-transport bootstrap/capture implementation. No new Agent wire profile or Vivy default switch is claimed. Current full-suite and outstanding transport gates are recorded in the [execution handoff](../bmad/laputa-modular-monolith-2026-09/README.md) and [conformance inventory](../bmad/laputa-modular-monolith-2026-09/conformance.md); a partial test pass is not a release gate.
 
 ## Non-negotiable conformance gates
 

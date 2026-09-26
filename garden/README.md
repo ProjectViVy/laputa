@@ -1,6 +1,6 @@
 # Garden
 
-Unified CLI / HTTP entry for Laputa governance and mentle memory.
+Unified CLI / HTTP application and importable Garden domain entry for Laputa governance and Mentle memory.
 
 ## Module
 
@@ -22,30 +22,51 @@ Depends on sibling modules via `go.mod` replace:
 | GET | `/v2/memories` | `?kind=&status=&limit=` |
 | PATCH | `/v2/memories/{id}` | `{"content","expected_version"}` |
 | DELETE | `/v2/memories/{id}` | — |
-| POST | `/v2/ingest/sessions` | session-end transcript |
+| POST | `/v2/ingest/sessions` | explicit `precompact` or `session_end` transcript, `session_id` and durable event identity |
 | GET | `/v2/ingestions/{id}` | ingestion status |
-| POST | `/v2/recall/bootstrap` | `{"intent","budget_chars"}` |
+| POST | `/v2/recall/bootstrap` | `{"session_id","intent","budget_chars"}` |
 | GET | `/health` | — |
 
 The legacy v1 CRUD translator was removed (ADR-0008); the HTTP surface is v2-only.
 
 ```bash
 ./garden.exe &
-curl -s -X POST http://127.0.0.1:7373/v2/memories \
-  -H 'Content-Type: application/json' \
-  -d '{"content":"decision text","kind":"decision","scope":"project:garden"}'
-curl -s http://127.0.0.1:7373/v2/memories
 curl -s http://127.0.0.1:7373/health
+curl -s http://127.0.0.1:7373/v2/memories  # loopback read
 ```
 
 ## Build
 
 ```bash
-cd garden
-go mod tidy
-go build -o garden.exe .
-go test ./internal/...
+cd garden/console
+npm install --no-package-lock --ignore-scripts
+npm run build
+cd ..
+CGO_ENABLED=0 go build -o garden.exe .
+CGO_ENABLED=0 GOSUMDB=off go test ./... -count=1
+CGO_ENABLED=0 GOSUMDB=off go test -tags=e2e ./e2e/... -count=1
 ```
+
+Memory writes require a trusted User/Agent capability bearer token configured via
+`GARDEN_CAPABILITY_USER_TOKEN`/`GARDEN_CAPABILITY_AGENT_TOKEN`; loopback GET
+without a token remains a read-only convenience, not a write grant. Keep the
+HTTP listener on loopback unless a separate authentication/exposure decision is
+made. See [ADR-0016](../docs/architecture/0016-laputa-embeddable-modular-monolith.md).
+
+## In-process Go host
+
+Import `github.com/dashimaki/garden/agentapi`, not `garden/internal/*` or the
+HTTP server. `agentapi.Open` fixes absolute storage/model paths and trusted
+profile/principal/agent/platform; `BindSession` supplies only the host session
+ID. `Bootstrap`/`FastRecall` expose bounded Frozen Core, explicit reads use
+separate methods, and `Capture` accepts durable terminal events only.
+
+The [independent smoke module](../examples/vivy-embed-smoke/) actually calls
+Open→BindSession→Bootstrap→Capture→Close under `CGO_ENABLED=0`. The
+[Vivy handoff](../docs/bmad/laputa-modular-monolith-2026-09/vivy-handoff.md)
+lists future MemoryPort/RunHook work and offline/lexical degradation. Neither
+local `replace` imports nor passing this smoke means Vivy is integrated or the
+modules have been published.
 
 ## Governed Agentic RAG
 

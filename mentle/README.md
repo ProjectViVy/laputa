@@ -6,7 +6,7 @@ A Go implementation of [MemPalace](https://github.com/milla-jovovich/mempalace) 
 
 ## Overview
 
-mempalace-go provides a single, portable binary with no Python dependencies or persistent daemon processes. It exposes memory operations as MCP tools that AI clients (like Claude Desktop, Cursor, or other MCP-compatible editors) can invoke to store, search, and recall contextual information.
+mempalace-go provides a portable binary and an importable `facade` library without Python or a persistent daemon. Its MCP tools and direct Go facade are separate assembly choices; Garden mediates access for embedded agents.
 
 ### Key Features
 
@@ -51,8 +51,8 @@ mempalace-go uses [hugot](https://github.com/knights-analytics/hugot) for ONNX-b
 
 ### Prerequisites
 
-- Go 1.26.2 or later
-- ONNX embedding model (auto-downloaded by hugot on first run)
+- Go 1.26.4 or later (see `go.mod`)
+- A local ONNX model for strict offline embedding mode. The legacy standalone CLI may still resolve/download a model; the embedded `RequireLocalModel` path never downloads or probes CWD.
 
 ## Building
 
@@ -65,6 +65,20 @@ make build
 ```
 
 No native dependencies required. Uses hugot's pure-Go backend.
+
+Canonical and KG SQLite use the pure-Go driver. To verify the module without
+CGO, run `CGO_ENABLED=0 GOSUMDB=off go test ./... -count=1`; the storage tests
+also reopen a versioned SQLite file produced by an independent engine.
+
+For an embedded host, pass explicit absolute `facade.Options.PalacePath` and
+`ModelsDir` rather than relying on ambient `~/.mempalace/config.json` or
+`MEMPALACE_*`. `RequireLocalModel: true` accepts only the given local model;
+bad/missing models fail without a network fallback. `LexicalOnly: true` is a
+separate **read-only** mode for an existing canonical SQLite file and uses
+BM25 only; it never creates/migrates the authority DB or accepts memory writes.
+The two options are mutually exclusive. For Garden/Vivy-style hosting, use
+Garden's [public agentapi](../garden/README.md#in-process-go-host), not a direct
+Mentle connection that bypasses Frozen Core and capability checks.
 
 ### ORT Build (Apple Silicon acceleration)
 

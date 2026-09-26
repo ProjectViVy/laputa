@@ -1,10 +1,10 @@
 # Laputa
 
-This module is being replaced under [`../docs/architecture/0012-laputa-markdown-clean-break.md`](../docs/architecture/0012-laputa-markdown-clean-break.md).
+This module implements the Markdown authority clean break described by [ADR-0012](../docs/architecture/0012-laputa-markdown-clean-break.md). It remains independently importable; Garden assembles it with Mentle and applies agent-facing policy.
 
 ## Target
 
-Laputa will be a profile-level Markdown authority store with exactly:
+Laputa is a profile-level Markdown authority store with exactly:
 
 ```text
 IDENTITY.MD      RELATIONSHIP.MD  REDLINE.MD  USER.MD
@@ -25,10 +25,12 @@ There is no migration, compatibility mapping, dual read/write, or fallback route
 
 Laputa owns personality authority, Persona review/history, and ACTMEM semantics. Mentle owns evidence and retrieval. Garden owns runtime orchestration. EvoMap owns every capability artifact lifecycle.
 
+External Go hosts should use Garden's [public in-process API](../garden/README.md#in-process-go-host) for governed context and capture. Direct Laputa Persona/ACTMEM calls remain appropriate for trusted operator setup, but `WORLD.MD`/`ACTMEM.MD` are never silently added to automatic context; agent principal/review policy lives at Garden's entrypoint. See the [Vivy handoff](../docs/bmad/laputa-modular-monolith-2026-09/vivy-handoff.md); Vivy is not yet integrated.
+
 ## Verification
 
 ```bash
-GOSUMDB=off go test ./...
+CGO_ENABLED=0 GOSUMDB=off go test ./... -count=1
 ```
 
 The current tests validate the Markdown-first clean-break implementation and its deletion boundaries. Archived JSON-section tests are historical evidence only.

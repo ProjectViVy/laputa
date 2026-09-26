@@ -12,6 +12,7 @@ This directory is the canonical entry point for Garden MemoryOS documentation.
 3. [ADR-0014: Mentle Canonical Authority](./architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md) — canonical SQLite, transactional index outbox, disposable indexes and safe rebuild.
 4. [ADR-0016: Embeddable Laputa Libraries and Modular Monolith](./architecture/0016-laputa-embeddable-modular-monolith.md) — three reusable libraries plus one application; refines Vivy transport decision.
 5. [Laputa modular-monolith execution baseline](./bmad/laputa-modular-monolith-2026-09/) — ownership, dependency waves and conformance gates under ADR-0016.
+   [Vivy in-process handoff](./bmad/laputa-modular-monolith-2026-09/vivy-handoff.md) — importable local Go API, host lifecycle mapping, offline modes and outstanding Vivy-side work.
 6. [ADR-0015: Laputa External Agent Contract](./architecture/0015-laputa-external-agent-contract.md) — external `laputa-agent/1` wire profile, refined by ADR-0016.
 7. [Laputa External Agent SDK package](./bmad/laputa-external-agent-sdk-2026-09/) — historical REST-first execution baseline; replan under ADR-0016 before further integration.
 8. [Garden Authority & Recovery planning package](./bmad/garden-authority-recovery-2026-09/) — completed clean-break PRD, API contract, Epics, test inventory, TODOLIST and GOAL execution runbook.
@@ -29,7 +30,7 @@ This directory is the canonical entry point for Garden MemoryOS documentation.
 | [ADR-0013: Laputa Clean-Break Implementation Architecture](./architecture/0013-laputa-clean-break-implementation-architecture.md) | Accepted implementation design: Markdown store, Persona review/history, ACTMEM tools, Frozen Core, deletion order, HTTP and Console replacement | accepted design |
 | [ADR-0014: Mentle Canonical Authority](./architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md) | Canonical SQLite authority, transactional index outbox, rebuildable derived indexes and non-destructive repair | accepted |
 | [ADR-0016: Embeddable Laputa Libraries and Modular Monolith](./architecture/0016-laputa-embeddable-modular-monolith.md) | Importable Laputa/Mentle/Garden domain stack and one Laputa application; in-process Vivy option with shared conformance | accepted direction; incremental implementation |
-| [Modular-monolith execution baseline](./bmad/laputa-modular-monolith-2026-09/) | Owned waves M0–M5 and explicit conformance/release gates | M1 in progress |
+| [Modular-monolith execution baseline](./bmad/laputa-modular-monolith-2026-09/) | Owned waves M0–M5 and explicit conformance/release gates | local M1–M3 implementation; M4 wire and M5 Vivy gates remain |
 | [ADR-0015: Laputa External Agent Contract](./architecture/0015-laputa-external-agent-contract.md) | External `laputa-agent/1` REST/MCP wire profile and native adapters | accepted; Vivy transport refined by ADR-0016 |
 | [Laputa External Agent SDK BMAD package](./bmad/laputa-external-agent-sdk-2026-09/) | Prior REST-first story baseline; isolate its uncommitted Wave 1 worktree before integration | replanning under ADR-0016 |
 | [Authority & Recovery GOAL package](./bmad/garden-authority-recovery-2026-09/) | Execution contract, frozen API, Story graph, tests, dirty-tree controls, Wave gates and implementation evidence | executed; complete |
