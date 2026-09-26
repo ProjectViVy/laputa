@@ -128,7 +128,7 @@ func (s *Service) SearchCards(ctx context.Context, principal Principal, binding 
 	if err := s.check(binding, principal, OpSearch); err != nil {
 		return CardPage{}, err
 	}
-	if strings.TrimSpace(q.Query) == "" || q.Limit < 0 || q.Limit > 100 {
+	if q.Query == "" || q.Limit < 0 || q.Limit > 100 {
 		return CardPage{}, failure("invalid_request", "invalid card search query or limit")
 	}
 	if s.runtime.Mentle == nil {
@@ -158,7 +158,7 @@ func (s *Service) ReadEvidence(ctx context.Context, principal Principal, binding
 		return nil, failure("invalid_request", "invalid evidence identifiers or budgets")
 	}
 	for _, id := range q.CardIDs {
-		if strings.TrimSpace(id) == "" {
+		if id == "" {
 			return nil, failure("invalid_request", "card id is required")
 		}
 	}
@@ -175,6 +175,32 @@ func (s *Service) ReadEvidence(ctx context.Context, principal Principal, binding
 	}
 	return result, nil
 }
+
+// CollectionInfo is the public, storage-independent collection summary.
+type CollectionInfo struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+// ListCollections reports live Mentle collections under the same read policy as cards.
+func (s *Service) ListCollections(ctx context.Context, principal Principal, binding Binding) ([]CollectionInfo, error) {
+	if err := s.check(binding, principal, OpSearch); err != nil {
+		return nil, err
+	}
+	if s.runtime.Mentle == nil {
+		return nil, failure("unavailable", "Mentle unavailable")
+	}
+	items, err := s.runtime.Mentle.ListCollections(ctx)
+	if err != nil {
+		return nil, materialError(err)
+	}
+	result := make([]CollectionInfo, 0, len(items))
+	for _, item := range items {
+		result = append(result, CollectionInfo{Name: item.Name, Count: item.Count})
+	}
+	return result, nil
+}
+
 func materialError(err error) error {
 	if errors.Is(err, facade.ErrUnavailable) {
 		return failure("unavailable", "Mentle unavailable")

@@ -2,12 +2,14 @@ package agentapi
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/dashimaki/garden/internal/runtimecore"
 	"github.com/dashimaki/laputa/actmem"
 	"github.com/dashimaki/laputa/persona"
+	"github.com/dashimaki/mentle/facade"
 )
 
 func TestReadPersonaExplicitWorldAndBinding(t *testing.T) {
@@ -62,6 +64,44 @@ func TestExplicitActmemReadAndQuery(t *testing.T) {
 	assertCode(t, err, "principal_forbidden")
 	_, err = s.QueryACTMEM(context.Background(), PrincipalAgent, binding(), ActmemQuery{})
 	assertCode(t, err, "invalid_request")
+}
+
+func TestSearchCardsAllowsWhitespaceQueryThroughMentle(t *testing.T) {
+	dir := t.TempDir()
+	catalog, err := facade.OpenCatalog(filepath.Join(dir, "canonical.sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := catalog.Close(); err != nil {
+		t.Fatal(err)
+	}
+	m := new(facade.Service)
+	if err := m.Init(context.Background(), facade.Options{PalacePath: dir, LexicalOnly: true}); err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	s := NewService(&runtimecore.Garden{ProfileID: "default", Mentle: m})
+	page, err := s.SearchCards(context.Background(), PrincipalRead, binding(), CardSearch{Query: "   ", Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Cards) != 0 {
+		t.Fatalf("whitespace page=%+v, want empty", page)
+	}
+	_, err = s.SearchCards(context.Background(), PrincipalRead, binding(), CardSearch{Query: "", Limit: 20})
+	assertCode(t, err, "invalid_request")
+}
+
+func TestListCollectionsRequiresBoundReadDomain(t *testing.T) {
+	s := NewService(&runtimecore.Garden{ProfileID: "default"})
+	_, err := s.ListCollections(context.Background(), "", binding())
+	assertCode(t, err, "authentication_required")
+	_, err = s.ListCollections(context.Background(), PrincipalRead, binding())
+	assertCode(t, err, "unavailable")
+	b := binding()
+	b.ProfileID = "other"
+	_, err = s.ListCollections(context.Background(), PrincipalRead, b)
+	assertCode(t, err, "profile_mismatch")
 }
 
 func TestExplicitMaterialReadsAreBoundAndUnavailableWithoutMentle(t *testing.T) {

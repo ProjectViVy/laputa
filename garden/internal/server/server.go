@@ -47,7 +47,6 @@ type Server struct {
 	Persona      *persona.Service
 	Actmem       *actmem.Store
 	Capabilities CapabilityConfig
-	Materials    MaterialsProvider
 	Components   map[string]string
 	Addr         string
 	// now is an optional clock seam for deterministic time-window handlers.
@@ -445,7 +444,7 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view, err := s.AgentAPI.Bootstrap(r.Context(), agentapi.Principal(principal), agentapi.BootstrapRequest{
-		Binding: agentapi.Binding{ProfileID: s.ProfileID, AgentID: "garden-http", Platform: "http", SessionID: body.SessionID},
+		Binding:   agentapi.Binding{ProfileID: s.ProfileID, AgentID: "garden-http", Platform: "http", SessionID: body.SessionID},
 		SessionID: body.SessionID, Intent: intent, BudgetChars: body.BudgetChars,
 	})
 	if err != nil {

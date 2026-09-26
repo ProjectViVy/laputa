@@ -20,7 +20,9 @@ type CardSearcher interface {
 type FastService struct {
 	Frozen   personactx.FrozenProvider
 	Searcher CardSearcher
-	WS       *activity.WorkingSet
+	// LexicalOnly marks retrieval from a read-only canonical BM25 projection.
+	LexicalOnly bool
+	WS          *activity.WorkingSet
 }
 
 type FastRequest struct {
@@ -72,6 +74,10 @@ func (s *FastService) Recall(ctx context.Context, req FastRequest) (ContextView,
 		Cards:       []facade.MemoryCard{},
 		Evidence:    []facade.EvidenceFragment{},
 		Warnings:    []string{},
+	}
+	if s.LexicalOnly {
+		view.Degraded = true
+		view.Warnings = append(view.Warnings, "local model unavailable; read-only lexical recall")
 	}
 	if s.Frozen != nil {
 		if strings.TrimSpace(req.SessionID) == "" {

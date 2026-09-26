@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,6 +45,8 @@ type Garden struct {
 	TransientSpool *activity.TransientSpool
 	Trace          *recall.TraceStore
 	Mentle         *facade.Service
+	// LexicalOnly identifies read-only Mentle retrieval without a local model.
+	LexicalOnly bool
 
 	mu     sync.Mutex
 	closed bool
@@ -79,8 +82,9 @@ func modelAvailable(dir string) (bool, error) {
 }
 
 // Open composes existing services without reading environment configuration or
-// starting an HTTP listener. A missing optional local model yields frozen-only
-// recall and spooled ingestion; all other initialization failures propagate.
+// starting an HTTP listener. A missing optional local model uses a read-only
+// lexical projection when an existing canonical catalog is present; otherwise
+// recall is frozen-only and ingestion spools. Other initialization failures propagate.
 func Open(ctx context.Context, cfg Config) (_ *Garden, err error) {
 	if err = validate(cfg); err != nil {
 		return nil, err
@@ -95,7 +99,23 @@ func Open(ctx context.Context, cfg Config) (_ *Garden, err error) {
 	if !available && cfg.RequireLocalModel {
 		return nil, fmt.Errorf("runtimecore: required local model missing under %q", cfg.ModelsDir)
 	}
-	g := &Garden{ProfileID: cfg.ProfileID}
+	lexicalOnly := false
+	if !available {
+		canonical := filepath.Join(cfg.PalacePath, "canonical.sqlite3")
+		info, statErr := os.Stat(canonical)
+		switch {
+		case statErr == nil:
+			if info.IsDir() {
+				return nil, fmt.Errorf("runtimecore: canonical catalog is a directory: %q", canonical)
+			}
+			lexicalOnly = true
+		case os.IsNotExist(statErr):
+			// Without canonical authority, do not create one just for recall.
+		default:
+			return nil, fmt.Errorf("runtimecore: inspect canonical catalog: %w", statErr)
+		}
+	}
+	g := &Garden{ProfileID: cfg.ProfileID, LexicalOnly: lexicalOnly}
 	defer func() {
 		if err != nil {
 			_ = g.Close()
@@ -105,9 +125,9 @@ func Open(ctx context.Context, cfg Config) (_ *Garden, err error) {
 		return nil, fmt.Errorf("persona: %w", err)
 	}
 	g.Actmem = actmem.New(cfg.PersonaDir)
-	if available {
+	if available || lexicalOnly {
 		m := &facade.Service{}
-		if err = m.Init(ctx, facade.Options{PalacePath: cfg.PalacePath, ModelsDir: cfg.ModelsDir, RequireLocalModel: true}); err != nil {
+		if err = m.Init(ctx, facade.Options{PalacePath: cfg.PalacePath, ModelsDir: cfg.ModelsDir, RequireLocalModel: !lexicalOnly, LexicalOnly: lexicalOnly}); err != nil {
 			_ = m.Close()
 			return nil, fmt.Errorf("mentle: %w", err)
 		}
@@ -125,19 +145,31 @@ func Open(ctx context.Context, cfg Config) (_ *Garden, err error) {
 	if g.TransientSpool, err = activity.OpenSpool(cfg.StateDB); err != nil {
 		return nil, fmt.Errorf("transient spool: %w", err)
 	}
-	g.FastRecall = &recall.FastService{Frozen: &personactx.SessionProvider{Store: g.Frozen, Reader: g.Persona}}
+	g.FastRecall = &recall.FastService{Frozen: &personactx.SessionProvider{Store: g.Frozen, Reader: g.Persona}, LexicalOnly: lexicalOnly}
 	var writer ingest.MemoryWriter
 	if g.Mentle != nil {
 		g.FastRecall.Searcher = g.Mentle
-		writer = g.Mentle
+		if !lexicalOnly {
+			writer = g.Mentle
+		}
 	}
-	if g.Ingest, err = ingest.Open(cfg.StateDB, writer); err != nil {
+	if g.Ingest, err = ingest.OpenPaused(cfg.StateDB, writer); err != nil {
 		return nil, fmt.Errorf("ingest: %w", err)
 	}
 	g.Ingest.Activity = g.Activity
 	g.Ingest.Spool = g.TransientSpool
+	if !lexicalOnly && g.Mentle != nil {
+		if drained, drainErr := g.Ingest.DrainSpool(ctx); drainErr != nil {
+			return nil, fmt.Errorf("spool drain: %w", drainErr)
+		} else if drained > 0 {
+			log.Printf("spool drain: recovered %d entries", drained)
+		}
+	}
 	if g.Trace, err = recall.OpenTraceStore(cfg.StateDB); err != nil {
 		return nil, fmt.Errorf("trace: %w", err)
+	}
+	if err = g.Ingest.Start(); err != nil {
+		return nil, fmt.Errorf("ingest worker: %w", err)
 	}
 	return g, nil
 }

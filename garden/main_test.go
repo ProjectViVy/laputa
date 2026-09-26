@@ -1,12 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/dashimaki/garden/agentapi"
+	"github.com/dashimaki/garden/internal/server"
 	"github.com/dashimaki/laputa/persona"
+	"github.com/dashimaki/mentle/facade"
 )
 
 func TestRuntimeConfigNormalizesLegacyRelativePaths(t *testing.T) {
@@ -62,5 +69,45 @@ func TestOpenAppSharesOneRuntimeAcrossAdapters(t *testing.T) {
 	binding.ProfileID = "other-profile"
 	if _, err := app.server.AgentAPI.FastRecall(context.Background(), agentapi.PrincipalAgent, agentapi.FastRecallRequest{Binding: binding, Query: "test", BudgetChars: 1000}); err == nil {
 		t.Fatal("agent could select another profile")
+	}
+}
+
+func TestOpenAppWithExistingCanonicalAndNoModelStaysLexicalReadOnly(t *testing.T) {
+	root := t.TempDir()
+	palace := filepath.Join(root, "palace")
+	if err := os.MkdirAll(palace, 0700); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := facade.OpenCatalog(filepath.Join(palace, "canonical.sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := catalog.Close(); err != nil {
+		t.Fatal(err)
+	}
+	cfg := runtimeConfig(filepath.Join(root, "persona"), palace, filepath.Join(root, "absent-model"), filepath.Join(root, "state.db"), "profile-local")
+	app, err := openApp(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Close()
+	if !app.runtime.LexicalOnly || app.server.Components["mentle"] != "degraded" || app.server.DeepRecall.Graph != nil {
+		t.Fatalf("lexical startup enabled full-model capability: lexical=%v components=%v graph=%v", app.runtime.LexicalOnly, app.server.Components, app.server.DeepRecall.Graph)
+	}
+	app.server.Capabilities = server.CapabilityConfig{UserToken: "fixture-user"}
+	req := httptest.NewRequest(http.MethodPost, "/v2/memories", bytes.NewBufferString(`{"content":"must-not-write","kind":"note"}`))
+	req.RemoteAddr = "127.0.0.1:1234"
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer fixture-user")
+	rec := httptest.NewRecorder()
+	app.server.HTTPHandler().ServeHTTP(rec, req)
+	var body struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusServiceUnavailable || body.Code != "memory_read_only" {
+		t.Fatalf("lexical write response: status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }

@@ -47,6 +47,14 @@ func testCore() personactx.FrozenCore {
 	return core
 }
 
+func TestFastRecallLexicalOnlyReturnsCardsAndReportsDegraded(t *testing.T) {
+	svc := &FastService{Searcher: &fakeSearcher{cards: []facade.MemoryCard{{ID: "mem_lexical", Kind: "note", Summary: "offline evidence"}}, evidence: []facade.EvidenceFragment{{CardID: "mem_lexical", Excerpt: "offline evidence"}}}, LexicalOnly: true}
+	view, err := svc.Recall(context.Background(), FastRequest{Query: "offline", BudgetChars: 6000})
+	if err != nil || len(view.Cards) != 1 || !strings.Contains(view.Context, "offline evidence") || !view.Degraded || !strings.Contains(strings.Join(view.Warnings, " "), "lexical") {
+		t.Fatalf("lexical view=%+v err=%v", view, err)
+	}
+}
+
 func TestFastRecallWithSearcher(t *testing.T) {
 	searcher := &fakeSearcher{
 		cards:    []facade.MemoryCard{{ID: "mem_1", Kind: "fact", Summary: "garden architecture", CandidateScore: 0.9, HeatScore: 0.5}},

@@ -116,7 +116,7 @@ func openApp(ctx context.Context, cfg runtimecore.Config) (_ *gardenApp, err err
 		}
 	}()
 	components := map[string]string{"persona": "ok"}
-	if core.Mentle == nil {
+	if core.Mentle == nil || core.LexicalOnly {
 		components["mentle"] = "degraded"
 	} else {
 		components["mentle"] = "ok"
@@ -161,15 +161,8 @@ func openApp(ctx context.Context, cfg runtimecore.Config) (_ *gardenApp, err err
 		return nil, fmt.Errorf("report store: %w", err)
 	}
 	a.closeExtra = append(a.closeExtra, reports.Close)
-	if core.Mentle != nil {
-		if drained, drainErr := core.Ingest.DrainSpool(ctx); drainErr != nil {
-			log.Printf("spool drain: %v", drainErr)
-		} else if drained > 0 {
-			log.Printf("drained %d spooled events to mentle", drained)
-		}
-	}
 	var graphSource recall.GraphSource
-	if core.Mentle != nil {
+	if core.Mentle != nil && !core.LexicalOnly {
 		graphSource = core.Mentle
 	}
 	deepRecall := &recall.DeepService{Fast: core.FastRecall, Graph: graphSource, Planner: configuredPlanner(), Arbiter: arbiter.New(), Traces: core.Trace}
@@ -201,11 +194,7 @@ func openApp(ctx context.Context, cfg runtimecore.Config) (_ *gardenApp, err err
 	if !strings.HasPrefix(addr, "127.0.0.1:") && !strings.HasPrefix(addr, "localhost:") && !strings.HasPrefix(addr, "[::1]:") {
 		log.Printf("HIGH RISK: Garden API is configured on non-loopback address %q; capability authentication is mandatory and loopback read exemptions do not apply", addr)
 	}
-	var materialsProvider server.MaterialsProvider
-	if core.Mentle != nil {
-		materialsProvider = core.Mentle
-	}
-	a.server = &server.Server{ProfileID: core.ProfileID, AgentAPI: agentapi.NewService(core), Facade: core.Mentle, FastRecall: core.FastRecall, DeepRecall: deepRecall, TraceStore: core.Trace, Evolution: evoService, Activity: core.Activity, Checkpointer: checkpointer, Pipelines: manager, Ingestions: core.Ingest, Reports: reports, Materials: materialsProvider, Mailbox: mailboxStore, Persona: core.Persona, Actmem: core.Actmem, Components: components, Addr: addr}
+	a.server = &server.Server{ProfileID: core.ProfileID, AgentAPI: agentapi.NewService(core), Facade: core.Mentle, FastRecall: core.FastRecall, DeepRecall: deepRecall, TraceStore: core.Trace, Evolution: evoService, Activity: core.Activity, Checkpointer: checkpointer, Pipelines: manager, Ingestions: core.Ingest, Reports: reports, Mailbox: mailboxStore, Persona: core.Persona, Actmem: core.Actmem, Components: components, Addr: addr}
 	return a, nil
 }
 

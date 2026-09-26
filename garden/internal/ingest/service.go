@@ -54,6 +54,10 @@ type Service struct {
 	Activity *activity.Store
 	Spool    *activity.TransientSpool
 	queue    chan string
+	mu       sync.Mutex
+	started  bool
+	closed   bool
+	ctx      context.Context
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
 	workerID string
@@ -73,6 +77,19 @@ type SessionStateStore interface {
 }
 
 func Open(path string, memory MemoryWriter) (*Service, error) {
+	s, err := OpenPaused(path, memory)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.Start(); err != nil {
+		_ = s.Close()
+		return nil, err
+	}
+	return s, nil
+}
+
+// OpenPaused prepares durable ingestion without starting the worker or replaying rows.
+func OpenPaused(path string, memory MemoryWriter) (*Service, error) {
 	db, err := sqliteconn.Open(path)
 	if err != nil {
 		return nil, err
@@ -89,23 +106,58 @@ CREATE INDEX IF NOT EXISTS ingestion_status ON ingestions(status,created_at);`
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &Service{db: db, memory: memory, queue: make(chan string, 128), cancel: cancel, workerID: "ingest-" + strings.ReplaceAll(uuid.NewString(), "-", "")}
-	s.wg.Add(1)
-	go s.worker(ctx)
-	rows, _ := db.Query(`SELECT ingestion_id FROM ingestions WHERE status IN ('accepted','running','spooled') ORDER BY created_at`)
-	if rows != nil {
-		defer rows.Close()
-		for rows.Next() {
-			var id string
-			if rows.Scan(&id) == nil {
-				s.queue <- id
-			}
-		}
-	}
-	return s, nil
+	return &Service{db: db, memory: memory, queue: make(chan string, 128), ctx: ctx, cancel: cancel, workerID: "ingest-" + strings.ReplaceAll(uuid.NewString(), "-", "")}, nil
 }
 
-func (s *Service) Close() error { s.cancel(); s.wg.Wait(); return s.db.Close() }
+// Start starts the worker and replays durable pending rows exactly once per service.
+func (s *Service) Start() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return errors.New("ingestion service is closed")
+	}
+	if s.started {
+		return nil
+	}
+	rows, err := s.db.Query(`SELECT ingestion_id FROM ingestions WHERE status IN ('accepted','running','spooled') ORDER BY created_at`)
+	if err != nil {
+		return err
+	}
+	var pending []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		pending = append(pending, id)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	s.started = true
+	s.wg.Add(1)
+	go s.worker(s.ctx)
+	for _, id := range pending {
+		select {
+		case s.queue <- id:
+		case <-s.ctx.Done():
+			return s.ctx.Err()
+		}
+	}
+	return nil
+}
+
+func (s *Service) Close() error {
+	s.mu.Lock()
+	s.closed = true
+	s.cancel()
+	s.mu.Unlock()
+	s.wg.Wait()
+	return s.db.Close()
+}
 
 func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, error) {
 	req.SessionID = strings.TrimSpace(req.SessionID)
@@ -146,14 +198,18 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, erro
 		req.OccurredAt = now
 	}
 	id := "ing_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	_, err = s.db.ExecContext(ctx, `INSERT INTO ingestions(ingestion_id,session_id,event_id,phase,content,content_hash,workspace,occurred_at,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, id, req.SessionID, req.EventID, req.Phase, req.Content, req.ContentHash, req.Workspace, req.OccurredAt.UTC().Format(time.RFC3339Nano), "accepted", now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
 	if err != nil {
 		return Accepted{}, err
 	}
-	select {
-	case s.queue <- id:
-	case <-ctx.Done():
-		return Accepted{}, ctx.Err()
+	if s.started {
+		select {
+		case s.queue <- id:
+		case <-ctx.Done():
+			return Accepted{}, ctx.Err()
+		}
 	}
 	if s.Activity != nil {
 		_ = s.Activity.Append(ctx, activity.Event{ID: req.EventID, SessionID: req.SessionID, Type: "ingest", Timestamp: req.OccurredAt, Data: map[string]any{"phase": req.Phase, "ingestion_id": id}})

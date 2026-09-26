@@ -1,23 +1,47 @@
 package server
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
-	"github.com/dashimaki/mentle/facade"
+	"github.com/dashimaki/garden/agentapi"
 )
 
-type MaterialsProvider interface {
-	SearchCards(context.Context, facade.CardQuery) (facade.CardPage, error)
-	ReadEvidence(context.Context, facade.EvidenceQuery) ([]facade.EvidenceFragment, error)
-	ListCollections(context.Context) ([]facade.CollectionInfo, error)
+func (s *Server) materialsRead(w http.ResponseWriter, r *http.Request) (agentapi.Principal, agentapi.Binding, bool) {
+	principal, ok := s.requireReadPrincipal(w, r, PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator)
+	if !ok {
+		return "", agentapi.Binding{}, false
+	}
+	if s.AgentAPI == nil || strings.TrimSpace(s.ProfileID) == "" {
+		writeErrorWithCode(w, http.StatusServiceUnavailable, "unavailable", errors.New("mentle unavailable"))
+		return "", agentapi.Binding{}, false
+	}
+	return agentapi.Principal(principal), agentapi.Binding{ProfileID: s.ProfileID, AgentID: "garden-http", Platform: "http", SessionID: "garden-http-read"}, true
+}
+
+func writeMaterialsReadError(w http.ResponseWriter, err error) {
+	var domainErr *agentapi.Error
+	if errors.As(err, &domainErr) {
+		status := http.StatusBadRequest
+		switch domainErr.Code {
+		case "unavailable":
+			status = http.StatusServiceUnavailable
+		case "authentication_required":
+			status = http.StatusUnauthorized
+		case "principal_forbidden", "profile_mismatch":
+			status = http.StatusForbidden
+		}
+		writeErrorWithCode(w, status, domainErr.Code, err)
+		return
+	}
+	writeErrorWithCode(w, http.StatusInternalServerError, "internal_error", errors.New("material read failed"))
 }
 
 func (s *Server) handleMaterialsCards(w http.ResponseWriter, r *http.Request) {
-	if s.Materials == nil {
-		writeError(w, http.StatusServiceUnavailable, errors.New("mentle unavailable"))
+	principal, binding, ok := s.materialsRead(w, r)
+	if !ok {
 		return
 	}
 	q := r.URL.Query()
@@ -35,27 +59,17 @@ func (s *Server) handleMaterialsCards(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = parsed
 	}
-	page, err := s.Materials.SearchCards(r.Context(), facade.CardQuery{
-		Text:       query,
-		Collection: q.Get("collection"),
-		Scope:      q.Get("scope"),
-		Limit:      limit,
-		Cursor:     q.Get("cursor"),
-	})
+	page, err := s.AgentAPI.SearchCards(r.Context(), principal, binding, agentapi.CardSearch{Query: query, Collection: q.Get("collection"), Scope: q.Get("scope"), Limit: limit, Cursor: q.Get("cursor")})
 	if err != nil {
-		writeHandlerError(w, err)
+		writeMaterialsReadError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"cards":       page.Cards,
-		"next_cursor": page.NextCursor,
-		"source":      "live",
-	})
+	writeJSON(w, http.StatusOK, map[string]any{"cards": page.Cards, "next_cursor": page.NextCursor, "source": "live"})
 }
 
 func (s *Server) handleMaterialsEvidence(w http.ResponseWriter, r *http.Request) {
-	if s.Materials == nil {
-		writeError(w, http.StatusServiceUnavailable, errors.New("mentle unavailable"))
+	principal, binding, ok := s.materialsRead(w, r)
+	if !ok {
 		return
 	}
 	cardID := r.PathValue("id")
@@ -75,34 +89,23 @@ func (s *Server) handleMaterialsEvidence(w http.ResponseWriter, r *http.Request)
 			total = parsed
 		}
 	}
-	fragments, err := s.Materials.ReadEvidence(r.Context(), facade.EvidenceQuery{
-		CardIDs:       []string{cardID},
-		PerItemBudget: perItem,
-		TotalBudget:   total,
-	})
+	fragments, err := s.AgentAPI.ReadEvidence(r.Context(), principal, binding, agentapi.EvidenceRead{CardIDs: []string{cardID}, PerItemBudget: perItem, TotalBudget: total})
 	if err != nil {
-		writeHandlerError(w, err)
+		writeMaterialsReadError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"card_id":   cardID,
-		"fragments": fragments,
-		"source":    "live",
-	})
+	writeJSON(w, http.StatusOK, map[string]any{"card_id": cardID, "fragments": fragments, "source": "live"})
 }
 
 func (s *Server) handleMaterialsCollections(w http.ResponseWriter, r *http.Request) {
-	if s.Materials == nil {
-		writeError(w, http.StatusServiceUnavailable, errors.New("mentle unavailable"))
+	principal, binding, ok := s.materialsRead(w, r)
+	if !ok {
 		return
 	}
-	collections, err := s.Materials.ListCollections(r.Context())
+	collections, err := s.AgentAPI.ListCollections(r.Context(), principal, binding)
 	if err != nil {
-		writeHandlerError(w, err)
+		writeMaterialsReadError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"collections": collections,
-		"source":      "live",
-	})
+	writeJSON(w, http.StatusOK, map[string]any{"collections": collections, "source": "live"})
 }

@@ -1,8 +1,10 @@
 package runtimecore
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +15,8 @@ import (
 	"github.com/dashimaki/garden/internal/ingest"
 	"github.com/dashimaki/garden/internal/recall"
 	"github.com/dashimaki/laputa/persona"
+	"github.com/dashimaki/mentle/facade"
+	_ "modernc.org/sqlite"
 )
 
 func testConfig(t *testing.T) Config {
@@ -33,8 +37,8 @@ func TestOpenDegradedUsesOnlyExplicitPaths(t *testing.T) {
 	if core.Persona == nil || core.Actmem == nil || core.Frozen == nil || core.FastRecall == nil || core.Ingest == nil || core.Trace == nil {
 		t.Fatal("missing runtime component")
 	}
-	if core.Mentle != nil || core.FastRecall.Searcher != nil {
-		t.Fatal("missing model must degrade without substituting a searcher")
+	if core.Mentle != nil || core.FastRecall.Searcher != nil || core.LexicalOnly {
+		t.Fatal("missing model and canonical must degrade without substituting a searcher")
 	}
 	if _, err := os.Stat(cfg.StateDB); err != nil {
 		t.Fatalf("state DB not at explicit path: %v", err)
@@ -45,6 +49,129 @@ func TestOpenDegradedUsesOnlyExplicitPaths(t *testing.T) {
 	view, err := core.FastRecall.Recall(context.Background(), recall.FastRequest{Query: "test"})
 	if err != nil || !view.Degraded || !strings.Contains(strings.Join(view.Warnings, " "), "mentle unavailable") {
 		t.Fatalf("degraded recall: %+v, %v", view, err)
+	}
+}
+
+func TestOpenMissingModelReadsExistingCanonicalLexically(t *testing.T) {
+	cfg := testConfig(t)
+	if err := os.MkdirAll(cfg.PalacePath, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(cfg.PalacePath, "canonical.sqlite3")
+	catalog, err := facade.OpenCatalog(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := catalog.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = db.Exec(`INSERT INTO memories(id,kind,content,status,version,scope,tags_json,source_json,valid_from,supersedes_json,created_at,updated_at,metadata_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, "mem_lexical", "note", "distinctivelexicaltoken evidence", "active", 1, "global", "[]", `{"type":"user"}`, now, "[]", now, now, "{}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	core, err := Open(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer core.Close()
+	if core.Mentle == nil || core.FastRecall.Searcher == nil || !core.LexicalOnly {
+		t.Fatalf("lexical wiring: mentle=%v searcher=%v lexical=%v", core.Mentle, core.FastRecall.Searcher, core.LexicalOnly)
+	}
+	content := "offline capture cannot mutate canonical"
+	digest := sha256.Sum256([]byte(content))
+	accepted, err := core.Ingest.Submit(context.Background(), ingest.SubmitRequest{SessionID: "lexical", EventID: "event-lexical", Phase: "session_end", Content: content, ContentHash: fmt.Sprintf("sha256:%x", digest)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		status, err := core.Ingest.Get(context.Background(), accepted.IngestionID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if status.Status == "spooled" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("lexical ingestion did not spool: %+v", status)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	view, err := core.FastRecall.Recall(context.Background(), recall.FastRequest{Query: "distinctivelexicaltoken", BudgetChars: 6000})
+	if err != nil || len(view.Cards) != 1 || view.Cards[0].ID != "mem_lexical" || !view.Degraded || !strings.Contains(strings.Join(view.Warnings, " "), "lexical") {
+		t.Fatalf("lexical recall: %+v %v", view, err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("lexical fallback mutated canonical SQLite")
+	}
+	for _, name := range []string{"vectors.db", "knowledge_graph.sqlite3"} {
+		if _, err := os.Stat(filepath.Join(cfg.PalacePath, name)); !os.IsNotExist(err) {
+			t.Fatalf("derived index %s created: %v", name, err)
+		}
+	}
+}
+
+func TestOpenFullModelPersistsAndRetrievesCardAcrossReopen(t *testing.T) {
+	cfg := testConfig(t)
+	var err error
+	cfg.ModelsDir, err = filepath.Abs(filepath.Join("..", "..", "..", "mentle", "models"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.ModelsDir, "onnx", "model.onnx")); err != nil {
+		t.Fatalf("model fixture required: %v", err)
+	}
+	core, err := Open(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if core.Mentle == nil || core.LexicalOnly {
+		t.Fatal("full model did not open in writable mode")
+	}
+	if _, err := core.Persona.Initialize(persona.Initialization{Identity: "identity", Relationship: "relationship", Redline: "redline", User: "user", World: "world"}, "user", persona.SourceInit, "init"); err != nil {
+		t.Fatal(err)
+	}
+	memory, err := core.Mentle.CreateMemory(context.Background(), facade.CreateMemoryRequest{Content: "uniquefullmodeltoken evidence", Scope: "global"}, "", "")
+	if err != nil {
+		core.Close()
+		t.Fatal(err)
+	}
+	if err := core.Close(); err != nil {
+		t.Fatal(err)
+	}
+	core, err = Open(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer core.Close()
+	view, err := core.FastRecall.Recall(context.Background(), recall.FastRequest{Query: "uniquefullmodeltoken", SessionID: "session-full", BudgetChars: 6000})
+	if err != nil || view.Degraded || len(view.Cards) == 0 {
+		t.Fatalf("full model recall: %+v %v", view, err)
+	}
+	found := false
+	for _, card := range view.Cards {
+		if card.ID == memory.ID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("persisted card %q missing: %+v", memory.ID, view.Cards)
 	}
 }
 
@@ -224,6 +351,241 @@ func TestDegradedCapturePersistsActivityAndTransientSpoolAcrossReopen(t *testing
 			t.Fatalf("ingestion after reopen: %+v", status)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestOpenLexicalOnlyLeavesExistingSpoolPending(t *testing.T) {
+	cfg := testConfig(t)
+	ctx := context.Background()
+	core, err := Open(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := "lexical spool must remain pending"
+	digest := sha256.Sum256([]byte(content))
+	accepted, err := core.Ingest.Submit(ctx, ingest.SubmitRequest{SessionID: "lexical-session", EventID: "lexical-pending", Phase: "session_end", Content: content, ContentHash: fmt.Sprintf("sha256:%x", digest)})
+	if err != nil {
+		_ = core.Close()
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		status, getErr := core.Ingest.Get(ctx, accepted.IngestionID)
+		if getErr != nil {
+			_ = core.Close()
+			t.Fatal(getErr)
+		}
+		if status.Status == "spooled" {
+			break
+		}
+		if time.Now().After(deadline) {
+			_ = core.Close()
+			t.Fatalf("capture did not spool: %+v", status)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := core.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(cfg.PalacePath, 0700); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := facade.OpenCatalog(filepath.Join(cfg.PalacePath, "canonical.sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := catalog.Close(); err != nil {
+		t.Fatal(err)
+	}
+	core, err = Open(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer core.Close()
+	if !core.LexicalOnly {
+		t.Fatal("expected lexical-only runtime")
+	}
+	pending, err := core.TransientSpool.Pending(ctx)
+	if err != nil || len(pending) != 1 || pending[0].EventID != "lexical-pending" {
+		t.Fatalf("lexical runtime drained spool: %+v %v", pending, err)
+	}
+	deadline = time.Now().Add(3 * time.Second)
+	for {
+		status, getErr := core.Ingest.Get(ctx, accepted.IngestionID)
+		if getErr != nil {
+			t.Fatal(getErr)
+		}
+		if status.Status == "spooled" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("lexical runtime changed ingestion: %+v", status)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestOpenRecoversSpooledCaptureWhenModelReturns(t *testing.T) {
+	cfg := testConfig(t)
+	ctx := context.Background()
+	core, err := Open(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := "recovered durable capture unique recovery token"
+	digest := sha256.Sum256([]byte(content))
+	req := ingest.SubmitRequest{SessionID: "recover-session", EventID: "recover-event", Phase: "session_end", Content: content, ContentHash: fmt.Sprintf("sha256:%x", digest)}
+	accepted, err := core.Ingest.Submit(ctx, req)
+	if err != nil {
+		_ = core.Close()
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		status, getErr := core.Ingest.Get(ctx, accepted.IngestionID)
+		if getErr != nil {
+			_ = core.Close()
+			t.Fatal(getErr)
+		}
+		if status.Status == "spooled" {
+			break
+		}
+		if time.Now().After(deadline) {
+			_ = core.Close()
+			t.Fatalf("capture did not spool: %+v", status)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := core.Close(); err != nil {
+		t.Fatal(err)
+	}
+	cfg.ModelsDir, err = filepath.Abs(filepath.Join("..", "..", "..", "mentle", "models"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.ModelsDir, "onnx", "model.onnx")); err != nil {
+		t.Fatalf("model fixture required: %v", err)
+	}
+	core, err = Open(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := core.Ingest.Get(ctx, accepted.IngestionID)
+	if err != nil || status.Status != "completed" {
+		_ = core.Close()
+		t.Fatalf("shared runtime did not recover ingestion: %+v %v", status, err)
+	}
+	pending, err := core.TransientSpool.Pending(ctx)
+	if err != nil || len(pending) != 0 {
+		_ = core.Close()
+		t.Fatalf("recovered spool still pending: %+v %v", pending, err)
+	}
+	if err := core.Close(); err != nil {
+		t.Fatal(err)
+	}
+	core, err = Open(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer core.Close()
+	status, err = core.Ingest.Get(ctx, accepted.IngestionID)
+	if err != nil || status.Status != "completed" {
+		t.Fatalf("reopen changed recovery status: %+v %v", status, err)
+	}
+	pending, err = core.TransientSpool.Pending(ctx)
+	if err != nil || len(pending) != 0 {
+		t.Fatalf("reopen duplicated pending spool: %+v %v", pending, err)
+	}
+}
+
+func TestOpenReportsSpoolDrainFailureInsteadOfHidingIt(t *testing.T) {
+	cfg := testConfig(t)
+	ctx := context.Background()
+	core, err := Open(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := "recovery failure should remain retryable"
+	digest := sha256.Sum256([]byte(content))
+	accepted, err := core.Ingest.Submit(ctx, ingest.SubmitRequest{
+		SessionID: "failed-recovery-session", EventID: "failed-recovery-event",
+		Phase: "session_end", Content: content, ContentHash: fmt.Sprintf("sha256:%x", digest),
+	})
+	if err != nil {
+		_ = core.Close()
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		status, getErr := core.Ingest.Get(ctx, accepted.IngestionID)
+		if getErr != nil {
+			_ = core.Close()
+			t.Fatal(getErr)
+		}
+		if status.Status == "spooled" {
+			break
+		}
+		if time.Now().After(deadline) {
+			_ = core.Close()
+			t.Fatalf("not spooled: %+v", status)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := core.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", cfg.StateDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`CREATE TRIGGER reject_runtime_drain BEFORE UPDATE ON ingestions WHEN NEW.status='completed' BEGIN SELECT RAISE(ABORT, 'runtime drain blocked'); END`); err != nil {
+		t.Fatal(err)
+	}
+	cfg.ModelsDir, err = filepath.Abs(filepath.Join("..", "..", "..", "mentle", "models"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.ModelsDir, "onnx", "model.onnx")); err != nil {
+		t.Fatalf("model fixture required: %v", err)
+	}
+	core, err = Open(ctx, cfg)
+	if core != nil {
+		_ = core.Close()
+		t.Fatal("Open returned a runtime despite failed spool recovery")
+	}
+	if err == nil || !strings.Contains(err.Error(), "runtime drain blocked") {
+		t.Fatalf("Open did not report drain failure: %v", err)
+	}
+	var status string
+	if err := db.QueryRow(`SELECT status FROM ingestions WHERE ingestion_id=?`, accepted.IngestionID).Scan(&status); err != nil || status != "spooled" {
+		t.Fatalf("ingestion status after failed drain: %q, %v", status, err)
+	}
+	var pending int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM transient_spool WHERE event_id=? AND status='pending_mentle'`, accepted.EventID).Scan(&pending); err != nil || pending != 1 {
+		t.Fatalf("pending spool after failed drain: %d, %v", pending, err)
+	}
+}
+
+func TestRequireLocalModelRejectsMissingEvenWithCanonical(t *testing.T) {
+	cfg := testConfig(t)
+	if err := os.MkdirAll(cfg.PalacePath, 0700); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := facade.OpenCatalog(filepath.Join(cfg.PalacePath, "canonical.sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := catalog.Close(); err != nil {
+		t.Fatal(err)
+	}
+	cfg.RequireLocalModel = true
+	core, err := Open(context.Background(), cfg)
+	if err == nil || core != nil {
+		if core != nil {
+			core.Close()
+		}
+		t.Fatalf("required model unexpectedly fell back to lexical: %v", err)
 	}
 }
 
