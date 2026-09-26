@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dashimaki/garden/internal/sqliteconn"
 	"github.com/dashimaki/mentle/facade"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 var ErrNotFound = errors.New("report not found")
@@ -108,7 +108,7 @@ type MemoryLister interface {
 }
 
 func Open(path string, memory MemoryLister, publisher Publisher, enricher Enricher) (*Service, error) {
-	db, err := sql.Open("sqlite3", path+"?_busy_timeout=5000&_journal_mode=WAL")
+	db, err := sqliteconn.Open(path)
 	if err != nil {
 		return nil, err
 	}
@@ -160,6 +160,9 @@ func migrateArtifactColumn(db *sql.DB) error {
 		}
 	}
 	if err := rows.Err(); err != nil {
+		return err
+	}
+	if err := rows.Close(); err != nil {
 		return err
 	}
 	_, err = db.Exec(`ALTER TABLE reports ADD COLUMN artifact TEXT NOT NULL DEFAULT '{}'`)

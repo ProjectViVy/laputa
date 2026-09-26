@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/dashimaki/mentle/facade"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 type fakeLister struct{ items []facade.Memory }
@@ -119,7 +119,7 @@ func TestGenerateRevisionIncrements(t *testing.T) {
 
 func TestOpenMigratesLegacySchema(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "garden.db")
-	db, err := sql.Open("sqlite3", path)
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}

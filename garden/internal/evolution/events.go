@@ -6,8 +6,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/dashimaki/garden/internal/sqliteconn"
 	"github.com/google/uuid"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 var ErrEventNotFound = errors.New("evolution: event not found")
@@ -17,7 +17,7 @@ type EventStore struct {
 }
 
 func OpenEventStore(path string) (*EventStore, error) {
-	db, err := sql.Open("sqlite3", path+"?_busy_timeout=5000&_journal_mode=WAL")
+	db, err := sqliteconn.Open(path)
 	if err != nil {
 		return nil, err
 	}

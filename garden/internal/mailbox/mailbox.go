@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/dashimaki/garden/internal/evolution"
+	"github.com/dashimaki/garden/internal/sqliteconn"
 	"github.com/google/uuid"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 const (
@@ -86,7 +86,7 @@ type Store struct {
 }
 
 func OpenStore(path string) (*Store, error) {
-	db, err := sql.Open("sqlite3", path+"?_busy_timeout=5000&_journal_mode=WAL")
+	db, err := sqliteconn.Open(path)
 	if err != nil {
 		return nil, err
 	}

@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/dashimaki/garden/internal/activity"
+	"github.com/dashimaki/garden/internal/sqliteconn"
 	"github.com/dashimaki/mentle/facade"
 	"github.com/google/uuid"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 var (
@@ -73,7 +73,7 @@ type SessionStateStore interface {
 }
 
 func Open(path string, memory MemoryWriter) (*Service, error) {
-	db, err := sql.Open("sqlite3", path+"?_busy_timeout=5000&_journal_mode=WAL")
+	db, err := sqliteconn.Open(path)
 	if err != nil {
 		return nil, err
 	}

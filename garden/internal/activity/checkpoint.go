@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/dashimaki/garden/internal/sqliteconn"
 )
 
 // CheckpointStore keeps runtime WorkingSet state in Garden's SQLite database.
@@ -17,7 +17,7 @@ type CheckpointStore struct {
 }
 
 func OpenCheckpointStore(path string) (*CheckpointStore, error) {
-	db, err := sql.Open("sqlite3", path+"?_busy_timeout=5000&_journal_mode=WAL")
+	db, err := sqliteconn.Open(path)
 	if err != nil {
 		return nil, err
 	}

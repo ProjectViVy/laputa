@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dashimaki/garden/internal/sqliteconn"
 	"github.com/dashimaki/laputa/persona"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/rivo/uniseg"
 )
 
@@ -194,11 +194,11 @@ func (p *SessionProvider) Get(ctx context.Context, sessionID string) (FrozenCore
 }
 
 func OpenStore(path string) (*Store, error) {
-	db, err := sql.Open("sqlite3", path+"?_busy_timeout=5000&_journal_mode=WAL")
+	db, err := sqliteconn.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(1)
+
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS frozen_core_sessions(
  session_id TEXT PRIMARY KEY,
  captured_at TEXT NOT NULL,

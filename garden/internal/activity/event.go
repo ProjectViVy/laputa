@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/dashimaki/garden/internal/sqliteconn"
 )
 
 type Event struct {
@@ -22,7 +22,7 @@ type Store struct {
 }
 
 func OpenStore(path string) (*Store, error) {
-	db, err := sql.Open("sqlite3", path+"?_busy_timeout=5000&_journal_mode=WAL")
+	db, err := sqliteconn.Open(path)
 	if err != nil {
 		return nil, err
 	}

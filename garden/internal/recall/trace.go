@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/dashimaki/garden/internal/sqliteconn"
 )
 
 var ErrTraceNotFound = errors.New("recall: trace not found")
@@ -50,7 +50,7 @@ type TraceStore struct {
 }
 
 func OpenTraceStore(path string) (*TraceStore, error) {
-	db, err := sql.Open("sqlite3", path+"?_busy_timeout=5000&_journal_mode=WAL")
+	db, err := sqliteconn.Open(path)
 	if err != nil {
 		return nil, err
 	}
