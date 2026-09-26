@@ -12,6 +12,15 @@ mentle/mempalace-test
 garden/garden.exe
 garden/.garden/
 
+# Local agent sessions and external reference checkouts
+.agents/
+.omc/
+.workspace/
+
+# Generated Go/e2e and frontend incremental build state
+e2e-tmp/
+garden/e2e-tmp/
+
 # OS
 .DS_Store
 Thumbs.db

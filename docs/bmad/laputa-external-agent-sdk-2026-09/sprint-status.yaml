@@ -1,0 +1,91 @@
+project: laputa-external-agent-sdk
+method: BMAD
+planning_path: project-sized
+updated: 2026-09-04
+phase: execution
+readiness: PASS
+implementation_authorized: true
+owner_authorized_at: 2026-09-04
+owner_decisions:
+  - ADR-0015 accepted
+  - AGENT-VIVY ships Laputa as the built-in preferred MemoryPort provider
+  - provider default transport is laputa-sdk-go over Garden canonical REST
+  - garden-mcp is for generic external-agent explicit tools, not Vivy lifecycle
+  - external-agent compatibility only; Persona/ACTMEM/Mentle authority remains clean-break
+  - SDK module remains at garden/sdk/laputa-agent-go inside the Garden repository
+  - Wave 1 through Wave 4 execution authorized within ADR-0015/BMAD scope
+  - Coordinator may create verified atomic commits but must not push; workers never commit or push
+escalation_required_for:
+  - non-loopback or public network exposure
+  - credential or authentication-model redesign
+  - data migration, deletion, or destructive operation
+  - Persona, ACTMEM, or Mentle authority semantic change
+  - independent SDK repository creation or public release
+execution_gate_remaining: []
+scope:
+  garden: canonical REST profile, discovery, capture status, MCP conformance
+  sdk: public framework-neutral typed client
+  agent_vivy: first-party internal MemoryPort lifecycle adapter
+non_goals:
+  - new generic Agent runtime/session/run/journal
+  - Persona/ACTMEM semantic redesign
+  - raw authority or storage exposure
+  - TencentDB compatibility/proxy requirement
+  - memsearch filesystem indexing
+  - optional vector backends
+  - compatibility aliases or dual authority
+rules:
+  wave_0_only_until_gate_close: true
+  worker_commit_allowed: false
+  push_allowed: false
+  coordinator_owns_status: true
+  max_concurrent_workers: 2
+  shared_files_require_serial_integration: true
+architecture_contract:
+  - ../../architecture/0012-laputa-markdown-clean-break.md
+  - ../../architecture/0013-laputa-clean-break-implementation-architecture.md
+  - ../../architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md
+  - ../../architecture/0015-laputa-external-agent-contract.md
+  - ARCHITECTURE-SPINE.md
+  - api-contract.md
+waves:
+  - id: 0
+    name: Contract and gates
+    status: done
+    depends_on: []
+    stories: [e00-s01, e00-s02, e00-s03, e00-s04]
+    story_status:
+      e00-s01: done
+      e00-s02: done
+      e00-s03: done
+      e00-s04: done
+  - id: 1
+    name: Canonical REST access plane
+    status: in_progress
+    depends_on: [0]
+    stories: [e01-s01, e01-s02, e01-s03, e01-s04, e01-s05]
+    story_status:
+      e01-s01: done
+      e01-s02: done
+      e01-s03: done
+      e01-s04: in_progress
+      e01-s05: blocked
+  - id: 2
+    name: SDK and first-party Vivy lifecycle
+    status: blocked
+    depends_on: [1]
+    stories: [e02-s01, e02-s02, e02-s03, e02-s04, e02-s05]
+  - id: 3
+    name: MCP conformance and explicit tools
+    status: blocked
+    depends_on: [1]
+    stories: [e03-s01, e03-s02, e03-s03, e03-s04]
+  - id: 4
+    name: Reliability and release
+    status: blocked
+    depends_on: [2, 3]
+    stories: [e04-s01, e04-s02, e04-s03, e04-s04]
+next_action:
+  story: e01-s04
+  mode: isolated Garden worktree implementation
+  condition: adapt terminal Capture/receipt from existing ingest; no data migration, MCP, Vivy or shared fixtures
