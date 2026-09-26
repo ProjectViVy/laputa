@@ -47,9 +47,18 @@ type Service struct {
 
 // Init loads config and wires the same components as cmd/server.
 func (s *Service) Init(ctx context.Context, opts Options) error {
-	cfg, err := config.Load(opts.ConfigDir)
-	if err != nil {
-		return fmt.Errorf("config: %w", err)
+	var cfg *config.Config
+	if opts.ConfigDir == "" && opts.PalacePath != "" && opts.ModelsDir != "" {
+		// Fully specified embedded paths must not consult ambient config or env.
+		defaults := config.DefaultConfig
+		defaults.TopicWings = append([]string(nil), defaults.TopicWings...)
+		cfg = &defaults
+	} else {
+		var err error
+		cfg, err = config.Load(opts.ConfigDir)
+		if err != nil {
+			return fmt.Errorf("config: %w", err)
+		}
 	}
 
 	if opts.PalacePath != "" {

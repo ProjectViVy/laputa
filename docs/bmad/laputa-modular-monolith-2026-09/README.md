@@ -9,6 +9,7 @@
 - Prior `C:/Users/Administrator/Desktop/garden-laputa-agent-sdk` worktree is dirty and **read-only** to this lane. No reset, stash, clean, implicit cherry-pick or parallel edits to its files.
 - Vivy root is on an unrelated feature branch. Do not change it without its own new isolated worktree and a Garden conformance gate.
 - No push, independent public release, data migration, authority semantics change or external network exposure in this batch.
+- [Cross-transport conformance inventory](conformance.md) records existing regression anchors and open gates; it is not proof that embedded mode passes.
 
 ## Dependency-driven waves
 
