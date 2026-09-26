@@ -336,10 +336,11 @@ func (s *Server) handleUpdateMemory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSessionSubmit(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requirePrincipal(w, r, PrincipalUser, PrincipalAgent, PrincipalAutodream); !ok {
+	principal, ok := s.requirePrincipal(w, r, PrincipalUser, PrincipalAgent, PrincipalAutodream)
+	if !ok {
 		return
 	}
-	if s.Ingestions == nil {
+	if s.AgentAPI == nil {
 		writeError(w, http.StatusServiceUnavailable, facade.ErrUnavailable)
 		return
 	}
@@ -347,14 +348,28 @@ func (s *Server) handleSessionSubmit(w http.ResponseWriter, r *http.Request) {
 		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("content type must be application/json"))
 		return
 	}
-	var body ingest.SubmitRequest
+	var body agentapi.SessionSubmitRequest
 	if err := decodeJSON(w, r, 4<<20, &body); err != nil {
 		writeRequestError(w, err)
 		return
 	}
-	accepted, err := s.Ingestions.Submit(r.Context(), body)
+	accepted, err := s.AgentAPI.SubmitSession(r.Context(), agentapi.Principal(principal), body)
 	if err != nil {
-		writeHandlerError(w, err)
+		var domainErr *agentapi.Error
+		if errors.As(err, &domainErr) {
+			switch domainErr.Code {
+			case "event_conflict":
+				writeErrorWithCode(w, http.StatusConflict, "memory_idempotency_conflict", domainErr)
+			case "unavailable":
+				writeError(w, http.StatusServiceUnavailable, facade.ErrUnavailable)
+			case "invalid_request":
+				writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", domainErr)
+			default:
+				writeHandlerError(w, domainErr)
+			}
+		} else {
+			writeHandlerError(w, err)
+		}
 		return
 	}
 	writeJSON(w, http.StatusAccepted, accepted)
