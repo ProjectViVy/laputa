@@ -35,6 +35,8 @@ view, err := session.Bootstrap(ctx, agentapi.BootstrapRequest{
 
 Vivy **还需**自己把上述三处接入 MemoryPort、模型请求装配和 Run/Journal 终态回调，并决定重试任务由谁发起。Garden 已持久化 ingest 状态与 event identity，不允许另建绕过 Garden 的写队列或双写 Persona/Mentle 权威。捕获被接纳不表示向量索引也已完成；查询 `IndexHealth`/派生 outbox 状态后才可声明派生健康。无模型时不应把 spool 收件说成已写入 canonical。
 
+**P1 接入限制**：当前显式 `ReadEvidence` 按已知 card ID 扩展内容，未把 `SearchCards` 的 scope/status 查询过滤当作授权；`scope` 目前由调用方传入，不是宿主签发的会话权限。可信宿主不得将不可信模型生成的 card ID 直接当作跨 scope 授权；若要提供隔离的证据扩展能力，必须先确定宿主固定的允许 scope/session 策略，增加服务端强制校验与跨 scope/失效状态负例，再宣告该能力安全可用。
+
 ## 离线运行语义
 
 | 条件 | 实际行为 |
