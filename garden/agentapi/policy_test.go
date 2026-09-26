@@ -11,6 +11,7 @@ func TestAuthorizeRoleMatrix(t *testing.T) {
 		{OpBootstrap, []Principal{PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator}},
 		{OpSearch, []Principal{PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator}},
 		{OpExpand, []Principal{PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator}},
+		{OpIndexHealth, []Principal{PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator}},
 		{OpCapture, []Principal{PrincipalUser, PrincipalAgent, PrincipalAutodream}},
 		{OpRemember, []Principal{PrincipalUser, PrincipalAgent}},
 		{OpPersonaGet, []Principal{PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator}},

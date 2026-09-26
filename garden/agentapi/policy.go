@@ -19,6 +19,7 @@ const (
 	OpBootstrap      Operation = "bootstrap"
 	OpSearch         Operation = "search"
 	OpExpand         Operation = "expand"
+	OpIndexHealth    Operation = "index_health"
 	OpCapture        Operation = "capture"
 	OpRemember       Operation = "remember"
 	OpPersonaGet     Operation = "persona_get"
@@ -43,7 +44,7 @@ func Authorize(configuredProfile string, binding Binding, principal Principal, o
 	}
 	allowed := false
 	switch operation {
-	case OpBootstrap, OpSearch, OpExpand, OpPersonaGet:
+	case OpBootstrap, OpSearch, OpExpand, OpIndexHealth, OpPersonaGet:
 		allowed = principal == PrincipalRead || principal == PrincipalUser || principal == PrincipalAgent || principal == PrincipalAutodream || principal == PrincipalOperator
 	case OpCapture:
 		allowed = principal == PrincipalUser || principal == PrincipalAgent || principal == PrincipalAutodream

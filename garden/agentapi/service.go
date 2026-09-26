@@ -52,7 +52,7 @@ func (s *Service) check(binding Binding, principal Principal, op Operation) erro
 	if err := Authorize(s.runtime.ProfileID, binding, principal, op); err != nil {
 		return err
 	}
-	if strings.TrimSpace(binding.AgentID) == "" || strings.TrimSpace(binding.Platform) == "" || strings.TrimSpace(binding.SessionID) == "" {
+	if strings.TrimSpace(binding.AgentID) == "" || strings.TrimSpace(binding.Platform) == "" || (op != OpSearch && op != OpIndexHealth && strings.TrimSpace(binding.SessionID) == "") {
 		return failure("invalid_binding", "agent_id, platform and session_id are required")
 	}
 	return nil
