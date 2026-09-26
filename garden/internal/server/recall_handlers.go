@@ -3,26 +3,47 @@ package server
 import (
 	"errors"
 	"net/http"
+	"strings"
 
+	"github.com/dashimaki/garden/agentapi"
 	"github.com/dashimaki/garden/internal/recall"
 )
 
 func (s *Server) handleFastRecall(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireReadPrincipal(w, r, PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator); !ok {
+	principal, ok := s.requireReadPrincipal(w, r, PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator)
+	if !ok {
 		return
 	}
-	if s.FastRecall == nil {
-		writeError(w, http.StatusServiceUnavailable, errors.New("recall service unavailable"))
-		return
+	// The ordinary recall route accepts recall inputs, not caller-supplied identity.
+	var body struct {
+		Query       string `json:"query"`
+		Scope       string `json:"scope"`
+		BudgetChars int    `json:"budget_chars"`
+		SessionID   string `json:"session_id"`
 	}
-	var body recall.FastRequest
 	if err := decodeJSON(w, r, 1<<20, &body); err != nil {
 		writeRequestError(w, err)
 		return
 	}
-	view, err := s.FastRecall.Recall(r.Context(), body)
+	if s.AgentAPI == nil || strings.TrimSpace(s.ProfileID) == "" {
+		writeErrorWithCode(w, http.StatusServiceUnavailable, "unavailable", errors.New("fast recall unavailable"))
+		return
+	}
+	view, err := s.AgentAPI.FastRecall(r.Context(), agentapi.Principal(principal), agentapi.FastRecallRequest{
+		Binding: agentapi.Binding{ProfileID: s.ProfileID, AgentID: "garden-http", Platform: "http", SessionID: body.SessionID},
+		Query:   body.Query, Scope: body.Scope, BudgetChars: body.BudgetChars,
+	})
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		var domainErr *agentapi.Error
+		if errors.As(err, &domainErr) {
+			status := http.StatusBadRequest
+			if domainErr.Code == "unavailable" {
+				status = http.StatusServiceUnavailable
+			}
+			writeErrorWithCode(w, status, domainErr.Code, err)
+		} else {
+			writeErrorWithCode(w, http.StatusInternalServerError, "internal_error", errors.New("fast recall unavailable"))
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, view)

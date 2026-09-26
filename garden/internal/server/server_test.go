@@ -11,14 +11,16 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/dashimaki/garden/agentapi"
 	"github.com/dashimaki/garden/internal/activity"
 	"github.com/dashimaki/garden/internal/evolution"
 	"github.com/dashimaki/garden/internal/recall"
+	"github.com/dashimaki/garden/internal/runtimecore"
 	"github.com/dashimaki/laputa/actmem"
 	"github.com/dashimaki/mentle/facade"
 )
 
-func testServer() *Server { return &Server{Addr: ":0"} }
+func testServer() *Server { return &Server{Addr: ":0", ProfileID: "profile_1"} }
 
 func evolutionTestServer(t *testing.T) *Server {
 	t.Helper()
@@ -87,10 +89,11 @@ func (fakeCardSearcher) ReadEvidence(context.Context, facade.EvidenceQuery) ([]f
 func TestFastRecallAndBootstrapEndpoints(t *testing.T) {
 	srv := testServer()
 	srv.FastRecall = &recall.FastService{Searcher: fakeCardSearcher{}}
+	srv.AgentAPI = agentapi.NewService(&runtimecore.Garden{ProfileID: "profile_1", FastRecall: srv.FastRecall})
 	for _, route := range []string{"/v2/recall/fast", "/v2/recall/bootstrap"} {
 		body := `{"query":"test","budget_chars":4000}`
 		if route == "/v2/recall/bootstrap" {
-			body = `{"intent":"test","budget_chars":4000}`
+			body = `{"session_id":"session_1","intent":"test","budget_chars":4000}`
 		}
 		req := localRequest(http.MethodPost, route, bytes.NewBufferString(body))
 		rec := httptest.NewRecorder()
@@ -101,6 +104,103 @@ func TestFastRecallAndBootstrapEndpoints(t *testing.T) {
 		if rec.Body.Len() == 0 {
 			t.Fatalf("route=%s empty response", route)
 		}
+	}
+}
+
+func TestBootstrapPreservesLegacyBodyWithoutClientIdentity(t *testing.T) {
+	srv := testServer()
+	srv.FastRecall = &recall.FastService{Searcher: fakeCardSearcher{}}
+	srv.AgentAPI = agentapi.NewService(&runtimecore.Garden{ProfileID: "profile_1", FastRecall: srv.FastRecall})
+	srv.Capabilities = CapabilityConfig{AgentToken: "agent-secret"}
+	req := localRequest(http.MethodPost, "/v2/recall/bootstrap", bytes.NewBufferString(`{"session_id":"session_1","intent":"test","budget_chars":4000}`))
+	req.Header.Set("Authorization", "Bearer agent-secret")
+	req.Header.Set("X-Garden-Actor", "operator") // audit metadata, not a trusted binding
+	rec := httptest.NewRecorder()
+	srv.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"trace_id", "context", "frozen_core", "evidence", "degraded", "warnings"} {
+		if _, ok := payload[key]; !ok {
+			t.Fatalf("missing %s in %v", key, payload)
+		}
+	}
+	if len(payload) != 6 {
+		t.Fatalf("unexpected bootstrap keys: %v", payload)
+	}
+}
+
+func TestBootstrapUsesBoundAgentAPIWithoutLegacyFastRecall(t *testing.T) {
+	srv := testServer()
+	srv.AgentAPI = agentapi.NewService(&runtimecore.Garden{ProfileID: "profile_1", FastRecall: &recall.FastService{Searcher: fakeCardSearcher{}}})
+	req := localRequest(http.MethodPost, "/v2/recall/bootstrap", bytes.NewBufferString(`{"session_id":"session_1","intent":"test","budget_chars":4000}`))
+	rec := httptest.NewRecorder()
+	srv.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestBootstrapRejectsClientIdentityClaims(t *testing.T) {
+	srv := testServer()
+	srv.FastRecall = &recall.FastService{Searcher: fakeCardSearcher{}}
+	for _, field := range []string{
+		`"binding":{"profile_id":"profile_1","agent_id":"agent_1","platform":"local","session_id":"session_1"}`,
+		`"profile_id":"profile_1"`, `"agent_id":"agent_1"`, `"actor":"operator"`,
+	} {
+		t.Run(field, func(t *testing.T) {
+			req := localRequest(http.MethodPost, "/v2/recall/bootstrap", bytes.NewBufferString(`{"session_id":"session_1",`+field+`}`))
+			rec := httptest.NewRecorder()
+			srv.HTTPHandler().ServeHTTP(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestBootstrapRequiresSessionID(t *testing.T) {
+	srv := testServer()
+	srv.FastRecall = &recall.FastService{Searcher: fakeCardSearcher{}}
+	req := localRequest(http.MethodPost, "/v2/recall/bootstrap", bytes.NewBufferString(`{"intent":"test"}`))
+	rec := httptest.NewRecorder()
+	srv.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestBootstrapUnavailableWithoutRecall(t *testing.T) {
+	srv := testServer()
+	req := localRequest(http.MethodPost, "/v2/recall/bootstrap", bytes.NewBufferString(`{"session_id":"session_1"}`))
+	rec := httptest.NewRecorder()
+	srv.HTTPHandler().ServeHTTP(rec, req)
+	var response struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusServiceUnavailable || response.Code != "unavailable" {
+		t.Fatalf("status=%d response=%+v", rec.Code, response)
+	}
+}
+
+func TestBootstrapAuthenticationIgnoresActorHeader(t *testing.T) {
+	srv := testServer()
+	srv.FastRecall = &recall.FastService{Searcher: fakeCardSearcher{}}
+	srv.Capabilities = CapabilityConfig{AgentToken: "agent-secret"}
+	req := localRequest(http.MethodPost, "/v2/recall/bootstrap", bytes.NewBufferString(`{"session_id":"session_1"}`))
+	req.Header.Set("Authorization", "Bearer wrong-token")
+	req.Header.Set("X-Garden-Actor", "operator")
+	rec := httptest.NewRecorder()
+	srv.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
 

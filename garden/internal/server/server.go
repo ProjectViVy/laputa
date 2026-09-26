@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dashimaki/garden/agentapi"
 	"github.com/dashimaki/garden/console"
 	"github.com/dashimaki/garden/internal/activity"
 	"github.com/dashimaki/garden/internal/evolution"
@@ -30,6 +31,8 @@ import (
 
 // Server exposes garden CRUD over HTTP.
 type Server struct {
+	AgentAPI     *agentapi.Service
+	ProfileID    string
 	Facade       *facade.Service
 	FastRecall   *recall.FastService
 	DeepRecall   *recall.DeepService
@@ -392,9 +395,12 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireReadPrincipal(w, r, PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator); !ok {
+	principal, ok := s.requireReadPrincipal(w, r, PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator)
+	if !ok {
 		return
 	}
+	// The HTTP contract accepts recall inputs only. Host binding is not an
+	// authenticated client claim and must not be decoded from this request.
 	var body struct {
 		SessionID   string `json:"session_id"`
 		Intent      string `json:"intent"`
@@ -402,6 +408,10 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := decodeJSON(w, r, 1<<20, &body); err != nil {
 		writeRequestError(w, err)
+		return
+	}
+	if strings.TrimSpace(body.SessionID) == "" {
+		writeError(w, http.StatusBadRequest, errors.New("session_id is required"))
 		return
 	}
 	if body.BudgetChars == 0 {
@@ -415,17 +425,33 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(intent) == "" {
 		intent = "current session bootstrap context"
 	}
-
-	if s.FastRecall != nil {
-		view, err := s.FastRecall.Recall(r.Context(), recall.FastRequest{Query: intent, Scope: "", BudgetChars: body.BudgetChars, SessionID: body.SessionID})
-		if err != nil {
-			writeError(w, http.StatusBadRequest, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"trace_id": view.TraceID, "context": view.Context, "frozen_core": view.FrozenCore, "evidence": view.Evidence, "degraded": view.Degraded, "warnings": view.Warnings})
+	if s.AgentAPI == nil || strings.TrimSpace(s.ProfileID) == "" {
+		writeErrorWithCode(w, http.StatusServiceUnavailable, "unavailable", errors.New("Garden runtime unavailable"))
 		return
 	}
-	writeError(w, http.StatusServiceUnavailable, errors.New("fast recall unavailable"))
+	view, err := s.AgentAPI.Bootstrap(r.Context(), agentapi.Principal(principal), agentapi.BootstrapRequest{
+		Binding: agentapi.Binding{ProfileID: s.ProfileID, AgentID: "garden-http", Platform: "http", SessionID: body.SessionID},
+		SessionID: body.SessionID, Intent: intent, BudgetChars: body.BudgetChars,
+	})
+	if err != nil {
+		var domainErr *agentapi.Error
+		if errors.As(err, &domainErr) {
+			status := http.StatusBadRequest
+			switch domainErr.Code {
+			case "authentication_required":
+				status = http.StatusUnauthorized
+			case "principal_forbidden":
+				status = http.StatusForbidden
+			case "unavailable":
+				status = http.StatusServiceUnavailable
+			}
+			writeErrorWithCode(w, status, domainErr.Code, domainErr)
+		} else {
+			writeErrorWithCode(w, http.StatusInternalServerError, "internal_error", errors.New("bootstrap unavailable"))
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
 }
 func (s *Server) handleLatestReport(w http.ResponseWriter, r *http.Request) {
 	if s.Reports == nil {

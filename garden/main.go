@@ -2,56 +2,125 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/dashimaki/garden/agentapi"
 	"github.com/dashimaki/garden/internal/activity"
 	"github.com/dashimaki/garden/internal/arbiter"
 	"github.com/dashimaki/garden/internal/evolution"
-	"github.com/dashimaki/garden/internal/ingest"
 	"github.com/dashimaki/garden/internal/lifecycle"
 	"github.com/dashimaki/garden/internal/mailbox"
-	"github.com/dashimaki/garden/internal/personactx"
 	"github.com/dashimaki/garden/internal/pipeline"
 	"github.com/dashimaki/garden/internal/rag"
 	"github.com/dashimaki/garden/internal/recall"
 	"github.com/dashimaki/garden/internal/report"
+	"github.com/dashimaki/garden/internal/runtimecore"
 	"github.com/dashimaki/garden/internal/server"
-	"github.com/dashimaki/laputa/actmem"
-	"github.com/dashimaki/laputa/persona"
 	"github.com/dashimaki/mentle/facade"
 )
 
 func main() {
 	ctx := context.Background()
-
 	personaDir := expandHome(os.Getenv("GARDEN_PERSONA_DIR"))
 	if personaDir == "" {
 		personaDir = expandHome("~/.laputa")
 	}
-	personaService, err := persona.Open(personaDir)
+	stateDB := expandHome(os.Getenv("GARDEN_STATE_DB"))
+	if stateDB == "" {
+		stateDB = expandHome("~/.garden/garden.db")
+	}
+	palacePath, modelsDir, err := facade.ResolveLegacyPaths(expandHome(os.Getenv("GARDEN_MENTLE_CONFIG_DIR")))
 	if err != nil {
-		log.Fatalf("persona store: %v", err)
+		log.Fatalf("mentle configuration: %v", err)
 	}
-	actmemStore := actmem.New(personaDir)
+	profileID := os.Getenv("GARDEN_AGENT_PROFILE_ID")
+	if profileID == "" {
+		profileID = "default"
+	}
+	app, err := openApp(ctx, runtimeConfig(personaDir, palacePath, modelsDir, stateDB, profileID))
+	if err != nil {
+		log.Fatalf("garden: %v", err)
+	}
+	defer app.Close()
+	if err := lifecycle.Run(ctx, app.server); err != nil {
+		log.Fatalf("lifecycle: %v", err)
+	}
+}
 
-	var mem *facade.Service
-	memSvc := &facade.Service{}
-	if err := memSvc.Init(ctx, facade.Options{ConfigDir: expandHome(os.Getenv("GARDEN_MENTLE_CONFIG_DIR"))}); err != nil {
-		log.Printf("mentle unavailable, frozen-core-only mode: %v", err)
-	} else {
-		mem = memSvc
-		defer mem.Close()
+// runtimeConfig makes the deployment profile an immutable binding, never a request selector.
+// The monolith alone resolves legacy relative paths against its working directory;
+// embedders must pass explicit absolute paths directly to agentapi.Open.
+func runtimeConfig(personaDir, palacePath, modelsDir, stateDB, profileID string) runtimecore.Config {
+	return runtimecore.Config{
+		PersonaDir: legacyAbsolutePath(personaDir), PalacePath: legacyAbsolutePath(palacePath),
+		ModelsDir: legacyAbsolutePath(modelsDir), StateDB: legacyAbsolutePath(stateDB), ProfileID: profileID,
 	}
+}
+
+func legacyAbsolutePath(path string) string {
+	if path == "" {
+		return ""
+	}
+	path = expandHome(path)
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return path // runtimecore validation fails closed rather than choosing another directory.
+	}
+	return absolute
+}
+
+type gardenApp struct {
+	runtime    *runtimecore.Garden
+	server     *server.Server
+	closeExtra []func() error
+}
+
+func (a *gardenApp) Close() error {
+	if a == nil {
+		return nil
+	}
+	var first error
+	for i := len(a.closeExtra) - 1; i >= 0; i-- {
+		if err := a.closeExtra[i](); err != nil && first == nil {
+			first = err
+		}
+	}
+	a.closeExtra = nil
+	if a.runtime != nil {
+		if err := a.runtime.Close(); err != nil && first == nil {
+			first = err
+		}
+		a.runtime = nil
+	}
+	return first
+}
+
+// openApp opens the domain once; the HTTP and agent adapters share its owned services.
+// Pipeline, report, checkpoint, EvoMap and mailbox remain app-level management.
+func openApp(ctx context.Context, cfg runtimecore.Config) (_ *gardenApp, err error) {
+	core, err := runtimecore.Open(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	a := &gardenApp{runtime: core}
+	defer func() {
+		if err != nil {
+			_ = a.Close()
+		}
+	}()
 	components := map[string]string{"persona": "ok"}
-	if mem == nil {
+	if core.Mentle == nil {
 		components["mentle"] = "degraded"
 	} else {
 		components["mentle"] = "ok"
 	}
-
 	pipelinePath := expandHome(os.Getenv("GARDEN_PIPELINE_CONFIG"))
 	if pipelinePath == "" {
 		pipelinePath = expandHome("~/.garden/pipelines.yaml")
@@ -63,6 +132,7 @@ func main() {
 	} else if manager, err = pipeline.NewManager(pipelineCfg.Pipelines, revision); err != nil {
 		log.Printf("pipeline unavailable: %v", err)
 		components["pipeline"] = "degraded"
+		err = nil
 	} else {
 		components["pipeline"] = "ok"
 	}
@@ -71,95 +141,48 @@ func main() {
 	} else {
 		components["planner"] = "ok"
 	}
-
-	stateDB := expandHome(os.Getenv("GARDEN_STATE_DB"))
-	if stateDB == "" {
-		stateDB = expandHome("~/.garden/garden.db")
-	}
-	if err := os.MkdirAll(filepath.Dir(stateDB), 0700); err != nil {
-		log.Fatalf("state directory: %v", err)
-	}
-
-	frozenStore, err := personactx.OpenStore(stateDB)
+	checkpointStore, err := activity.OpenCheckpointStore(cfg.StateDB)
 	if err != nil {
-		log.Fatalf("frozen core store: %v", err)
+		return nil, fmt.Errorf("checkpoint store: %w", err)
 	}
-	defer frozenStore.Close()
-	fastRecall := &recall.FastService{Frozen: &personactx.SessionProvider{Store: frozenStore, Reader: personaService}}
-	if mem != nil {
-		fastRecall.Searcher = mem
-	}
-
-	checkpointStore, err := activity.OpenCheckpointStore(stateDB)
-	if err != nil {
-		log.Fatalf("checkpoint store: %v", err)
-	}
-	defer checkpointStore.Close()
+	a.closeExtra = append(a.closeExtra, checkpointStore.Close)
 	ws := activity.NewWorkingSet()
 	checkpointer := &activity.Checkpointer{Store: checkpointStore, WS: ws}
 	if err := checkpointer.Load(ctx, ""); err != nil {
 		log.Printf("checkpoint load: %v", err)
 	}
-	fastRecall.WS = ws
-
-	var memoryWriter ingest.MemoryWriter
+	core.FastRecall.WS = ws
 	var memoryLister report.MemoryLister
-	if mem != nil {
-		memoryWriter = mem
-		memoryLister = mem
+	if core.Mentle != nil {
+		memoryLister = core.Mentle
 	}
-	ingestions, err := ingest.Open(stateDB, memoryWriter)
+	reports, err := report.Open(cfg.StateDB, memoryLister, nil, nil)
 	if err != nil {
-		log.Fatalf("ingestion store: %v", err)
+		return nil, fmt.Errorf("report store: %w", err)
 	}
-	defer ingestions.Close()
-	reports, err := report.Open(stateDB, memoryLister, nil, nil)
-	if err != nil {
-		log.Fatalf("report store: %v", err)
-	}
-	defer reports.Close()
-
-	activityStore, err := activity.OpenStore(stateDB)
-	if err != nil {
-		log.Fatalf("activity store: %v", err)
-	}
-	defer activityStore.Close()
-	ingestions.Activity = activityStore
-	spool, err := activity.OpenSpool(stateDB)
-	if err != nil {
-		log.Fatalf("transient spool: %v", err)
-	}
-	defer spool.Close()
-	ingestions.Spool = spool
-	if mem != nil {
-		if drained, drainErr := ingestions.DrainSpool(ctx); drainErr != nil {
+	a.closeExtra = append(a.closeExtra, reports.Close)
+	if core.Mentle != nil {
+		if drained, drainErr := core.Ingest.DrainSpool(ctx); drainErr != nil {
 			log.Printf("spool drain: %v", drainErr)
 		} else if drained > 0 {
 			log.Printf("drained %d spooled events to mentle", drained)
 		}
 	}
-
-	traceStore, err := recall.OpenTraceStore(stateDB)
-	if err != nil {
-		log.Fatalf("trace store: %v", err)
-	}
-	defer traceStore.Close()
 	var graphSource recall.GraphSource
-	if mem != nil {
-		graphSource = mem
+	if core.Mentle != nil {
+		graphSource = core.Mentle
 	}
-	deepRecall := &recall.DeepService{Fast: fastRecall, Graph: graphSource, Planner: configuredPlanner(), Arbiter: arbiter.New(), Traces: traceStore}
-
-	evoStore, err := evolution.OpenStore(stateDB)
+	deepRecall := &recall.DeepService{Fast: core.FastRecall, Graph: graphSource, Planner: configuredPlanner(), Arbiter: arbiter.New(), Traces: core.Trace}
+	evoStore, err := evolution.OpenStore(cfg.StateDB)
 	if err != nil {
-		log.Fatalf("evolution store: %v", err)
+		return nil, fmt.Errorf("evolution store: %w", err)
 	}
-	defer evoStore.Close()
-	evoEvents, err := evolution.OpenEventStore(stateDB)
+	a.closeExtra = append(a.closeExtra, evoStore.Close)
+	evoEvents, err := evolution.OpenEventStore(cfg.StateDB)
 	if err != nil {
-		log.Fatalf("evolution events: %v", err)
+		return nil, fmt.Errorf("evolution events: %w", err)
 	}
-	defer evoEvents.Close()
+	a.closeExtra = append(a.closeExtra, evoEvents.Close)
 	var evoProvider evolution.EvolverProvider
 	components["evolution"] = "degraded"
 	if hub, hubErr := evolution.OpenHubClient(evolution.HubClientOptions{BaseURL: os.Getenv("GARDEN_EVOMAP_HUB_URL"), CredsPath: expandHome(os.Getenv("GARDEN_EVOMAP_CREDS"))}); hubErr != nil {
@@ -169,25 +192,21 @@ func main() {
 		components["evolution"] = "ok"
 	}
 	evoService := &evolution.Service{Provider: evoProvider, Store: evoStore, Events: evoEvents, Hub: evolution.DefaultHubPolicy()}
-
-	mailboxStore, err := mailbox.OpenStore(stateDB)
+	mailboxStore, err := mailbox.OpenStore(cfg.StateDB)
 	if err != nil {
-		log.Fatalf("mailbox store: %v", err)
+		return nil, fmt.Errorf("mailbox store: %w", err)
 	}
-	defer mailboxStore.Close()
-
+	a.closeExtra = append(a.closeExtra, mailboxStore.Close)
 	addr := listenAddr()
 	if !strings.HasPrefix(addr, "127.0.0.1:") && !strings.HasPrefix(addr, "localhost:") && !strings.HasPrefix(addr, "[::1]:") {
 		log.Printf("HIGH RISK: Garden API is configured on non-loopback address %q; capability authentication is mandatory and loopback read exemptions do not apply", addr)
 	}
 	var materialsProvider server.MaterialsProvider
-	if mem != nil {
-		materialsProvider = mem
+	if core.Mentle != nil {
+		materialsProvider = core.Mentle
 	}
-	srv := &server.Server{Facade: mem, FastRecall: fastRecall, DeepRecall: deepRecall, TraceStore: traceStore, Evolution: evoService, Activity: activityStore, Checkpointer: checkpointer, Pipelines: manager, Ingestions: ingestions, Reports: reports, Materials: materialsProvider, Mailbox: mailboxStore, Persona: personaService, Actmem: actmemStore, Components: components, Addr: addr}
-	if err := lifecycle.Run(ctx, srv); err != nil {
-		log.Fatalf("lifecycle: %v", err)
-	}
+	a.server = &server.Server{ProfileID: core.ProfileID, AgentAPI: agentapi.NewService(core), Facade: core.Mentle, FastRecall: core.FastRecall, DeepRecall: deepRecall, TraceStore: core.Trace, Evolution: evoService, Activity: core.Activity, Checkpointer: checkpointer, Pipelines: manager, Ingestions: core.Ingest, Reports: reports, Materials: materialsProvider, Mailbox: mailboxStore, Persona: core.Persona, Actmem: core.Actmem, Components: components, Addr: addr}
+	return a, nil
 }
 
 func configuredPlanner() rag.Planner {
