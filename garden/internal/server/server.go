@@ -396,7 +396,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 			status = "degraded"
 		}
 	}
-	indexHealth, healthErr := s.indexHealth(r.Context())
+	indexHealth, healthErr := s.indexHealth(r.Context(), PrincipalRead)
 	if healthErr != nil {
 		status = "degraded"
 		components["mentle"] = "unavailable"
@@ -607,6 +607,10 @@ func writeHandlerError(w http.ResponseWriter, err error) {
 	}
 	if errors.Is(err, facade.ErrIndexHealthUnavailable) {
 		writeErrorWithCode(w, http.StatusServiceUnavailable, "index_health_unavailable", errors.New("live index probes unavailable"))
+		return
+	}
+	if errors.Is(err, facade.ErrReadOnly) {
+		writeErrorWithCode(w, http.StatusServiceUnavailable, "memory_read_only", errors.New("memory writes unavailable in lexical-only mode"))
 		return
 	}
 	if errors.Is(err, facade.ErrUnavailable) {

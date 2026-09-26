@@ -4,16 +4,20 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
+	"github.com/dashimaki/garden/agentapi"
 	"github.com/dashimaki/garden/internal/recall"
 	"github.com/dashimaki/mentle/facade"
 )
 
-func (s *Server) indexHealth(ctx context.Context) (facade.IndexHealth, error) {
-	if s.Facade == nil {
+func (s *Server) indexHealth(ctx context.Context, principal Principal) (facade.IndexHealth, error) {
+	if s.AgentAPI == nil || strings.TrimSpace(s.ProfileID) == "" {
 		return facade.IndexHealth{Status: "unavailable", Reasons: []string{"canonical_probe_failed"}}, facade.ErrIndexHealthUnavailable
 	}
-	return s.Facade.IndexHealth(ctx)
+	return s.AgentAPI.IndexHealth(ctx, agentapi.Principal(principal), agentapi.Binding{
+		ProfileID: s.ProfileID, AgentID: "garden-http", Platform: "http",
+	})
 }
 
 func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
@@ -31,7 +35,7 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 		"components": components,
 		"source":     "live",
 	}
-	indexHealth, healthErr := s.indexHealth(r.Context())
+	indexHealth, healthErr := s.indexHealth(r.Context(), PrincipalRead)
 	resp["index_health"] = indexHealth
 	if healthErr != nil || indexHealth.Status != "ok" {
 		resp["status"] = "degraded"
@@ -52,10 +56,11 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminIndexHealth(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireReadPrincipal(w, r, PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator); !ok {
+	principal, ok := s.requireReadPrincipal(w, r, PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator)
+	if !ok {
 		return
 	}
-	health, err := s.indexHealth(r.Context())
+	health, err := s.indexHealth(r.Context(), principal)
 	if err != nil {
 		writeErrorWithDetails(w, http.StatusServiceUnavailable, "index_health_unavailable", errors.New("live index probes unavailable"), map[string]any{"reasons": health.Reasons})
 		return
@@ -74,7 +79,7 @@ func (s *Server) handleAdminComponents(w http.ResponseWriter, r *http.Request) {
 	for name, value := range s.Components {
 		merged[name] = value
 	}
-	indexHealth, healthErr := s.indexHealth(r.Context())
+	indexHealth, healthErr := s.indexHealth(r.Context(), PrincipalRead)
 	if healthErr != nil {
 		merged["mentle"] = "unavailable"
 	} else {
