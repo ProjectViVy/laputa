@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -54,8 +55,19 @@ type HTTPError struct {
 	Body   string
 }
 
+var errBackendTransport = errors.New("garden backend transport failure")
+
+type backendErrorEnvelope struct {
+	Code      string         `json:"code"`
+	Message   string         `json:"message"`
+	Legacy    string         `json:"error"`
+	Retryable bool           `json:"retryable"`
+	RequestID string         `json:"request_id"`
+	Details   map[string]any `json:"details"`
+}
+
 func (e *HTTPError) Error() string {
-	return fmt.Sprintf("garden %s %s -> %d: %s", e.Method, e.Path, e.Status, truncate(e.Body, 400))
+	return fmt.Sprintf("garden %s %s -> %d %s", e.Method, e.Path, e.Status, http.StatusText(e.Status))
 }
 
 func NewClient(baseURL string) *Client {
@@ -108,7 +120,7 @@ func (c *Client) doWithHeaders(ctx context.Context, method, path string, body an
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("request %s %s: %w", method, path, err)
+		return fmt.Errorf("%w: %v", errBackendTransport, err)
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
@@ -128,13 +140,6 @@ func (c *Client) doWithHeaders(ctx context.Context, method, path string, body an
 
 func (c *Client) postWithHeaders(ctx context.Context, path string, body any, headers map[string]string, out any) error {
 	return c.doWithHeaders(ctx, http.MethodPost, path, body, headers, out)
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "..."
 }
 
 // --- Persona types (mirror of /v2/persona/status response) ---
@@ -371,7 +376,13 @@ func main() {
 	baseURL := flag.String("base-url", envOr("GARDEN_MCP_BASE_URL", "http://127.0.0.1:7373"), "Garden HTTP API base URL")
 	flag.Parse()
 
-	client := NewClient(*baseURL)
+	if err := server.ServeStdio(newMCPServer(NewClient(*baseURL))); err != nil {
+		fmt.Fprintf(os.Stderr, "garden-mcp: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func newMCPServer(client *Client) *server.MCPServer {
 	srv := server.NewMCPServer(
 		"garden",
 		"0.1.0",
@@ -393,11 +404,7 @@ func main() {
 	srv.AddTool(handleEvidenceCollections(client))
 	srv.AddTool(handleActivityRecent(client))
 	srv.AddTool(handleRecordSignal(client))
-
-	if err := server.ServeStdio(srv); err != nil {
-		fmt.Fprintf(os.Stderr, "garden-mcp: %v\n", err)
-		os.Exit(1)
-	}
+	return srv
 }
 
 func envOr(key, def string) string {
@@ -1075,8 +1082,36 @@ func okResult(text string) *mcp.CallToolResult {
 }
 
 func errorResult(err error) *mcp.CallToolResult {
+	payload := map[string]any{"code": "invalid_request", "message": err.Error(), "retryable": false, "request_id": "", "details": map[string]any{}}
+	var httpErr *HTTPError
+	switch {
+	case errors.As(err, &httpErr):
+		payload["status"] = httpErr.Status
+		payload["code"] = "backend_error"
+		payload["message"] = http.StatusText(httpErr.Status)
+		payload["retryable"] = httpErr.Status == http.StatusTooManyRequests || httpErr.Status >= http.StatusInternalServerError
+		var envelope backendErrorEnvelope
+		if json.Unmarshal([]byte(httpErr.Body), &envelope) == nil && envelope.Code != "" {
+			payload["code"] = envelope.Code
+			if envelope.Message != "" {
+				payload["message"] = envelope.Message
+			} else if envelope.Legacy != "" {
+				payload["message"] = envelope.Legacy
+			}
+			payload["retryable"] = envelope.Retryable
+			payload["request_id"] = envelope.RequestID
+			if envelope.Details != nil {
+				payload["details"] = envelope.Details
+			}
+		}
+	case errors.Is(err, errBackendTransport):
+		payload["code"] = "backend_unavailable"
+		payload["message"] = "Garden backend unavailable"
+		payload["retryable"] = true
+	}
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{mcp.NewTextContent("error: " + err.Error())},
-		IsError: true,
+		Content:           []mcp.Content{mcp.NewTextContent(fmt.Sprintf("error [%s]: %s", payload["code"], payload["message"]))},
+		StructuredContent: payload,
+		IsError:           true,
 	}
 }
