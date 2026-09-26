@@ -162,9 +162,19 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, erro
 }
 
 func (s *Service) Get(ctx context.Context, id string) (Status, error) {
+	return s.get(ctx, `SELECT ingestion_id,status,memory_id,trace_id,warnings,error FROM ingestions WHERE ingestion_id=?`, id)
+}
+
+// GetByIdentity reads status only when all three durable ingestion identifiers match.
+// An identity mismatch is indistinguishable from a missing ingestion to callers.
+func (s *Service) GetByIdentity(ctx context.Context, id, sessionID, eventID string) (Status, error) {
+	return s.get(ctx, `SELECT ingestion_id,status,memory_id,trace_id,warnings,error FROM ingestions WHERE ingestion_id=? AND session_id=? AND event_id=?`, id, sessionID, eventID)
+}
+
+func (s *Service) get(ctx context.Context, query string, args ...any) (Status, error) {
 	var st Status
 	var memoryID, traceID, warnings, errText sql.NullString
-	err := s.db.QueryRowContext(ctx, `SELECT ingestion_id,status,memory_id,trace_id,warnings,error FROM ingestions WHERE ingestion_id=?`, id).Scan(&st.IngestionID, &st.Status, &memoryID, &traceID, &warnings, &errText)
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(&st.IngestionID, &st.Status, &memoryID, &traceID, &warnings, &errText)
 	if errors.Is(err, sql.ErrNoRows) {
 		return st, ErrNotFound
 	}
