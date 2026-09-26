@@ -3,13 +3,107 @@ package facade
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/dashimaki/mentle/internal/config"
+	"github.com/dashimaki/mentle/internal/embedder"
 )
+
+func TestInitRequireLocalModelRejectsMissingDespiteBundledCWD(t *testing.T) {
+	_ = bundledModelsDir(t)
+	palace := filepath.Join(t.TempDir(), "palace")
+	missing := filepath.Join(t.TempDir(), "no-model")
+	var svc Service
+	err := svc.Init(context.Background(), Options{PalacePath: palace, ModelsDir: missing, RequireLocalModel: true})
+	if !errors.Is(err, embedder.ErrLocalModelMissing) {
+		t.Fatalf("strict init: got %v, want ErrLocalModelMissing", err)
+	}
+	if svc.Embedder != nil || svc.Catalog != nil {
+		t.Fatalf("failed init retained resources: %+v", svc)
+	}
+	if _, statErr := os.Stat(palace); !os.IsNotExist(statErr) {
+		t.Fatalf("strict init created palace before model validation: %v", statErr)
+	}
+}
+
+func TestInitRequireLocalModelRejectsEmptyDirectory(t *testing.T) {
+	var svc Service
+	err := svc.Init(context.Background(), Options{PalacePath: filepath.Join(t.TempDir(), "palace"), RequireLocalModel: true})
+	if !errors.Is(err, embedder.ErrLocalModelMissing) {
+		t.Fatalf("strict init without explicit modelsDir: %v", err)
+	}
+}
+
+func TestInitExplicitPalaceReopenCanonicalLifecycle(t *testing.T) {
+	modelsDir := bundledModelsDir(t)
+	palace := filepath.Join(t.TempDir(), "palace")
+	opts := Options{PalacePath: palace, ModelsDir: modelsDir, RequireLocalModel: true}
+	ctx := context.Background()
+	var first Service
+	if err := first.Init(ctx, opts); err != nil {
+		t.Fatalf("first init: %v", err)
+	}
+	created, err := first.CreateMemory(ctx, CreateMemoryRequest{Content: "m1 original decision", Kind: "decision"}, "m1-create", "m1-create-hash")
+	if err != nil {
+		first.Close()
+		t.Fatalf("create: %v", err)
+	}
+	updatedContent := "m1 revised decision"
+	expectedVersion := created.Version
+	updated, err := first.UpdateMemory(ctx, created.ID, UpdateMemoryRequest{Content: &updatedContent, ExpectedVersion: &expectedVersion})
+	if err != nil {
+		first.Close()
+		t.Fatalf("update: %v", err)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatalf("close first: %v", err)
+	}
+
+	var reopened Service
+	if err := reopened.Init(ctx, opts); err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	persisted, err := reopened.GetMemory(ctx, created.ID)
+	if err != nil || persisted.Content != updatedContent || persisted.Version != updated.Version {
+		reopened.Close()
+		t.Fatalf("reopened canonical memory=%+v err=%v", persisted, err)
+	}
+	page, err := reopened.ListMemories(ctx, ListMemoryOptions{Limit: 10})
+	if err != nil || len(page.Items) != 1 || page.Items[0].ID != created.ID {
+		reopened.Close()
+		t.Fatalf("reopened canonical list=%+v err=%v", page, err)
+	}
+	hits, err := reopened.Retrieve(ctx, RetrievalQuery{Text: updatedContent, Limit: 5})
+	if err != nil || len(hits) != 1 || hits[0].ID != created.ID || hits[0].Content != updatedContent {
+		reopened.Close()
+		t.Fatalf("reopened retrieval=%+v err=%v", hits, err)
+	}
+	deleted, err := reopened.DeleteMemory(ctx, created.ID, persisted.Version, "user_request", "m1-delete")
+	if err != nil || !deleted.Deleted {
+		reopened.Close()
+		t.Fatalf("delete after reopen=%+v err=%v", deleted, err)
+	}
+	if err := reopened.Close(); err != nil {
+		t.Fatalf("close reopened: %v", err)
+	}
+
+	var final Service
+	if err := final.Init(ctx, opts); err != nil {
+		t.Fatalf("final reopen: %v", err)
+	}
+	defer final.Close()
+	if _, err := final.GetMemory(ctx, created.ID); !errors.Is(err, ErrMemoryNotFound) {
+		t.Fatalf("tombstone not persisted across reopen: %v", err)
+	}
+	page, err = final.ListMemories(ctx, ListMemoryOptions{Limit: 10})
+	if err != nil || len(page.Items) != 0 {
+		t.Fatalf("deleted memory returned after reopen: %+v err=%v", page, err)
+	}
+}
 
 func bundledModelsDir(t *testing.T) string {
 	t.Helper()

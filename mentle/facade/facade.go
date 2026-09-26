@@ -24,6 +24,8 @@ type Options struct {
 	ConfigDir  string
 	PalacePath string
 	ModelsDir  string
+	// RequireLocalModel disables cwd fallback and downloads; ModelsDir must be explicit.
+	RequireLocalModel bool
 }
 
 // Service aggregates mentle internal components for garden and cmd/server.
@@ -69,7 +71,14 @@ func (s *Service) Init(ctx context.Context, opts Options) error {
 	}
 
 	modelsDir := cfg.GetModelsDir()
-	emb, err := embedder.New("", modelsDir)
+	var emb *embedder.Embedder
+	var err error
+	if opts.RequireLocalModel {
+		// Strict mode uses the caller's explicit directory, never config defaults.
+		emb, err = embedder.NewLocal("", opts.ModelsDir)
+	} else {
+		emb, err = embedder.New("", modelsDir)
+	}
 	if err != nil {
 		return fmt.Errorf("embedder: %w", err)
 	}
@@ -88,6 +97,7 @@ func (s *Service) Init(ctx context.Context, opts Options) error {
 
 	kgDB, err := kg.New(palacePath + "/knowledge_graph.sqlite3")
 	if err != nil {
+		vectorDB.Close()
 		emb.Close()
 		return fmt.Errorf("knowledge graph: %w", err)
 	}
@@ -99,6 +109,7 @@ func (s *Service) Init(ctx context.Context, opts Options) error {
 	taxonomy, err := searcher.GetTaxonomy(ctx)
 	if err != nil {
 		kgDB.Close()
+		vectorDB.Close()
 		emb.Close()
 		return fmt.Errorf("taxonomy: %w", err)
 	}
@@ -116,6 +127,7 @@ func (s *Service) Init(ctx context.Context, opts Options) error {
 	agentDiary, err := diary.New(palacePath)
 	if err != nil {
 		kgDB.Close()
+		vectorDB.Close()
 		emb.Close()
 		return fmt.Errorf("diary: %w", err)
 	}

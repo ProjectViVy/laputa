@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/dashimaki/mentle/internal/embedder"
+	"github.com/dashimaki/mentle/storage/sqlite"
 	"github.com/google/uuid"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 var (
@@ -106,7 +106,7 @@ type DeleteResult struct {
 type Catalog struct{ db *sql.DB }
 
 func OpenCatalog(path string) (*Catalog, error) {
-	db, err := sql.Open("sqlite3", path+"?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=on")
+	db, err := sqlite.Open(path)
 	if err != nil {
 		return nil, err
 	}
@@ -167,12 +167,10 @@ CREATE TABLE IF NOT EXISTS embedding_identity (
    canonical_snapshot_count INTEGER, error_code TEXT NOT NULL DEFAULT ''
  );`
 	if _, err = db.Exec(schema); err != nil {
-		db.Close()
-		return nil, err
+		return nil, errors.Join(err, db.Close())
 	}
 	if err = migrateIndexJobs(db); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("migrate index outbox: %w", err)
+		return nil, errors.Join(fmt.Errorf("migrate index outbox: %w", err), db.Close())
 	}
 	return &Catalog{db: db}, nil
 }

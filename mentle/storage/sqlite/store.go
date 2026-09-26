@@ -1,21 +1,31 @@
-// Package sqlite provides SQLite database connectivity using CGO driver.
+// Package sqlite provides pure-Go SQLite database connectivity.
 package sqlite
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"net/url"
+	"path/filepath"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
+// Open configures a single connection so the connection-scoped pragmas remain
+// effective for every operation, including transactions.
 func Open(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", path)
+	name := filepath.ToSlash(path)
+	if path == ":memory:" {
+		name = ":memory:"
+	}
+	dsn := "file:" + (&url.URL{Path: name}).EscapedPath() + "?" + url.Values{"_pragma": {"busy_timeout(5000)", "foreign_keys(ON)", "journal_mode(WAL)"}}.Encode()
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("open sqlite3 %s: %w", path, err)
+		return nil, fmt.Errorf("open sqlite %s: %w", path, err)
 	}
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		return nil, err
+	if err = db.Ping(); err != nil {
+		return nil, errors.Join(fmt.Errorf("open sqlite %s: %w", path, err), db.Close())
 	}
 	return db, nil
 }

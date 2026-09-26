@@ -2,11 +2,40 @@ package embedder
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestNewLocalMissingModelDoesNotUseBundledCWD(t *testing.T) {
+	if _, err := os.Stat(filepath.Join("models", "onnx", "model.onnx")); err != nil {
+		t.Skipf("bundled cwd model unavailable: %v", err)
+	}
+	missing := filepath.Join(t.TempDir(), "absent")
+	emb, err := NewLocal("", missing)
+	if emb != nil {
+		emb.Close()
+		t.Fatal("missing explicit model unexpectedly initialized")
+	}
+	if !errors.Is(err, ErrLocalModelMissing) {
+		t.Fatalf("missing model: got %v, want ErrLocalModelMissing", err)
+	}
+	if _, err := os.Stat(missing); !os.IsNotExist(err) {
+		t.Fatalf("model directory unexpectedly created: %v", err)
+	}
+}
+
+func TestNewLocalRequiresExplicitDirectory(t *testing.T) {
+	emb, err := NewLocal("", "")
+	if emb != nil {
+		emb.Close()
+	}
+	if emb != nil || !errors.Is(err, ErrLocalModelMissing) {
+		t.Fatalf("empty directory: embedder=%v err=%v", emb, err)
+	}
+}
 
 // TestMain relocates the working directory to the module root so that the
 // relative "models/onnx/model.onnx" probe inside New("","") resolves against

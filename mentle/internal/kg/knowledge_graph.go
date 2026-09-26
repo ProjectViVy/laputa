@@ -66,7 +66,7 @@ func New(dbPath string) (*KnowledgeGraph, error) {
 	}
 	kg := &KnowledgeGraph{db: db}
 	if err := kg.initDB(); err != nil {
-		return nil, err
+		return nil, errors.Join(err, db.Close())
 	}
 	return kg, nil
 }

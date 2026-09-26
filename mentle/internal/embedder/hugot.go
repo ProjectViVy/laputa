@@ -4,6 +4,7 @@ package embedder
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -47,6 +48,33 @@ func (e *Embedder) Identity() Identity {
 // Dimension returns the size of vectors produced by this embedder.
 func (e *Embedder) Dimension() int {
 	return 384
+}
+
+// ErrLocalModelMissing means no model.onnx exists under the explicit directory.
+var ErrLocalModelMissing = errors.New("local embedding model missing")
+
+// NewLocal loads only from modelsDir/model.onnx or modelsDir/onnx/model.onnx.
+// It never probes the process working directory or downloads a model.
+func NewLocal(modelName, modelsDir string) (*Embedder, error) {
+	if modelsDir == "" {
+		return nil, fmt.Errorf("%w: modelsDir is empty", ErrLocalModelMissing)
+	}
+	if modelName == "" {
+		modelName = "sentence-transformers/all-MiniLM-L6-v2"
+	}
+	for _, candidate := range []string{
+		filepath.Join(modelsDir, "model.onnx"),
+		filepath.Join(modelsDir, "onnx", "model.onnx"),
+	} {
+		info, err := os.Stat(candidate)
+		if err == nil && !info.IsDir() {
+			return newFromPath(filepath.Dir(candidate), modelName)
+		}
+		if err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("inspect local model %q: %w", candidate, err)
+		}
+	}
+	return nil, fmt.Errorf("%w: %q (expected model.onnx or onnx/model.onnx)", ErrLocalModelMissing, modelsDir)
 }
 
 // New creates a new Embedder. It downloads (if needed) and loads the model.
