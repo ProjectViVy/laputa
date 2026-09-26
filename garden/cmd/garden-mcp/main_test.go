@@ -80,6 +80,63 @@ func TestBackendErrorDoesNotExposeRawBody(t *testing.T) {
 	}
 }
 
+func TestMemorySearchBothBackendErrorsKeepSeparateStructuredEnvelopes(t *testing.T) {
+	secret := "private-backend-stack-and-token"
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/v2/recall/fast":
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"code":"recall_throttled","message":"recall busy","retryable":true,"request_id":"recall-42","private":"` + secret + `"}`))
+		case "/v2/memories":
+			w.WriteHeader(http.StatusConflict)
+			_, _ = w.Write([]byte(`{"code":"memory_conflict","message":"memory conflict","retryable":false,"request_id":"memory-43","private":"` + secret + `"}`))
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer backend.Close()
+	request := mcp.CallToolRequest{}
+	request.Params.Arguments = map[string]any{"query": "recovery"}
+	result, err := newMCPServer(NewClient(backend.URL)).GetTool(toolMemorySearch).Handler(context.Background(), request)
+	if err != nil || result == nil || !result.IsError {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	payload, ok := result.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("structured error=%+v", result.StructuredContent)
+	}
+	if payload["code"] != "backend_error" || payload["retryable"] != true {
+		t.Fatalf("composite error=%+v", payload)
+	}
+	text, ok := result.Content[0].(mcp.TextContent)
+	if !ok || !strings.Contains(text.Text, "error [backend_error]") {
+		t.Fatalf("fallback text=%+v", result.Content)
+	}
+	details, ok := payload["details"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing backend details: %+v", payload)
+	}
+	for _, check := range []struct {
+		name, code, message, requestID string
+		status                         int
+		retryable                      bool
+	}{
+		{"recall", "recall_throttled", "recall busy", "recall-42", 429, true},
+		{"memories", "memory_conflict", "memory conflict", "memory-43", 409, false},
+	} {
+		got, ok := details[check.name].(map[string]any)
+		if !ok || got["code"] != check.code || got["message"] != check.message || got["retryable"] != check.retryable || got["request_id"] != check.requestID || got["status"] != check.status {
+			t.Errorf("%s error=%+v", check.name, details[check.name])
+		}
+	}
+	wire, err := json.Marshal(result)
+	if err != nil || strings.Contains(string(wire), secret) {
+		t.Fatalf("wire=%s err=%v", wire, err)
+	}
+}
+
 func TestFilterMemoryItemsOnlyReturnsLiteralMatches(t *testing.T) {
 	items := []memoryItem{
 		{ID: "match", Kind: "decision", Content: "The index recovery is canonical."},

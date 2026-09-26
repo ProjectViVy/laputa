@@ -676,7 +676,20 @@ func handleMemorySearch(client *Client) (mcp.Tool, server.ToolHandlerFunc) {
 		memErr := client.get(ctx, "/v2/memories?limit=100", &mems)
 
 		if recallErr != nil && memErr != nil {
-			return errorResult(fmt.Errorf("recall: %v; memories: %v", recallErr, memErr)), nil
+			recallFailure := errorResult(recallErr).StructuredContent.(map[string]any)
+			memoryFailure := errorResult(memErr).StructuredContent.(map[string]any)
+			payload := map[string]any{
+				"code":       "backend_error",
+				"message":    "memory search backends unavailable",
+				"retryable":  recallFailure["retryable"] == true || memoryFailure["retryable"] == true,
+				"request_id": "",
+				"details":    map[string]any{"recall": recallFailure, "memories": memoryFailure},
+			}
+			return &mcp.CallToolResult{
+				Content:           []mcp.Content{mcp.NewTextContent("error [backend_error]: memory search backends unavailable")},
+				StructuredContent: payload,
+				IsError:           true,
+			}, nil
 		}
 
 		text := formatMemorySearch(query, maxResults, &recall, recallErr, &mems, memErr)
