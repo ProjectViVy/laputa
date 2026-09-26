@@ -23,7 +23,7 @@ func TestInitRequireLocalModelRejectsMissingDespiteBundledCWD(t *testing.T) {
 		t.Fatalf("strict init: got %v, want ErrLocalModelMissing", err)
 	}
 	if svc.Embedder != nil || svc.Catalog != nil {
-		t.Fatalf("failed init retained resources: %+v", svc)
+		t.Fatalf("failed init retained resources: embedder=%p catalog=%p", svc.Embedder, svc.Catalog)
 	}
 	if _, statErr := os.Stat(palace); !os.IsNotExist(statErr) {
 		t.Fatalf("strict init created palace before model validation: %v", statErr)
