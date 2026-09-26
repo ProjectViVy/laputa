@@ -1,6 +1,6 @@
 # ADR-0015: Laputa External Agent Contract and Lifecycle SDK
 
-**Status:** accepted; Vivy default transport and in-process access precedence refined by [ADR-0016](0016-laputa-embeddable-modular-monolith.md)  
+**Status:** accepted; Vivy default transport and in-process access precedence refined by [ADR-0016](0016-laputa-embeddable-modular-monolith.md)
 **Date:** 2026-09-04  
 **Decision owner:** project owner  
 **Accepted by:** owner authorization on 2026-09-04  
