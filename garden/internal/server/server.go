@@ -50,9 +50,9 @@ type Server struct {
 	// principals. An empty value scopes agent ACTMEM calls to the caller's
 	// personal union; it is never a request-supplied claim.
 	ActmemWorkspace string
-	Capabilities CapabilityConfig
-	Components   map[string]string
-	Addr         string
+	Capabilities    CapabilityConfig
+	Components      map[string]string
+	Addr            string
 	// now is an optional clock seam for deterministic time-window handlers.
 	// Production servers leave it nil and use UTC wall-clock time.
 	now        func() time.Time

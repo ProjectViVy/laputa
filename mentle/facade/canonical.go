@@ -123,6 +123,17 @@ CREATE INDEX IF NOT EXISTS memories_order ON memories(updated_at DESC, id DESC);
 CREATE TABLE IF NOT EXISTS idempotency (
  key TEXT PRIMARY KEY, body_hash TEXT NOT NULL, memory_id TEXT NOT NULL, created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS mutation_receipts (
+ operation_id TEXT PRIMARY KEY,
+ payload_digest TEXT NOT NULL,
+ scope TEXT NOT NULL,
+ destination TEXT NOT NULL,
+ record_id TEXT NOT NULL,
+ revision INTEGER NOT NULL,
+ status TEXT NOT NULL,
+ error_code TEXT NOT NULL,
+ created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS index_jobs (
  job_id TEXT NOT NULL, memory_id TEXT PRIMARY KEY, canonical_version INTEGER NOT NULL DEFAULT 1,
  operation TEXT NOT NULL, content TEXT NOT NULL, metadata_json TEXT NOT NULL,

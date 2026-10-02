@@ -32,6 +32,10 @@ func writeMaterialsReadError(w http.ResponseWriter, err error) {
 			status = http.StatusUnauthorized
 		case "principal_forbidden", "profile_mismatch":
 			status = http.StatusForbidden
+		case "not_found":
+			status = http.StatusNotFound
+		case "conflict":
+			status = http.StatusConflict
 		}
 		writeErrorWithCode(w, status, domainErr.Code, err)
 		return
@@ -59,7 +63,7 @@ func (s *Server) handleMaterialsCards(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = parsed
 	}
-	page, err := s.AgentAPI.SearchCards(r.Context(), principal, binding, agentapi.CardSearch{Query: query, Collection: q.Get("collection"), Scope: q.Get("scope"), Limit: limit, Cursor: q.Get("cursor")})
+	page, err := s.AgentAPI.SearchCards(r.Context(), principal, binding, agentapi.CardSearch{Query: query, Collection: q.Get("collection"), Limit: limit, Cursor: q.Get("cursor")})
 	if err != nil {
 		writeMaterialsReadError(w, err)
 		return
@@ -89,7 +93,12 @@ func (s *Server) handleMaterialsEvidence(w http.ResponseWriter, r *http.Request)
 			total = parsed
 		}
 	}
-	fragments, err := s.AgentAPI.ReadEvidence(r.Context(), principal, binding, agentapi.EvidenceRead{CardIDs: []string{cardID}, PerItemBudget: perItem, TotalBudget: total})
+	revision, err := strconv.ParseUint(r.URL.Query().Get("expected_revision"), 10, 64)
+	if err != nil || revision == 0 {
+		writeError(w, http.StatusBadRequest, errors.New("expected_revision query parameter is required"))
+		return
+	}
+	fragments, err := s.AgentAPI.ReadEvidence(r.Context(), principal, binding, agentapi.EvidenceRead{Items: []agentapi.EvidenceRef{{CardID: cardID, ExpectedRevision: revision}}, PerItemBudget: perItem, TotalBudget: total})
 	if err != nil {
 		writeMaterialsReadError(w, err)
 		return

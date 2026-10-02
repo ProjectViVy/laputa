@@ -386,15 +386,26 @@ func (s *Service) applyIndexJob(ctx context.Context, memoryID string) error {
 		wing, _ := meta["wing"].(string)
 		room, _ := meta["room"].(string)
 		source, _ := meta["source_file"].(string)
-		err = s.Hybrid.Store(ctx, palace.Drawer{ID: physicalID, Content: job.Content, Wing: wing, Room: room, SourceFile: source, Metadata: stringMetadata(meta)})
-		if err == nil {
-			// Updates may leave older physical revisions behind. Prune them
-			// after the current version is durable so stale points cannot
-			// crowd out current canonical retrieval.
-			err = s.Hybrid.PruneCanonicalRevisions(ctx, job.MemoryID, physicalID)
+		drawer := palace.Drawer{ID: physicalID, Content: job.Content, Wing: wing, Room: room, SourceFile: source, Metadata: stringMetadata(meta)}
+		if s.Hybrid.Lexical() {
+			s.Hybrid.IndexBM25Drawer(drawer)
+			err = nil
+		} else {
+			err = s.Hybrid.Store(ctx, drawer)
+			if err == nil {
+				// Updates may leave older physical revisions behind. Prune
+				// them after the current version is durable so stale
+				// points cannot crowd out current canonical retrieval.
+				err = s.Hybrid.PruneCanonicalRevisions(ctx, job.MemoryID, physicalID)
+			}
 		}
 	} else if job.Operation == "delete" {
-		err = s.Hybrid.PruneCanonicalRevisions(ctx, job.MemoryID, "")
+		if s.Hybrid.Lexical() {
+			s.Hybrid.RemoveBM25(fmt.Sprintf("%s@v%d", job.MemoryID, job.CanonicalVersion))
+			err = nil
+		} else {
+			err = s.Hybrid.PruneCanonicalRevisions(ctx, job.MemoryID, "")
+		}
 	} else {
 		err = fmt.Errorf("unknown index operation %q", job.Operation)
 	}

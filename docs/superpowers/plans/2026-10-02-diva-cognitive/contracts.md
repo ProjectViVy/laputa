@@ -171,3 +171,35 @@ Each owning Story adds behavior tests listed in its plan. S01 fixtures do not as
   the scoped `QueryACTMEM`; contract DTOs alias evolution types.
 - Fold capsules record `session_key`/`created_at`/`fold_digest`/`entries`
   front matter; reader tolerates both legacy and fold formats.
+
+### S04 — injected backend, scoped captures, mutation receipts (diva-cognitive/v1-review-1, amended)
+
+- `memory.AuthorizedSearch` gains `Collection`; `AuthorizedExpansion.Scope`
+  becomes `Scopes []evolution.Scope` (the caller admits a union; it never
+  declares which scope a record lives in). Scope strings use `scope/v1`
+  encoding (`memory.EncodeScope`/`DecodeScope`/`ScopeVisible`); requests carry
+  no raw scope anywhere.
+- `memory.Backend` port implemented by `backends/mentle.Adapter` (canonical
+  facade only, never search indexes): `Search`, `Expand`,
+  `Mutate`, `MutationStatus`, `Capabilities`, `Health`, `Close`,
+  `BoundScope`, `BoundDestination`, plus `CreateMemory` for the ingest writer.
+  One backend binds one scope+destination; `AuthorizedMutation.MatchesWriter`
+  rejects foreign writes; injected `runtimecore.Config.Backends` wins and a
+  revoked destination never falls back.
+- `agentapi.CardSearch` drops `Scope`; `agentapi.EvidenceRead` gains
+  `Items []EvidenceRef{CardID, ExpectedRevision}` — `GET
+  /v2/materials/cards/{id}/evidence` now requires `expected_revision` and
+  expands by exact ID + revision, never search-hit ids.
+- `facade` gains `Mutate`/`MutationStatus`/`MutationRequest`/`MutationReceipt`/
+  `ErrMutationNotFound`, the `mutation_receipts` schema (registered inside
+  `canonicalSchema`), `OpenCatalogService` (writable no-model catalog with
+  BM25 projection), `Service.IsReadOnly`, and `ErrReadOnly`. Canonical
+  Create/Update/Delete and `outbox` transaction boundaries are unchanged;
+  receipts record inside those same transactions.
+- `hybrid.Searcher` gains `Lexical`, `IndexBM25Drawer`, `RemoveBM25` for the
+  no-model projection path in `applyIndexJob`.
+- ingest `TransientEntry` and the `ingestions` row carry the encoded scope
+  (derived from the stored `workspace` column); undecodable spool scopes fail
+  visibly as `failed`, never re-routed.
+- `MemoryCard`/`EvidenceFragment` live in `garden/memory/cards.go`;
+  `agentapi` keeps type aliases (breaks the memory→agentapi import edge).

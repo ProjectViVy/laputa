@@ -51,7 +51,7 @@ func TestBoundMaterialReadsDelegateAndEnforcePrincipal(t *testing.T) {
 	b := &BoundClient{client: &Client{runtime: &runtimecore.Garden{ProfileID: "default"}, principal: PrincipalAgent}, binding: binding()}
 	_, err := b.SearchCards(context.Background(), CardSearch{Query: "signal"})
 	assertCode(t, err, "unavailable")
-	_, err = b.ReadEvidence(context.Background(), EvidenceRead{CardIDs: []string{"card"}})
+	_, err = b.ReadEvidence(context.Background(), EvidenceRead{Items: []EvidenceRef{{CardID: "card", ExpectedRevision: 1}}})
 	assertCode(t, err, "unavailable")
 	_, err = b.ReadEvidence(context.Background(), EvidenceRead{})
 	assertCode(t, err, "invalid_request")
@@ -91,7 +91,7 @@ func TestBoundExplicitReadsRejectUnavailableHandles(t *testing.T) {
 	assertCode(t, err, "unavailable")
 	_, err = b.SearchCards(context.Background(), CardSearch{Query: "hello"})
 	assertCode(t, err, "unavailable")
-	_, err = b.ReadEvidence(context.Background(), EvidenceRead{CardIDs: []string{"card"}})
+	_, err = b.ReadEvidence(context.Background(), EvidenceRead{Items: []EvidenceRef{{CardID: "card", ExpectedRevision: 1}}})
 	assertCode(t, err, "unavailable")
 	b = &BoundClient{client: &Client{principal: PrincipalAgent}, binding: binding()}
 	_, err = b.ReadPersona(context.Background(), "world")
