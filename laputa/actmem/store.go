@@ -18,16 +18,18 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/dashimaki/laputa/evolution"
 )
 
 const (
 	ACTMEMFileName     = "ACTMEM.MD"
-	ACTMEMRingCapChars = 1600
-	ACTMEMWorkCapChars = 1600
-	ACTMEMReadCapChars = 1200
-	ACTMEMCapsuleCap   = 800
-	PulseItemCapChars  = 280
-	RecapItemCapChars  = 200
+	ACTMEMRingCapChars = evolution.ActmemRingCapChars
+	ACTMEMWorkCapChars = evolution.ActmemWorkCapChars
+	ACTMEMReadCapChars = evolution.ActmemReadCapChars
+	ACTMEMCapsuleCap   = evolution.ActmemCapsuleCap
+	PulseItemCapChars  = evolution.ActmemPulseEntryCap
+	RecapItemCapChars  = evolution.ActmemRecapEntryCap
 	CapsuleChunkChars  = 560
 )
 
@@ -73,16 +75,23 @@ func CodeOf(err error) string {
 	return "actmem_storage_error"
 }
 
-// ActmemDocument is the parsed ACTMEM head. Markdown is always the canonical
-// rendered form of the three structured sections.
+// ActmemDocument is the parsed ACTMEM head's owner projection. Markdown is
+// always the canonical rendered form. Unclassified marks a legacy head whose
+// entries carry no scope and stay out of every Agent projection until the
+// owner re-saves through the v2 kernel.
 type ActmemDocument struct {
-	Revision  uint64    `json:"revision"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Pulse     string    `json:"pulse"`
-	Recap     string    `json:"recap"`
-	Work      string    `json:"work"`
-	Markdown  string    `json:"markdown"`
+	Revision     uint64    `json:"revision"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Pulse        string    `json:"pulse"`
+	Recap        string    `json:"recap"`
+	Work         string    `json:"work"`
+	Markdown     string    `json:"markdown"`
+	Unclassified bool      `json:"unclassified"`
+	entries      []evolution.Entry
 }
+
+// Entries returns the classified v2 entries (empty for unclassified heads).
+func (d ActmemDocument) Entries() []evolution.Entry { return d.entries }
 
 // Document is the shorter public name used by Garden adapters.
 type Document = ActmemDocument
@@ -179,20 +188,45 @@ func (s *Store) now() time.Time {
 }
 
 func (s *Store) Read() (ActmemDocument, error) {
+	h, err := s.load()
+	if err != nil {
+		return ActmemDocument{}, err
+	}
+	return h.projection(), nil
+}
+
+// load reads the head from disk. A missing head is the canonical empty v2
+// document and creates nothing.
+func (s *Store) load() (head, error) {
 	raw, err := os.ReadFile(s.HeadPath())
 	if errors.Is(err, os.ErrNotExist) {
-		return EmptyDocument(), nil
+		return emptyHead(), nil
 	}
 	if err != nil {
-		return ActmemDocument{}, newError("actmem_io_error", "cannot read ACTMEM", err)
+		return head{}, newError("actmem_io_error", "cannot read ACTMEM", err)
 	}
-	return parse(string(raw))
+	return loadHead(string(raw))
+}
+
+// readLegacyWritable loads the head for the pre-v2 free-text write surface.
+// A classified v2 head is rejected instead of being rewritten in the legacy
+// grammar (which would destroy entry metadata); a missing or legacy head
+// keeps the old code path until the scoped operations own mutation.
+func (s *Store) readLegacyWritable() (ActmemDocument, error) {
+	h, err := s.load()
+	if err != nil {
+		return ActmemDocument{}, err
+	}
+	if h.classified() && !h.missing {
+		return ActmemDocument{}, newError("actmem_format_error", errV1WriteOnV2Head.Error(), nil)
+	}
+	return h.projection(), nil
 }
 
 func (s *Store) Put(patch ActmemPatch) (WriteResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	current, err := s.Read()
+	current, err := s.readLegacyWritable()
 	if err != nil {
 		return WriteResult{}, err
 	}
@@ -325,7 +359,7 @@ func (s *Store) appendRing(sessionKey, content string, pulse bool) (WriteResult,
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	current, err := s.Read()
+	current, err := s.readLegacyWritable()
 	if err != nil {
 		return WriteResult{}, err
 	}
@@ -355,7 +389,7 @@ func (s *Store) appendRing(sessionKey, content string, pulse bool) (WriteResult,
 func (s *Store) EditWork(section, replacement string, baseRevision uint64) (WriteResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	current, err := s.Read()
+	current, err := s.readLegacyWritable()
 	if err != nil {
 		return WriteResult{}, err
 	}
@@ -383,7 +417,7 @@ func (s *Store) CompleteOpenItem(itemIndex int, baseRevision uint64) (WriteResul
 func (s *Store) DropItem(section string, itemIndex int, baseRevision uint64) (WriteResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	current, err := s.Read()
+	current, err := s.readLegacyWritable()
 	if err != nil {
 		return WriteResult{}, err
 	}
@@ -419,7 +453,7 @@ func (s *Store) FoldSession(sessionKey string) ([]CapsuleSummary, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	current, err := s.Read()
+	current, err := s.readLegacyWritable()
 	if err != nil {
 		return nil, err
 	}

@@ -25,12 +25,13 @@ type PersonaDocument struct {
 }
 
 type ActmemDocument struct {
-	Revision  uint64    `json:"revision"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Pulse     string    `json:"pulse"`
-	Recap     string    `json:"recap"`
-	Work      string    `json:"work"`
-	Markdown  string    `json:"markdown"`
+	Revision     uint64    `json:"revision"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Pulse        string    `json:"pulse"`
+	Recap        string    `json:"recap"`
+	Work         string    `json:"work"`
+	Markdown     string    `json:"markdown"`
+	Unclassified bool      `json:"unclassified"`
 }
 type ActmemQuery struct {
 	Query    string   `json:"query"`
@@ -99,7 +100,7 @@ func (s *Service) ReadACTMEM(_ context.Context, principal Principal, binding Bin
 	if err != nil {
 		return ActmemDocument{}, failure(actmem.CodeOf(err), "ACTMEM read failed")
 	}
-	return ActmemDocument(doc), nil
+	return ActmemDocument{Revision: doc.Revision, UpdatedAt: doc.UpdatedAt, Pulse: doc.Pulse, Recap: doc.Recap, Work: doc.Work, Markdown: doc.Markdown, Unclassified: doc.Unclassified}, nil
 }
 
 func (s *Service) QueryACTMEM(_ context.Context, principal Principal, binding Binding, q ActmemQuery) (ActmemResult, error) {

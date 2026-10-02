@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dashimaki/laputa/actmem"
 	"gopkg.in/yaml.v3"
 )
 
@@ -17,15 +16,15 @@ import (
 
 const ActmemSchemaV2 = "laputa.actmem/v2"
 
-// Existing body caps, re-exported so downstream code reads the contract in
-// one place. Values remain owned by laputa/actmem.
+// The contract owns the body caps; laputa/actmem re-exports them so the
+// storage package stays the single importer of the grammar.
 const (
-	ActmemRingCapChars  = actmem.ACTMEMRingCapChars // Pulse/Recap/Work each
-	ActmemWorkCapChars  = actmem.ACTMEMWorkCapChars
-	ActmemReadCapChars  = actmem.ACTMEMReadCapChars
-	ActmemCapsuleCap    = actmem.ACTMEMCapsuleCap
-	ActmemPulseEntryCap = actmem.PulseItemCapChars
-	ActmemRecapEntryCap = actmem.RecapItemCapChars
+	ActmemRingCapChars  = 1600 // Pulse/Recap each
+	ActmemWorkCapChars  = 1600
+	ActmemReadCapChars  = 1200
+	ActmemCapsuleCap    = 800
+	ActmemPulseEntryCap = 280
+	ActmemRecapEntryCap = 200
 )
 
 var (
