@@ -25,12 +25,13 @@ type PersonaDocument struct {
 }
 
 type ActmemDocument struct {
-	Revision  uint64    `json:"revision"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Pulse     string    `json:"pulse"`
-	Recap     string    `json:"recap"`
-	Work      string    `json:"work"`
-	Markdown  string    `json:"markdown"`
+	Revision     uint64    `json:"revision"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Pulse        string    `json:"pulse"`
+	Recap        string    `json:"recap"`
+	Work         string    `json:"work"`
+	Markdown     string    `json:"markdown"`
+	Unclassified bool      `json:"unclassified"`
 }
 type ActmemQuery struct {
 	Query    string   `json:"query"`
@@ -99,7 +100,7 @@ func (s *Service) ReadACTMEM(_ context.Context, principal Principal, binding Bin
 	if err != nil {
 		return ActmemDocument{}, failure(actmem.CodeOf(err), "ACTMEM read failed")
 	}
-	return ActmemDocument(doc), nil
+	return ActmemDocument{Revision: doc.Revision, UpdatedAt: doc.UpdatedAt, Pulse: doc.Pulse, Recap: doc.Recap, Work: doc.Work, Markdown: doc.Markdown, Unclassified: doc.Unclassified}, nil
 }
 
 func (s *Service) QueryACTMEM(_ context.Context, principal Principal, binding Binding, q ActmemQuery) (ActmemResult, error) {
@@ -112,7 +113,11 @@ func (s *Service) QueryACTMEM(_ context.Context, principal Principal, binding Bi
 	if s.runtime.Actmem == nil {
 		return ActmemResult{}, failure("unavailable", "ACTMEM unavailable")
 	}
-	result, err := s.runtime.Actmem.Query(actmem.QueryOptions{Query: q.Query, Sections: q.Sections, MaxHits: q.MaxHits, MaxChars: q.MaxChars})
+	scope, err := binding.TrustedScope()
+	if err != nil {
+		return ActmemResult{}, failure("invalid_request", err.Error())
+	}
+	result, err := s.runtime.Actmem.Query(scope, actmem.QueryOptions{Query: q.Query, Sections: q.Sections, MaxHits: q.MaxHits, MaxChars: q.MaxChars})
 	if err != nil {
 		return ActmemResult{}, failure(actmem.CodeOf(err), "ACTMEM query failed")
 	}

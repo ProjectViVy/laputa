@@ -15,6 +15,7 @@ import (
 	"github.com/dashimaki/garden/internal/ingest"
 	"github.com/dashimaki/garden/internal/personactx"
 	"github.com/dashimaki/garden/internal/recall"
+	"github.com/dashimaki/laputa/evolution"
 	"github.com/dashimaki/laputa/persona"
 	"github.com/dashimaki/mentle/facade"
 	_ "modernc.org/sqlite"
@@ -206,7 +207,7 @@ func TestBootstrapFrozenAcrossReopenExcludesToolOnlyAuthority(t *testing.T) {
 	if _, err := core.Persona.Initialize(persona.Initialization{Identity: "identity sentinel", Relationship: "relationship", Redline: "redline", User: "user", World: "world private sentinel"}, "user", persona.SourceInit, "init"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := core.Actmem.AppendPulse("session-1", "activity private sentinel"); err != nil {
+	if _, err := core.Actmem.AppendEntry(evolution.Entry{Section: evolution.SectionPulse, Scope: evolution.Scope{SubjectID: "test", Kind: evolution.ScopePersonal}, SessionID: "session-1", Body: "activity private sentinel"}); err != nil {
 		t.Fatal(err)
 	}
 	first, err := core.Frozen.Capture(context.Background(), "session-1", core.Persona)

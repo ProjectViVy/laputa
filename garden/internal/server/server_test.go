@@ -257,7 +257,7 @@ func TestActmemReadWriteAndExplicitOnlyRoutes(t *testing.T) {
 	if _, err := os.Stat(store.Root()); err == nil {
 		t.Fatal("read created ACTMEM directory")
 	}
-	req = localRequest(http.MethodPut, "/v2/actmem", bytes.NewBufferString(`{"base_revision":0,"pulse":"hello"}`))
+	req = localRequest(http.MethodPut, "/v2/actmem", bytes.NewBufferString(`{"base_revision":0,"markdown":"---\nschema: laputa.actmem/v2\nrevision: 1\nupdated: 2030-01-01T00:00:00Z\nentries:\n  e_0000000000000000000000000000000a:\n    section: pulse\n    field: \"\"\n    scope:\n      subject_id: profile_1\n      kind: personal\n      workspace_id: \"\"\n    session_id: s-1\n    event_id: \"\"\n    occurred_at: 2030-01-01T00:00:00Z\n    sources: []\n---\n## Pulse\n<!-- actmem-entry:e_0000000000000000000000000000000a -->\nhello\n<!-- /actmem-entry:e_0000000000000000000000000000000a -->\n## Recap\n## Work\n"}`))
 	req.Header.Set("Authorization", "Bearer user-secret")
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()

@@ -6,7 +6,6 @@ package actmem
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -18,16 +17,19 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/dashimaki/laputa/evolution"
+	"gopkg.in/yaml.v3"
 )
 
 const (
 	ACTMEMFileName     = "ACTMEM.MD"
-	ACTMEMRingCapChars = 1600
-	ACTMEMWorkCapChars = 1600
-	ACTMEMReadCapChars = 1200
-	ACTMEMCapsuleCap   = 800
-	PulseItemCapChars  = 280
-	RecapItemCapChars  = 200
+	ACTMEMRingCapChars = evolution.ActmemRingCapChars
+	ACTMEMWorkCapChars = evolution.ActmemWorkCapChars
+	ACTMEMReadCapChars = evolution.ActmemReadCapChars
+	ACTMEMCapsuleCap   = evolution.ActmemCapsuleCap
+	PulseItemCapChars  = evolution.ActmemPulseEntryCap
+	RecapItemCapChars  = evolution.ActmemRecapEntryCap
 	CapsuleChunkChars  = 560
 )
 
@@ -73,16 +75,23 @@ func CodeOf(err error) string {
 	return "actmem_storage_error"
 }
 
-// ActmemDocument is the parsed ACTMEM head. Markdown is always the canonical
-// rendered form of the three structured sections.
+// ActmemDocument is the parsed ACTMEM head's owner projection. Markdown is
+// always the canonical rendered form. Unclassified marks a legacy head whose
+// entries carry no scope and stay out of every Agent projection until the
+// owner re-saves through the v2 kernel.
 type ActmemDocument struct {
-	Revision  uint64    `json:"revision"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Pulse     string    `json:"pulse"`
-	Recap     string    `json:"recap"`
-	Work      string    `json:"work"`
-	Markdown  string    `json:"markdown"`
+	Revision     uint64    `json:"revision"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Pulse        string    `json:"pulse"`
+	Recap        string    `json:"recap"`
+	Work         string    `json:"work"`
+	Markdown     string    `json:"markdown"`
+	Unclassified bool      `json:"unclassified"`
+	entries      []evolution.Entry
 }
+
+// Entries returns the classified v2 entries (empty for unclassified heads).
+func (d ActmemDocument) Entries() []evolution.Entry { return d.entries }
 
 // Document is the shorter public name used by Garden adapters.
 type Document = ActmemDocument
@@ -95,22 +104,6 @@ func EmptyDocument() ActmemDocument {
 
 func (d ActmemDocument) Empty() bool {
 	return d.Revision == 0 && d.Pulse == "" && d.Recap == "" && d.Work == emptyWork()
-}
-
-// ActmemPatch replaces any provided sections and applies exact CAS using
-// BaseRevision. A zero value is a real revision and never a wildcard.
-type ActmemPatch struct {
-	Pulse        *string `json:"pulse,omitempty"`
-	Recap        *string `json:"recap,omitempty"`
-	Work         *string `json:"work,omitempty"`
-	BaseRevision uint64  `json:"base_revision"`
-}
-
-type Patch = ActmemPatch
-
-type WriteResult struct {
-	Changed  bool           `json:"changed"`
-	Document ActmemDocument `json:"document"`
 }
 
 type CapsuleSummary struct {
@@ -147,10 +140,18 @@ type QueryResult struct {
 }
 
 // Store is one profile's independent <profile>/actmem authority.
+//
+// Concurrency contract: the mutex makes operations atomic within one
+// process. A second process writer remains unsupported — another process
+// holding the same directory could interleave atomic file writes and
+// produce divergent heads; run one Store owner per profile directory.
 type Store struct {
 	root  string
 	mu    sync.Mutex
 	clock func() time.Time
+	// crashBeforeHeadCommit is a test hook simulating a crash between the
+	// archive write and the head commit of a fold.
+	crashBeforeHeadCommit bool
 }
 
 // ActmemStore is the DIVA-compatible name.
@@ -179,286 +180,24 @@ func (s *Store) now() time.Time {
 }
 
 func (s *Store) Read() (ActmemDocument, error) {
+	h, err := s.load()
+	if err != nil {
+		return ActmemDocument{}, err
+	}
+	return h.projection(), nil
+}
+
+// load reads the head from disk. A missing head is the canonical empty v2
+// document and creates nothing.
+func (s *Store) load() (head, error) {
 	raw, err := os.ReadFile(s.HeadPath())
 	if errors.Is(err, os.ErrNotExist) {
-		return EmptyDocument(), nil
+		return emptyHead(), nil
 	}
 	if err != nil {
-		return ActmemDocument{}, newError("actmem_io_error", "cannot read ACTMEM", err)
+		return head{}, newError("actmem_io_error", "cannot read ACTMEM", err)
 	}
-	return parse(string(raw))
-}
-
-func (s *Store) Put(patch ActmemPatch) (WriteResult, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	current, err := s.Read()
-	if err != nil {
-		return WriteResult{}, err
-	}
-	if current.Revision != patch.BaseRevision {
-		return WriteResult{}, newError("actmem_revision_conflict", fmt.Sprintf("expected revision %d, actual %d", patch.BaseRevision, current.Revision), nil)
-	}
-	next := current
-	if patch.Pulse != nil {
-		next.Pulse = normalizeSection(*patch.Pulse)
-	}
-	if patch.Recap != nil {
-		next.Recap = normalizeSection(*patch.Recap)
-	}
-	if patch.Work != nil {
-		next.Work, err = normalizeWork(*patch.Work)
-		if err != nil {
-			return WriteResult{}, err
-		}
-	}
-	return s.commitIfChanged(current, next)
-}
-
-func (s *Store) AppendPulse(sessionKey, content string) (WriteResult, error) {
-	return s.appendRing(sessionKey, content, true)
-}
-
-func (s *Store) AppendRecap(sessionKey, content string) (WriteResult, error) {
-	return s.appendRing(sessionKey, content, false)
-}
-
-// Query performs bounded literal, case-insensitive matching over logical
-// ACTMEM lines. It is deliberately not semantic/vector retrieval.
-func (s *Store) Query(options QueryOptions) (QueryResult, error) {
-	query := strings.ToLower(normalizeVisible(options.Query))
-	if query == "" {
-		return QueryResult{}, newError("actmem_invalid_edit", "query is required", nil)
-	}
-	if options.MaxHits == 0 {
-		options.MaxHits = 20
-	}
-	if options.MaxChars == 0 {
-		options.MaxChars = ACTMEMReadCapChars
-	}
-	if options.MaxHits < 1 || options.MaxHits > 50 || options.MaxChars < 1 || options.MaxChars > ACTMEMReadCapChars {
-		return QueryResult{}, newError("actmem_invalid_edit", "query bounds are invalid", nil)
-	}
-	document, err := s.Read()
-	if err != nil {
-		return QueryResult{}, err
-	}
-	allowed := map[string]bool{"pulse": true, "recap": true, "work": true}
-	sections := options.Sections
-	if len(sections) == 0 {
-		sections = []string{"pulse", "recap", "work"}
-	}
-	for _, section := range sections {
-		if !allowed[strings.ToLower(strings.TrimSpace(section))] {
-			return QueryResult{}, newError("actmem_invalid_edit", "unknown query section: "+section, nil)
-		}
-	}
-	result := QueryResult{Revision: document.Revision, Items: []QueryHit{}}
-	for _, section := range sections {
-		section = strings.ToLower(strings.TrimSpace(section))
-		if section == "work" {
-			parts, splitErr := splitWork(document.Work)
-			if splitErr != nil {
-				return QueryResult{}, splitErr
-			}
-			for _, workSection := range WorkSections {
-				for index, line := range nonEmptyLines(parts[workSection]) {
-					if !strings.Contains(strings.ToLower(line), query) {
-						continue
-					}
-					name := workSection
-					if !appendQueryHit(&result, QueryHit{Section: "work", WorkSection: &name, LineIndex: index, Excerpt: line}, options.MaxHits, options.MaxChars) {
-						return result, nil
-					}
-				}
-			}
-			continue
-		}
-		value := document.Pulse
-		if section == "recap" {
-			value = document.Recap
-		}
-		for index, line := range nonEmptyLines(value) {
-			if !strings.Contains(strings.ToLower(line), query) {
-				continue
-			}
-			if !appendQueryHit(&result, QueryHit{Section: section, LineIndex: index, Excerpt: line}, options.MaxHits, options.MaxChars) {
-				return result, nil
-			}
-		}
-	}
-	return result, nil
-}
-
-func appendQueryHit(result *QueryResult, hit QueryHit, maxHits, maxChars int) bool {
-	if len(result.Items) >= maxHits {
-		result.Truncated = true
-		return false
-	}
-	remaining := maxChars - result.ReturnedChars
-	if remaining <= 0 {
-		result.Truncated = true
-		return false
-	}
-	if runeLen(hit.Excerpt) > remaining {
-		hit.Excerpt = truncateChars(hit.Excerpt, remaining)
-		result.Truncated = true
-	}
-	result.Items = append(result.Items, hit)
-	result.ReturnedChars += runeLen(hit.Excerpt)
-	if result.ReturnedChars >= maxChars {
-		result.Truncated = true
-		return false
-	}
-	return true
-}
-
-func (s *Store) appendRing(sessionKey, content string, pulse bool) (WriteResult, error) {
-	sessionKey = strings.TrimSpace(sessionKey)
-	if sessionKey == "" {
-		return WriteResult{}, newError("actmem_invalid_edit", "session_key is required", nil)
-	}
-	content = normalizeVisible(content)
-	if content == "" {
-		document, err := s.Read()
-		return WriteResult{Document: document}, err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	current, err := s.Read()
-	if err != nil {
-		return WriteResult{}, err
-	}
-	itemCap := RecapItemCapChars
-	if pulse {
-		itemCap = PulseItemCapChars
-	}
-	item := fmt.Sprintf("- %s %s <!-- session-hex:%s -->", s.now().Format("2006-01-02T15:04:05.000Z07:00"), truncateChars(content, itemCap), hexSession(sessionKey))
-	section := current.Recap
-	if pulse {
-		section = current.Pulse
-	}
-	lines := nonEmptyLines(section)
-	lines = append(lines, item)
-	for len(lines) > 1 && runeLen(strings.Join(lines, "\n")) > ACTMEMRingCapChars {
-		lines = lines[1:]
-	}
-	next := current
-	if pulse {
-		next.Pulse = strings.Join(lines, "\n")
-	} else {
-		next.Recap = strings.Join(lines, "\n")
-	}
-	return s.commitIfChanged(current, next)
-}
-
-func (s *Store) EditWork(section, replacement string, baseRevision uint64) (WriteResult, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	current, err := s.Read()
-	if err != nil {
-		return WriteResult{}, err
-	}
-	if err := ensureRevision(current, baseRevision); err != nil {
-		return WriteResult{}, err
-	}
-	canonical, err := canonicalWorkSection(section)
-	if err != nil {
-		return WriteResult{}, err
-	}
-	sections, err := splitWork(current.Work)
-	if err != nil {
-		return WriteResult{}, err
-	}
-	sections[canonical] = normalizeSection(replacement)
-	next := current
-	next.Work = renderWork(sections)
-	return s.commitIfChanged(current, next)
-}
-
-func (s *Store) CompleteOpenItem(itemIndex int, baseRevision uint64) (WriteResult, error) {
-	return s.DropItem("Open", itemIndex, baseRevision)
-}
-
-func (s *Store) DropItem(section string, itemIndex int, baseRevision uint64) (WriteResult, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	current, err := s.Read()
-	if err != nil {
-		return WriteResult{}, err
-	}
-	if err := ensureRevision(current, baseRevision); err != nil {
-		return WriteResult{}, err
-	}
-	canonical, err := canonicalWorkSection(section)
-	if err != nil {
-		return WriteResult{}, err
-	}
-	sections, err := splitWork(current.Work)
-	if err != nil {
-		return WriteResult{}, err
-	}
-	items := nonEmptyLines(sections[canonical])
-	if itemIndex < 0 || itemIndex >= len(items) {
-		return WriteResult{}, newError("actmem_invalid_edit", "ACTMEM item index is out of range", nil)
-	}
-	items = append(items[:itemIndex], items[itemIndex+1:]...)
-	sections[canonical] = strings.Join(items, "\n")
-	next := current
-	next.Work = renderWork(sections)
-	return s.commitIfChanged(current, next)
-}
-
-// FoldSession compacts only Pulse/Recap lines carrying the exact session
-// marker. Capsules are written first and removed again if the head commit
-// fails, avoiding an unexplained half-complete fold.
-func (s *Store) FoldSession(sessionKey string) ([]CapsuleSummary, error) {
-	sessionKey = strings.TrimSpace(sessionKey)
-	if sessionKey == "" {
-		return nil, newError("actmem_invalid_edit", "session_key is required", nil)
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	current, err := s.Read()
-	if err != nil {
-		return nil, err
-	}
-	marker := "<!-- session-hex:" + hexSession(sessionKey) + " -->"
-	pulseKept, pulseFolded := partitionLines(current.Pulse, marker)
-	recapKept, recapFolded := partitionLines(current.Recap, marker)
-	var folded []string
-	for _, line := range pulseFolded {
-		folded = append(folded, "Pulse: "+line)
-	}
-	for _, line := range recapFolded {
-		folded = append(folded, "Recap: "+line)
-	}
-	if len(folded) == 0 {
-		return []CapsuleSummary{}, nil
-	}
-	var summaries []CapsuleSummary
-	var paths []string
-	for index, chunk := range chunkLines(folded, CapsuleChunkChars) {
-		summary, path, writeErr := s.writeCapsule(sessionKey, index, chunk)
-		if writeErr != nil {
-			for _, created := range paths {
-				_ = os.Remove(created)
-			}
-			return nil, writeErr
-		}
-		summaries = append(summaries, summary)
-		paths = append(paths, path)
-	}
-	next := current
-	next.Pulse = strings.Join(pulseKept, "\n")
-	next.Recap = strings.Join(recapKept, "\n")
-	if _, commitErr := s.commitIfChanged(current, next); commitErr != nil {
-		for _, created := range paths {
-			_ = os.Remove(created)
-		}
-		return nil, commitErr
-	}
-	return summaries, nil
+	return loadHead(string(raw))
 }
 
 func (s *Store) ListCapsules() ([]CapsuleSummary, error) {
@@ -529,47 +268,6 @@ func (s *Store) DeleteCapsule(name string) error {
 		return newError("actmem_storage_error", "cannot delete capsule", err)
 	}
 	return nil
-}
-
-func (s *Store) commitIfChanged(current, next ActmemDocument) (WriteResult, error) {
-	if current.Pulse == next.Pulse && current.Recap == next.Recap && current.Work == next.Work {
-		return WriteResult{Changed: false, Document: current}, nil
-	}
-	if err := validateCaps(next); err != nil {
-		return WriteResult{}, err
-	}
-	next.Revision = current.Revision + 1
-	next.UpdatedAt = s.now()
-	next.Markdown = render(next)
-	if err := writeAtomic(s.HeadPath(), []byte(next.Markdown)); err != nil {
-		return WriteResult{}, newError("actmem_storage_error", "cannot atomically write ACTMEM", err)
-	}
-	return WriteResult{Changed: true, Document: next}, nil
-}
-
-func (s *Store) writeCapsule(sessionKey string, index int, body string) (CapsuleSummary, string, error) {
-	createdAt := s.now()
-	safe := safeSessionKey(sessionKey)
-	for suffix := index; ; suffix++ {
-		name := fmt.Sprintf("%s_%d_%d.md", safe, createdAt.UnixMilli(), suffix)
-		if !validCapsuleName(name) {
-			return CapsuleSummary{}, "", newError("actmem_capsule_invalid", "invalid capsule name", nil)
-		}
-		path := filepath.Join(s.CapsulesDir(), name)
-		if _, err := os.Stat(path); err == nil {
-			continue
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return CapsuleSummary{}, "", newError("actmem_io_error", "cannot inspect capsule path", err)
-		}
-		markdown := fmt.Sprintf("---\nsession_key: %s\ncreated_at: %s\n---\n\n# ACTMEM Capsule\n\n%s\n", quoteJSON(sessionKey), createdAt.Format("2006-01-02T15:04:05.000Z07:00"), strings.TrimSpace(body))
-		if runeLen(markdown) > ACTMEMCapsuleCap {
-			return CapsuleSummary{}, "", newError("actmem_cap_exceeded", "capsule exceeds its capacity", nil)
-		}
-		if err := writeAtomic(path, []byte(markdown)); err != nil {
-			return CapsuleSummary{}, "", newError("actmem_storage_error", "cannot write capsule", err)
-		}
-		return CapsuleSummary{Name: name, SessionKey: sessionKey, CreatedAt: createdAt, Chars: runeLen(markdown)}, path, nil
-	}
 }
 
 func parse(raw string) (ActmemDocument, error) {
@@ -655,13 +353,6 @@ func validateCaps(document ActmemDocument) error {
 	return nil
 }
 
-func ensureRevision(document ActmemDocument, expected uint64) error {
-	if document.Revision != expected {
-		return newError("actmem_revision_conflict", fmt.Sprintf("expected revision %d, actual %d", expected, document.Revision), nil)
-	}
-	return nil
-}
-
 func emptyWork() string { return renderWork(map[string]string{}) }
 
 func normalizeWork(raw string) (string, error) {
@@ -739,18 +430,6 @@ func normalizeSection(value string) string {
 	return strings.TrimSpace(strings.ReplaceAll(value, "\r\n", "\n"))
 }
 
-func normalizeVisible(value string) string {
-	var lines []string
-	for _, line := range strings.Split(strings.ReplaceAll(value, "\r\n", "\n"), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "```") {
-			continue
-		}
-		lines = append(lines, line)
-	}
-	return strings.Join(lines, " ")
-}
-
 func RecapFromFinalResponse(value string) string {
 	normalized := strings.ReplaceAll(value, "\r\n", "\n")
 	inCode := false
@@ -803,65 +482,96 @@ func nonEmptyLines(value string) []string {
 	return result
 }
 
-func partitionLines(value, marker string) ([]string, []string) {
-	var kept, folded []string
-	for _, line := range strings.Split(value, "\n") {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		if strings.Contains(line, marker) {
-			folded = append(folded, line)
-		} else {
-			kept = append(kept, line)
-		}
-	}
-	return kept, folded
-}
-
-func chunkLines(lines []string, target int) []string {
-	var chunks []string
-	current := ""
-	for _, line := range lines {
-		line = truncateChars(line, target)
-		extra := runeLen(line)
-		if current != "" {
-			extra++
-		}
-		if current != "" && runeLen(current)+extra > target {
-			chunks = append(chunks, current)
-			current = ""
-		}
-		if current != "" {
-			current += "\n"
-		}
-		current += line
-	}
-	if current != "" {
-		chunks = append(chunks, current)
-	}
-	return chunks
-}
-
-func safeSessionKey(value string) string {
-	var b strings.Builder
-	for _, r := range value {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
-			b.WriteRune(r)
-		} else {
-			b.WriteRune('_')
-		}
-	}
-	if b.Len() == 0 {
-		return "session"
-	}
-	return b.String()
-}
-
-func hexSession(value string) string { return hex.EncodeToString([]byte(value)) }
-func quoteJSON(value string) string  { raw, _ := json.Marshal(value); return string(raw) }
-
 func validCapsuleName(name string) bool {
 	return name != "" && filepath.Base(name) == name && filepath.Ext(name) == ".md" && !strings.ContainsAny(name, `/\\`) && name != ".md" && !strings.Contains(name, "..")
+}
+
+// Query performs bounded literal, case-insensitive matching over the caller's
+// visible entries. Unclassified heads and hidden scopes expose nothing.
+func (s *Store) Query(caller evolution.Scope, options QueryOptions) (QueryResult, error) {
+	query := strings.ToLower(normalizeSection(options.Query))
+	if query == "" {
+		return QueryResult{}, newError("actmem_invalid_edit", "query is required", nil)
+	}
+	if options.MaxHits == 0 {
+		options.MaxHits = 20
+	}
+	if options.MaxChars == 0 {
+		options.MaxChars = ACTMEMReadCapChars
+	}
+	if options.MaxHits < 1 || options.MaxHits > 50 || options.MaxChars < 1 || options.MaxChars > ACTMEMReadCapChars {
+		return QueryResult{}, newError("actmem_invalid_edit", "query bounds are invalid", nil)
+	}
+	if err := caller.Validate(); err != nil {
+		return QueryResult{}, newError("actmem_invalid_edit", "caller scope: "+err.Error(), nil)
+	}
+	h, err := s.load()
+	if err != nil {
+		return QueryResult{}, err
+	}
+	result := QueryResult{Revision: h.revision, Items: []QueryHit{}}
+	if !h.classified() {
+		return result, nil
+	}
+	allowed := map[evolution.EntrySection]bool{evolution.SectionPulse: true, evolution.SectionRecap: true, evolution.SectionWork: true}
+	for _, section := range options.Sections {
+		if !allowed[evolution.EntrySection(strings.ToLower(strings.TrimSpace(section)))] {
+			return QueryResult{}, newError("actmem_invalid_edit", "unknown query section: "+section, nil)
+		}
+	}
+	wanted := func(section evolution.EntrySection) bool {
+		if len(options.Sections) == 0 {
+			return true
+		}
+		for _, s := range options.Sections {
+			if evolution.EntrySection(strings.ToLower(strings.TrimSpace(s))) == section {
+				return true
+			}
+		}
+		return false
+	}
+	for _, entry := range h.entries() {
+		if !wanted(entry.Section) || !visibleTo(entry.Scope, caller) {
+			continue
+		}
+		for index, line := range nonEmptyLines(entry.Body) {
+			if !strings.Contains(strings.ToLower(line), query) {
+				continue
+			}
+			hit := QueryHit{Section: string(entry.Section), LineIndex: index, Excerpt: line}
+			if entry.Section == evolution.SectionWork {
+				field := string(entry.Field)
+				hit.WorkSection = &field
+			}
+			if !appendQueryHit(&result, hit, options.MaxHits, options.MaxChars) {
+				return result, nil
+			}
+		}
+	}
+	return result, nil
+}
+
+func appendQueryHit(result *QueryResult, hit QueryHit, maxHits, maxChars int) bool {
+	if len(result.Items) >= maxHits {
+		result.Truncated = true
+		return false
+	}
+	remaining := maxChars - result.ReturnedChars
+	if remaining <= 0 {
+		result.Truncated = true
+		return false
+	}
+	if runeLen(hit.Excerpt) > remaining {
+		hit.Excerpt = truncateChars(hit.Excerpt, remaining)
+		result.Truncated = true
+	}
+	result.Items = append(result.Items, hit)
+	result.ReturnedChars += runeLen(hit.Excerpt)
+	if result.ReturnedChars >= maxChars {
+		result.Truncated = true
+		return false
+	}
+	return true
 }
 
 func parseCapsule(name, markdown string) (CapsuleDocument, error) {
@@ -878,24 +588,38 @@ func parseCapsule(name, markdown string) (CapsuleDocument, error) {
 	if len(lines) > 0 && lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
 	}
-	if len(lines) < 6 || lines[0] != "---" || lines[3] != "---" {
+	if len(lines) < 6 || lines[0] != "---" {
 		return CapsuleDocument{}, newError("actmem_malformed", "capsule front matter is invalid", nil)
 	}
-	if !strings.HasPrefix(lines[1], "session_key: ") || !strings.HasPrefix(lines[2], "created_at: ") {
-		return CapsuleDocument{}, newError("actmem_malformed", "capsule metadata is invalid", nil)
+	end := -1
+	for i := 1; i < len(lines); i++ {
+		if lines[i] == "---" {
+			end = i
+			break
+		}
 	}
-	var sessionKey string
-	if err := json.Unmarshal([]byte(strings.TrimPrefix(lines[1], "session_key: ")), &sessionKey); err != nil {
-		return CapsuleDocument{}, newError("actmem_malformed", "capsule session_key is invalid", err)
+	if end < 0 {
+		return CapsuleDocument{}, newError("actmem_malformed", "capsule front matter is invalid", nil)
 	}
-	createdAt, err := time.Parse(time.RFC3339Nano, strings.TrimPrefix(lines[2], "created_at: "))
+	var header struct {
+		SessionKey string `yaml:"session_key"`
+		CreatedAt  string `yaml:"created_at"`
+	}
+	if err := yaml.Unmarshal([]byte(strings.Join(lines[1:end], "\n")), &header); err != nil {
+		return CapsuleDocument{}, newError("actmem_malformed", "capsule metadata is invalid", err)
+	}
+	if header.SessionKey == "" {
+		return CapsuleDocument{}, newError("actmem_malformed", "capsule session_key is invalid", nil)
+	}
+	createdAt, err := time.Parse(time.RFC3339Nano, header.CreatedAt)
 	if err != nil {
 		return CapsuleDocument{}, newError("actmem_malformed", "capsule created_at is invalid", err)
 	}
-	if lines[4] != "" || lines[5] != "# ACTMEM Capsule" {
+	rest := lines[end+1:]
+	if len(rest) < 2 || rest[0] != "" || rest[1] != "# ACTMEM Capsule" {
 		return CapsuleDocument{}, newError("actmem_malformed", "capsule heading is invalid", nil)
 	}
-	summary := CapsuleSummary{Name: name, SessionKey: sessionKey, CreatedAt: createdAt.UTC(), Chars: runeLen(markdown)}
+	summary := CapsuleSummary{Name: name, SessionKey: header.SessionKey, CreatedAt: createdAt.UTC(), Chars: runeLen(markdown)}
 	return CapsuleDocument{CapsuleSummary: summary, Markdown: markdown}, nil
 }
 

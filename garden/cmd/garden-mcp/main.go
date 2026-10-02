@@ -259,9 +259,8 @@ type actmemQueryResponse struct {
 
 type actmemWriteResponse struct {
 	Result struct {
-		Changed   bool   `json:"changed"`
-		Revision  uint64 `json:"revision"`
-		UpdatedAt string `json:"updated_at"`
+		Changed  bool   `json:"changed"`
+		Revision uint64 `json:"revision"`
 	} `json:"result"`
 }
 
@@ -610,7 +609,7 @@ func handleActmemQuery(client *Client) (mcp.Tool, server.ToolHandlerFunc) {
 func handleActmemAppend(client *Client) (mcp.Tool, server.ToolHandlerFunc) {
 	tool := mcp.NewTool(
 		toolActmemAppend,
-		mcp.WithDescription("Append a bounded activity pulse to ACTMEM through the authorized maintenance endpoint. This is a direct ACTMEM write, not a Persona or Mentle memory write."),
+		mcp.WithDescription("Append a bounded activity pulse to ACTMEM through the authorized maintenance endpoint. The caller scope is derived from the authenticated principal, never supplied. This is a direct ACTMEM write, not a Persona or Mentle memory write."),
 		mcp.WithString("session_key", mcp.Required(), mcp.Description("Stable session key")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Pulse content")),
 	)
@@ -623,11 +622,12 @@ func handleActmemAppend(client *Client) (mcp.Tool, server.ToolHandlerFunc) {
 		}
 		var resp actmemWriteResponse
 		if err := client.post(ctx, "/v2/actmem/maintenance", map[string]any{
-			"operation": "append_pulse", "session_key": sessionKey, "content": content,
+			"operation": "system_append",
+			"entry":     map[string]any{"section": "pulse", "session_id": sessionKey, "body": content},
 		}, &resp); err != nil {
 			return errorResult(err), nil
 		}
-		return okResult(fmt.Sprintf("ACTMEM pulse appended changed=%t revision=%d updated_at=%s", resp.Result.Changed, resp.Result.Revision, resp.Result.UpdatedAt)), nil
+		return okResult(fmt.Sprintf("ACTMEM pulse appended changed=%t revision=%d", resp.Result.Changed, resp.Result.Revision)), nil
 	}
 	return tool, handler
 }

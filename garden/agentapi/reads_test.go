@@ -8,6 +8,7 @@ import (
 
 	"github.com/dashimaki/garden/internal/runtimecore"
 	"github.com/dashimaki/laputa/actmem"
+	"github.com/dashimaki/laputa/evolution"
 	"github.com/dashimaki/laputa/persona"
 	"github.com/dashimaki/mentle/facade"
 )
@@ -41,7 +42,7 @@ func TestReadPersonaExplicitWorldAndBinding(t *testing.T) {
 
 func TestExplicitActmemReadAndQuery(t *testing.T) {
 	a := actmem.New(t.TempDir())
-	_, err := a.AppendPulse("session", "unique milestone")
+	_, err := a.AppendEntry(evolution.Entry{Section: evolution.SectionPulse, Scope: evolution.Scope{SubjectID: "default", Kind: evolution.ScopePersonal}, SessionID: "session", Body: "unique milestone"})
 	if err != nil {
 		t.Fatal(err)
 	}

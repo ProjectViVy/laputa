@@ -31,6 +31,7 @@ const (
 	OpActmemQuery    Operation = "actmem_query"
 	OpActmemWrite    Operation = "actmem_write"
 	OpActmemMaintain Operation = "actmem_maintain"
+	OpActmemSave     Operation = "actmem_save"
 )
 
 // Authorize checks a trusted principal and exact server-owned profile ID.
@@ -50,6 +51,8 @@ func Authorize(configuredProfile string, binding Binding, principal Principal, o
 		allowed = principal == PrincipalUser || principal == PrincipalAgent || principal == PrincipalAutodream
 	case OpRemember, OpActmemWrite, OpActmemMaintain:
 		allowed = principal == PrincipalUser || principal == PrincipalAgent
+	case OpActmemSave:
+		allowed = principal == PrincipalUser
 	case OpPersonaPropose:
 		allowed = principal == PrincipalAgent || principal == PrincipalAutodream
 	case OpPersonaP16:

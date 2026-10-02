@@ -7,6 +7,7 @@ import (
 
 	"github.com/dashimaki/garden/internal/runtimecore"
 	"github.com/dashimaki/laputa/actmem"
+	"github.com/dashimaki/laputa/evolution"
 	"github.com/dashimaki/laputa/persona"
 )
 
@@ -30,7 +31,7 @@ func TestBoundReadPersonaExplicitWorld(t *testing.T) {
 
 func TestBoundReadACTMEMAndQueryACTMEM(t *testing.T) {
 	a := actmem.New(t.TempDir())
-	if _, err := a.AppendPulse("session", "unique milestone"); err != nil {
+	if _, err := a.AppendEntry(evolution.Entry{Section: evolution.SectionPulse, Scope: evolution.Scope{SubjectID: "default", Kind: evolution.ScopePersonal}, SessionID: "session", Body: "unique milestone"}); err != nil {
 		t.Fatal(err)
 	}
 	b := &BoundClient{client: &Client{runtime: &runtimecore.Garden{ProfileID: "default", Actmem: a}, principal: PrincipalAgent}, binding: binding()}
