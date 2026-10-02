@@ -217,7 +217,8 @@ func TestGardenCleanBreakEndToEnd(t *testing.T) {
 		} `json:"result"`
 	}
 	requestJSON(t, client, http.MethodPost, baseURL+"/v2/actmem/maintenance", map[string]any{
-		"operation": "append_pulse", "session_key": "e2e-session", "content": actmemMarker,
+		"operation": "system_append",
+		"entry":     map[string]any{"section": "pulse", "session_id": "e2e-session", "body": actmemMarker},
 	}, agentToken, http.StatusOK, "", &actmemWrite)
 	if !actmemWrite.Result.Changed || actmemWrite.Result.Revision != 1 {
 		t.Fatalf("ACTMEM write=%+v", actmemWrite)
