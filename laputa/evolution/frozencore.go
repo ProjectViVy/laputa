@@ -79,9 +79,13 @@ func (c FrozenCoreV2) Content(kind FrozenCoreKind) string {
 	return section.Content
 }
 
-// MissionRevision is the pinned Mission source revision (0 when unassigned).
+// MissionRevision is the pinned Mission source revision (0 when unassigned
+// or the envelope carries no mission slot).
 func (c FrozenCoreV2) MissionRevision() uint64 {
-	return c.Sections[0].SourceRevision
+	if mission, ok := c.Section(FrozenKindMission); ok {
+		return mission.SourceRevision
+	}
+	return 0
 }
 
 // DecodeFrozenCoreV2 strict-decodes and validates the v2 envelope: exact
