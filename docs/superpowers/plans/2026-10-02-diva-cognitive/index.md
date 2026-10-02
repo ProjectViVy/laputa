@@ -9,15 +9,15 @@ Schedule basis: dependency waves, not invented calendar dates or person-day esti
 
 | Story | Epic | Requirements | Immediate predecessors / supplied input | Plan state |
 | --- | --- | --- | --- | --- |
-| [S01](S01.md) Shared contracts and compatibility fixtures | A | R1–R11 | None; reviewed shared design | Planned; not execution-authorized |
-| [S02](S02.md) Mission authority and session projection | A | R1,R5,R6,R9 | S01 | Planned; not execution-authorized |
-| [S03](S03.md) Scoped Markdown ACTMEM | A | R2,R9,R10 | S01 | Planned; not execution-authorized |
-| [S04](S04.md) Optional backend and scope-safe capture | B | R2,R3,R7,R8,R9 | S01 | Planned; not execution-authorized |
-| [S05](S05.md) Laputa DIVA strategy library | C | R3,R4,R6,R11 | S01 | Planned; not execution-authorized |
-| [S06](S06.md) ViVy trusted strategy runtime adapter | D | R4,R5,R6,R11 | S01 | Planned; not execution-authorized |
-| [S07](S07.md) Bound cognitive service, capture and automatic wakeups | D | R1,R2,R3,R4,R7,R11 | S02, S03, S04, S05, S06 | Planned; not execution-authorized |
+| [S01](S01.md) Shared contracts and compatibility fixtures | A | R1–R11 | None; reviewed shared design | Done |
+| [S02](S02.md) Mission authority and session projection | A | R1,R5,R6,R9 | S01 | Done |
+| [S03](S03.md) Scoped Markdown ACTMEM | A | R2,R9,R10 | S01 | Done |
+| [S04](S04.md) Optional backend and scope-safe capture | B | R2,R3,R7,R8,R9 | S01 | Done |
+| [S05](S05.md) Laputa DIVA strategy library | C | R3,R4,R6,R11 | S01 | Done |
+| [S06](S06.md) ViVy trusted strategy runtime adapter | D | R4,R5,R6,R11 | S01 | Done |
+| [S07](S07.md) Bound cognitive service, capture and automatic wakeups | D | R1,R2,R3,R4,R7,R11 | S02, S03, S04, S05, S06 | Done |
 | [S08](S08.md) DIVA cognitive controls and read models | E | R1,R5,R6,R10,R11 | S07 | Blocked: desktop bridge |
-| [S09](S09.md) Cross-repository acceptance and delivery evidence | E | R1–R11 | S08 | Planned; not execution-authorized |
+| [S09](S09.md) Cross-repository acceptance and delivery evidence | E | R1–R11 | S08 | Done |
 
 Topological waves: {S01} → {S02, S03, S04, S05, S06} → {S07} → {S08} → {S09}.
 
@@ -42,8 +42,8 @@ The plan has not run product tests. Document checks validate Story IDs, requirem
 
 ## Readiness and handoff
 
-- S01 is the first execution candidate; no predecessor is missing. It remains Planned until implementation is authorized and the shared-contract review is accepted.
-- S02–S07 and S09 remain Planned behind the stated predecessor evidence. Do not mark them Ready merely because the document exists.
+- S01–S07 and S09 are Done; evidence and the acceptance record live in acceptance.md and the merged lane history.
+
 - S08 is explicitly Blocked on the separate DIVA-NEXT-P0 bridge API, selected revision and desktop build/smoke command. The owning bridge delivery supplies these, and the S08 planner attaches them before release.
 - Root/nested AGENTS.md instruction changes are not made by this package. The owner-approved Mission/backend architecture changes must be reconciled with the seven-file/Mentle-only guards before affected code is landed. No broad instruction rewrite is authorized.
 - Execution recommendation: native, one Story at a time initially. Enable concurrent work only after shared interfaces land and the owner selects delegation.
