@@ -54,7 +54,7 @@ func TestKindContract(t *testing.T) {
 			t.Errorf("%s frozen = %d,%v", tc.kind, fl, ok)
 		}
 	}
-	if len(AllKinds) != 7 || len(RequiredKinds) != 5 || len(FrozenKinds) != 6 {
+	if len(AllKinds) != 8 || len(RequiredKinds) != 5 || len(FrozenKinds) != 7 {
 		t.Fatal("kind set sizes wrong")
 	}
 }
