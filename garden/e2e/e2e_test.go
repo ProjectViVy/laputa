@@ -81,7 +81,7 @@ func TestGardenCleanBreakEndToEnd(t *testing.T) {
 		} `json:"documents"`
 	}
 	requestJSON(t, client, http.MethodGet, baseURL+"/v2/persona/documents", nil, readToken, http.StatusOK, "", &beforeInit)
-	if beforeInit.Status != "uninitialized" || len(beforeInit.Documents) != 7 {
+	if beforeInit.Status != "uninitialized" || len(beforeInit.Documents) != 8 {
 		t.Fatalf("initial Persona status=%+v", beforeInit)
 	}
 
@@ -108,7 +108,7 @@ func TestGardenCleanBreakEndToEnd(t *testing.T) {
 		Documents []map[string]any `json:"documents"`
 	}
 	requestJSON(t, client, http.MethodPost, baseURL+"/v2/persona/initialize", initialize, userToken, http.StatusCreated, "", &initialized)
-	if initialized.Status != "ready" || len(initialized.Documents) != 7 {
+	if initialized.Status != "ready" || len(initialized.Documents) != 8 {
 		t.Fatalf("initialized Persona=%+v", initialized)
 	}
 
