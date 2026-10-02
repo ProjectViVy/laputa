@@ -203,3 +203,28 @@ Each owning Story adds behavior tests listed in its plan. S01 fixtures do not as
   visibly as `failed`, never re-routed.
 - `MemoryCard`/`EvidenceFragment` live in `garden/memory/cards.go`;
   `agentapi` keeps type aliases (breaks the memory→agentapi import edge).
+
+### S05 — DIVA strategy library (diva-cognitive/v1-review-1, amended)
+
+- `laputa/evolution/diva` implements the six-stage strategy
+  (collect/prepare/reconcile/reflect/effects/finish) over the `Domain` and
+  `Model` ports; `Run(input, operationKey)` executes the chain and returns
+  `Outcome{status: applied|submitted|no_change|partial|recovery_required,
+  window, receipts, reason}`.
+- Effect operation IDs are `<node operation_key>:work` for the reconcile
+  patch and `<operation_key>:e<i>` per reflect candidate index. Committed
+  receipts resolve via `Domain.Lookup` before any Apply; a digest mismatch
+  is an idempotency conflict; a failed Apply stops the chain preserving
+  committed receipts; `unknown` stops and yields `recovery_required`.
+- `evolution/diva` owns the prompt text and output schemas
+  (`PromptReconcile`, `PromptReflect`, `SchemaWorkPatch`,
+  `SchemaReflectionOutput`, `ImplementationRevision`) — hosts ship no
+  copies.
+- `laputa/evolution/inofy` exports `Definition()`, `Descriptors()` and
+  `NewExecutor(domain, model) inofy.NodeExecutor`; `StrategyDigest()`
+  covers definition bytes + prompt bundle + implementation ID. Node calls
+  carry the stage input under the single `input` binding member.
+- `laputa/go.mod` requires `github.com/ProjectViVy/inofy` pinned to the
+  baseline `71e2c9b` via local replace (unreleased pin; no tag publication).
+- Stage envelopes are internal wire format, strict-decoded; only node IDs
+  and semantics are frozen.
