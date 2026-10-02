@@ -142,3 +142,32 @@ S01 defines test fixtures (not production behavior) for:
 - TestActmemGoldenGrammar: valid multiline entries round-trip; delimiter collision/orphan scope metadata fails.
 
 Each owning Story adds behavior tests listed in its plan. S01 fixtures do not assert unimplemented integration success.
+
+## 8. Changelog — interface changes recorded during execution
+
+### S03 — scoped ACTMEM ops (diva-cognitive/v1-review-1, amended)
+
+- New stable codes join section 7: `actmem_unclassified_head`, `actmem_revision_conflict`,
+  `actmem_fold_conflict`, `actmem_invalid_edit`, `actmem_invalid_entry`,
+  `actmem_scope_forbidden`, `actmem_capsule_invalid`, `actmem_malformed`,
+  `actmem_storage_error`. HTTP map: 400 invalid_* / malformed / format /
+  unclassified / scope; 404 capsule; 409 revision + fold conflicts; 413 cap.
+- `PUT /v2/actmem` is owner-only (`actmem_save` op, user capability): body is
+  `{markdown, base_revision}` — a validated v2 whole-save whose stored
+  revision is always head+1. Free-text section fields are gone.
+- `POST /v2/actmem/maintenance` operations are now the typed set
+  `system_append` (entry{section,scope,field,session_id,event_id,body,sources}),
+  `work_patch` (contracts WorkPatch), `fold_session` (session_key). The retired
+  `append_pulse`/`append_recap`/`edit_work`/`complete_open_item`/`drop_item`
+  operations are gone — no compatibility mapping.
+- `GET /v2/actmem` is scope-split: read/user/operator principals receive the
+  owner document projection; agent principals receive scoped `entries[]`
+  bounded by `ActmemWorkspace` (host-configured, never request-supplied).
+- `POST /v2/actmem/query` executes under the caller's derived scope; hidden
+  workspaces contribute no hits.
+- `DELETE /v2/actmem/capsules/{name}` is owner-only (`actmem_save`).
+- agentapi gains `actmem_save` (user-only) and typed service ops
+  `ReadActivity`, `ApplyWorkPatch`, `AppendActivity`, `FoldSession` alongside
+  the scoped `QueryACTMEM`; contract DTOs alias evolution types.
+- Fold capsules record `session_key`/`created_at`/`fold_digest`/`entries`
+  front matter; reader tolerates both legacy and fold formats.

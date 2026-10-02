@@ -35,6 +35,33 @@ func (b *BoundClient) QueryACTMEM(ctx context.Context, q ActmemQuery) (ActmemRes
 	return s.QueryACTMEM(ctx, b.client.principal, b.binding, q)
 }
 
+func (b *BoundClient) ReadActivity(ctx context.Context, req ReadRequest) (ActivityResult, error) {
+	s, unlock, err := b.service()
+	if err != nil {
+		return ActivityResult{}, err
+	}
+	defer unlock()
+	return s.ReadActivity(ctx, b.client.principal, b.binding, req)
+}
+
+func (b *BoundClient) ApplyWorkPatch(ctx context.Context, patch WorkPatch) (ActivityResult, error) {
+	s, unlock, err := b.service()
+	if err != nil {
+		return ActivityResult{}, err
+	}
+	defer unlock()
+	return s.ApplyWorkPatch(ctx, b.client.principal, b.binding, patch)
+}
+
+func (b *BoundClient) AppendActivity(ctx context.Context, entry Entry) (ActivityResult, error) {
+	s, unlock, err := b.service()
+	if err != nil {
+		return ActivityResult{}, err
+	}
+	defer unlock()
+	return s.AppendActivity(ctx, b.client.principal, b.binding, entry)
+}
+
 func (b *BoundClient) SearchCards(ctx context.Context, q CardSearch) (CardPage, error) {
 	s, unlock, err := b.service()
 	if err != nil {

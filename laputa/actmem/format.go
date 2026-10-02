@@ -3,7 +3,6 @@ package actmem
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -70,8 +69,8 @@ func declaresV2Schema(raw string) bool {
 
 func emptyHead() head {
 	doc := evolution.ActmemDocument{
-		Schema:   evolution.ActmemSchemaV2,
-		Updated:  "1970-01-01T00:00:00Z",
+		Schema:  evolution.ActmemSchemaV2,
+		Updated: "1970-01-01T00:00:00Z",
 		Sections: map[evolution.EntrySection][]evolution.ActmemEntry{
 			evolution.SectionPulse: {},
 			evolution.SectionRecap: {},
@@ -154,11 +153,11 @@ func (h head) projection() ActmemDocument {
 		}
 	}
 	document := ActmemDocument{
-		Revision:  h.doc.Revision,
-		Pulse:     pulse.String(),
-		Recap:     recap.String(),
-		Work:      work.String(),
-		Markdown:  h.doc.Render(),
+		Revision: h.doc.Revision,
+		Pulse:    pulse.String(),
+		Recap:    recap.String(),
+		Work:     work.String(),
+		Markdown: h.doc.Render(),
 	}
 	document.UpdatedAt = parseUpdated(h.doc.Updated)
 	document.entries = h.entries()
@@ -204,7 +203,3 @@ func newEntryID() (string, error) {
 	}
 	return "e_" + hex.EncodeToString(raw[:]), nil
 }
-
-// errV1WriteOnV2Head guards the legacy free-text write surface until the
-// scoped operations own mutation.
-var errV1WriteOnV2Head = errors.New("legacy write path cannot mutate a v2 ACTMEM head")

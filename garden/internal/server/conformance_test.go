@@ -16,6 +16,7 @@ import (
 	"github.com/dashimaki/garden/internal/recall"
 	"github.com/dashimaki/garden/internal/runtimecore"
 	"github.com/dashimaki/laputa/actmem"
+	"github.com/dashimaki/laputa/evolution"
 	"github.com/dashimaki/laputa/persona"
 )
 
@@ -52,8 +53,7 @@ func newConformanceFixture(t *testing.T) *conformanceFixture {
 		t.Fatal(err)
 	}
 	activity := actmem.New(filepath.Join(dir, "activity"))
-	pulse := conformanceActmem
-	if _, err := activity.Put(actmem.ActmemPatch{Pulse: &pulse}); err != nil {
+	if _, err := activity.AppendEntry(evolution.Entry{Section: evolution.SectionPulse, Scope: evolution.Scope{SubjectID: "profile_1", Kind: evolution.ScopePersonal}, SessionID: "session-conformance", Body: conformanceActmem}); err != nil {
 		t.Fatal(err)
 	}
 	frozenPath := filepath.Join(dir, "frozen.db")

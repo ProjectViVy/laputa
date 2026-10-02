@@ -6,6 +6,21 @@ import (
 	"github.com/dashimaki/laputa/evolution"
 )
 
+// ACTMEM scoped-operation DTOs alias the shared contract; the agentapi
+// surface adds no second representation.
+type (
+	ReadRequest    = evolution.ReadRequest
+	WorkPatch      = evolution.WorkPatch
+	WorkChange     = evolution.WorkChange
+	WorkChangeKind = evolution.WorkChangeKind
+	WorkField      = evolution.WorkField
+	Entry          = evolution.Entry
+	EntrySection   = evolution.EntrySection
+	ActivityResult = evolution.ActivityResult
+	SourceRef      = evolution.SourceRef
+	Scope          = evolution.Scope
+)
+
 // Binding is host identity and audit provenance, not an authorization claim.
 // ProfileID is checked against server configuration on every request.
 // WorkspaceID is the trusted workspace binding issued by the host at Open;

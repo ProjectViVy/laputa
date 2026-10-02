@@ -46,6 +46,10 @@ type Server struct {
 	Mailbox      *mailbox.Store
 	Persona      *persona.Service
 	Actmem       *actmem.Store
+	// ActmemWorkspace is the host-issued workspace binding for HTTP agent
+	// principals. An empty value scopes agent ACTMEM calls to the caller's
+	// personal union; it is never a request-supplied claim.
+	ActmemWorkspace string
 	Capabilities CapabilityConfig
 	Components   map[string]string
 	Addr         string

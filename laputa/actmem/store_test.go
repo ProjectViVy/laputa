@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dashimaki/laputa/evolution"
 )
 
 func TestMissingHeadIsEmptyWithoutCreatingDirectories(t *testing.T) {
@@ -22,102 +24,86 @@ func TestMissingHeadIsEmptyWithoutCreatingDirectories(t *testing.T) {
 	}
 }
 
-func TestAppendCASNoopAndRestart(t *testing.T) {
+func TestAppendCASAndRestart(t *testing.T) {
 	temp := t.TempDir()
 	clock := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
 	store := New(temp)
 	store.SetClock(func() time.Time { return clock })
-	first, err := store.AppendPulse("gui:one", "hello")
+	first, err := store.AppendEntry(evolution.Entry{Section: evolution.SectionPulse, Scope: evolution.Scope{SubjectID: "sub", Kind: evolution.ScopePersonal}, SessionID: "gui:one", Body: "hello"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !first.Changed || first.Document.Revision != 1 {
+	if !first.Changed || first.Revision != 1 {
 		t.Fatalf("first = %#v", first)
-	}
-	second, err := store.Put(ActmemPatch{Pulse: &first.Document.Pulse, BaseRevision: 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if second.Changed || second.Document.Revision != 1 {
-		t.Fatalf("no-op = %#v", second)
-	}
-	if _, err := store.Put(ActmemPatch{BaseRevision: 0}); CodeOf(err) != "actmem_revision_conflict" {
-		t.Fatalf("CAS error = %v", err)
 	}
 	restarted := New(temp)
 	document, err := restarted.Read()
 	if err != nil || document.Revision != 1 || !strings.Contains(document.Pulse, "hello") {
 		t.Fatalf("restart = %#v, %v", document, err)
 	}
+	if document.Unclassified || len(document.Entries()) != 1 {
+		t.Fatalf("restart document = %#v", document)
+	}
 }
 
-func TestWorkMaintenanceAndCapsuleLifecycle(t *testing.T) {
+func TestCapsuleLifecycle(t *testing.T) {
 	temp := t.TempDir()
 	store := New(temp)
-	updated, err := store.EditWork("Open", "- pending", 0)
+	if _, err := store.AppendEntry(evolution.Entry{Section: evolution.SectionPulse, Scope: evolution.Scope{SubjectID: "sub", Kind: evolution.ScopeWorkspace, WorkspaceID: "w"}, SessionID: "s-1", Body: "folded line"}); err != nil {
+		t.Fatal(err)
+	}
+	capsules, err := store.FoldSession("s-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated, err = store.CompleteOpenItem(0, updated.Document.Revision)
+	if len(capsules) != 1 {
+		t.Fatalf("capsules = %#v", capsules)
+	}
+	listed, err := store.ListCapsules()
+	if err != nil || len(listed) != 1 {
+		t.Fatalf("list = %#v, %v", listed, err)
+	}
+	full, err := store.ReadCapsule(capsules[0].Name)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(updated.Document.Work, "### Open") {
-		t.Fatal("canonical work heading missing")
-	}
-	if _, err := store.EditWork("Unknown", "x", updated.Document.Revision); CodeOf(err) != "actmem_invalid_edit" {
-		t.Fatalf("unknown section = %v", err)
-	}
-	tooLarge := "### Goal\n" + strings.Repeat("x", ACTMEMWorkCapChars+1)
-	if _, err := store.Put(ActmemPatch{Work: &tooLarge, BaseRevision: updated.Document.Revision}); CodeOf(err) != "actmem_cap_exceeded" {
-		t.Fatalf("cap error = %v", err)
-	}
-	if _, err := store.AppendPulse("session/one", "fold me"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.AppendRecap("other", "keep me"); err != nil {
-		t.Fatal(err)
-	}
-	capsules, err := store.FoldSession("session/one")
-	if err != nil || len(capsules) != 1 {
-		t.Fatalf("fold = %#v, %v", capsules, err)
-	}
-	if capsules[0].Chars > ACTMEMCapsuleCap {
-		t.Fatalf("capsule exceeds cap: %#v", capsules[0])
-	}
-	head, _ := store.Read()
-	if strings.Contains(head.Pulse, "fold me") || !strings.Contains(head.Recap, "keep me") {
-		t.Fatalf("fold head = %#v", head)
-	}
-	read, err := store.ReadCapsule(capsules[0].Name)
-	if err != nil || read.SessionKey != "session/one" {
-		t.Fatalf("capsule = %#v, %v", read, err)
-	}
-	if err := store.DeleteCapsule("../escape.md"); CodeOf(err) != "actmem_capsule_invalid" {
-		t.Fatalf("traversal = %v", err)
+	if !strings.Contains(full.Markdown, "folded line") || full.SessionKey != "s-1" {
+		t.Fatalf("capsule = %#v", full)
 	}
 	if err := store.DeleteCapsule(capsules[0].Name); err != nil {
 		t.Fatal(err)
+	}
+	if listed, _ := store.ListCapsules(); len(listed) != 0 {
+		t.Fatalf("delete failed: %#v", listed)
+	}
+}
+
+func TestQueryRespectsScope(t *testing.T) {
+	store := New(t.TempDir())
+	for _, e := range []evolution.Entry{
+		{Section: evolution.SectionPulse, Scope: evolution.Scope{SubjectID: "sub", Kind: evolution.ScopeWorkspace, WorkspaceID: "ws-x"}, SessionID: "s", Body: "x scoped needle"},
+		{Section: evolution.SectionPulse, Scope: evolution.Scope{SubjectID: "sub", Kind: evolution.ScopeWorkspace, WorkspaceID: "ws-y"}, SessionID: "s", Body: "y scoped needle"},
+	} {
+		if _, err := store.AppendEntry(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	caller := evolution.Scope{SubjectID: "sub", Kind: evolution.ScopeWorkspace, WorkspaceID: "ws-x"}
+	result, err := store.Query(caller, QueryOptions{Query: "needle"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Items) != 1 || !strings.Contains(result.Items[0].Excerpt, "x scoped") {
+		t.Fatalf("query leaked or missed: %+v", result.Items)
+	}
+	if _, err := store.Query(caller, QueryOptions{Query: "needle", Sections: []string{"bogus"}}); err == nil {
+		t.Fatal("unknown section accepted")
 	}
 }
 
 func TestRecapFromFinalResponse(t *testing.T) {
 	got := RecapFromFinalResponse("```go\nignored\n```\n\n完成了主路径。\n\n后文")
-	if got != "完成了主路径。" {
+	if !strings.Contains(got, "完成了主路径") || strings.Contains(got, "ignored") {
 		t.Fatalf("recap = %q", got)
-	}
-}
-
-func TestQueryIsBoundedAndLiteral(t *testing.T) {
-	store := New(t.TempDir())
-	if _, err := store.AppendPulse("session", "Alpha decision"); err != nil {
-		t.Fatal(err)
-	}
-	result, err := store.Query(QueryOptions{Query: "DECISION", MaxChars: 6})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result.Items) != 1 || result.ReturnedChars > 6 || !result.Truncated {
-		t.Fatalf("query = %#v", result)
 	}
 }

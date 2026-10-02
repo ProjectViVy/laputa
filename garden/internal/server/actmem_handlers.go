@@ -7,23 +7,48 @@ import (
 	"strings"
 
 	"github.com/dashimaki/laputa/actmem"
+	"github.com/dashimaki/laputa/evolution"
 )
 
+// actmemCallerScope derives the trusted scope for HTTP principals from the
+// configured profile + host workspace binding — never from request data.
+// read/user/operator principals read the owner projection (the caller IS the
+// subject); agent reads the union bound to ActmemWorkspace.
+func (s *Server) actmemCallerScope(principal Principal) (evolution.Scope, error) {
+	if principal == PrincipalAgent {
+		kind := evolution.ScopePersonal
+		if s.ActmemWorkspace != "" {
+			kind = evolution.ScopeWorkspace
+		}
+		scope := evolution.Scope{SubjectID: s.ProfileID, Kind: kind, WorkspaceID: s.ActmemWorkspace}
+		if err := scope.Validate(); err != nil {
+			return evolution.Scope{}, err
+		}
+		return scope, nil
+	}
+	scope := evolution.Scope{SubjectID: s.ProfileID, Kind: evolution.ScopePersonal}
+	if err := scope.Validate(); err != nil {
+		return evolution.Scope{}, err
+	}
+	return scope, nil
+}
+
 type actmemView struct {
-	Revision  uint64 `json:"revision"`
-	UpdatedAt string `json:"updated_at"`
-	Markdown  string `json:"markdown"`
-	Truncated bool   `json:"truncated"`
-	Sections  struct {
+	Revision     uint64            `json:"revision"`
+	UpdatedAt    string            `json:"updated_at"`
+	Markdown     string            `json:"markdown"`
+	Truncated    bool              `json:"truncated"`
+	Unclassified bool              `json:"unclassified,omitempty"`
+	Entries      []evolution.Entry `json:"entries,omitempty"`
+	Sections     struct {
 		Pulse string `json:"pulse"`
 		Recap string `json:"recap"`
 		Work  string `json:"work"`
 	} `json:"sections"`
 }
 
-func (s *Server) actmemReadPrincipal(w http.ResponseWriter, r *http.Request) bool {
-	_, ok := s.requireReadPrincipal(w, r, PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalOperator)
-	return ok
+func (s *Server) actmemReadPrincipal(w http.ResponseWriter, r *http.Request) (Principal, bool) {
+	return s.requireReadPrincipal(w, r, PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalOperator)
 }
 
 func parseActmemMaxChars(raw string) (int, error) {
@@ -38,7 +63,7 @@ func parseActmemMaxChars(raw string) (int, error) {
 }
 
 func makeActmemView(document actmem.ActmemDocument, maxChars int) actmemView {
-	view := actmemView{Revision: document.Revision, UpdatedAt: document.UpdatedAt.UTC().Format("2006-01-02T15:04:05.000Z07:00")}
+	view := actmemView{Revision: document.Revision, UpdatedAt: document.UpdatedAt.UTC().Format("2006-01-02T15:04:05.000Z07:00"), Unclassified: document.Unclassified}
 	view.Markdown = truncateActmem(document.Markdown, maxChars)
 	view.Truncated = len([]rune(document.Markdown)) > len([]rune(view.Markdown))
 	remaining := maxChars
@@ -68,7 +93,8 @@ func truncateActmem(value string, max int) string {
 }
 
 func (s *Server) handleActmemRead(w http.ResponseWriter, r *http.Request) {
-	if !s.actmemReadPrincipal(w, r) {
+	principal, ok := s.actmemReadPrincipal(w, r)
+	if !ok {
 		return
 	}
 	if s.Actmem == nil {
@@ -86,12 +112,54 @@ func (s *Server) handleActmemRead(w http.ResponseWriter, r *http.Request) {
 		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", err)
 		return
 	}
+	if principal == PrincipalAgent {
+		scope, scopeErr := s.actmemCallerScope(principal)
+		if scopeErr != nil {
+			writeErrorWithCode(w, http.StatusInternalServerError, "actmem_scope_error", scopeErr)
+			return
+		}
+		result, readErr := s.Actmem.ReadScoped(scope, evolution.ReadRequest{})
+		if readErr != nil {
+			writeActmemError(w, readErr)
+			return
+		}
+		entries := result.Entries
+		if maxChars < actmem.ACTMEMReadCapChars && len(entries) > 0 {
+			entries = budgetEntries(entries, maxChars)
+		}
+		writeJSON(w, http.StatusOK, actmemView{Revision: result.Revision, Entries: entries})
+		return
+	}
 	document, err := s.Actmem.Read()
 	if err != nil {
 		writeActmemError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, makeActmemView(document, maxChars))
+}
+
+// budgetEntries keeps whole entries within the read budget, dropping the
+// largest bodies first — a read projection, never a write.
+func budgetEntries(entries []evolution.Entry, maxChars int) []evolution.Entry {
+	total := 0
+	for _, e := range entries {
+		total += len([]rune(e.Body))
+	}
+	if total <= maxChars {
+		return entries
+	}
+	kept := make([]evolution.Entry, len(entries))
+	copy(kept, entries)
+	for i := len(kept) - 1; i >= 0 && total > maxChars; i-- {
+		body := len([]rune(kept[i].Body))
+		allowed := maxChars - (total - body)
+		if allowed < 0 {
+			allowed = 0
+		}
+		kept[i].Body = truncateActmem(kept[i].Body, allowed)
+		total = (total - body) + len([]rune(kept[i].Body))
+	}
+	return kept
 }
 
 type actmemQueryRequest struct {
@@ -102,7 +170,8 @@ type actmemQueryRequest struct {
 }
 
 func (s *Server) handleActmemQuery(w http.ResponseWriter, r *http.Request) {
-	if !s.actmemReadPrincipal(w, r) {
+	principal, ok := s.actmemReadPrincipal(w, r)
+	if !ok {
 		return
 	}
 	if s.Actmem == nil {
@@ -118,7 +187,12 @@ func (s *Server) handleActmemQuery(w http.ResponseWriter, r *http.Request) {
 		writeRequestError(w, err)
 		return
 	}
-	result, err := s.Actmem.Query(actmem.QueryOptions{Query: body.Query, Sections: body.Sections, MaxHits: body.MaxHits, MaxChars: body.MaxChars})
+	scope, err := s.actmemCallerScope(principal)
+	if err != nil {
+		writeErrorWithCode(w, http.StatusInternalServerError, "actmem_scope_error", err)
+		return
+	}
+	result, err := s.Actmem.Query(scope, actmem.QueryOptions{Query: body.Query, Sections: body.Sections, MaxHits: body.MaxHits, MaxChars: body.MaxChars})
 	if err != nil {
 		writeActmemError(w, err)
 		return
@@ -126,15 +200,15 @@ func (s *Server) handleActmemQuery(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-type actmemPatchRequest struct {
+// Owner whole-save only: {markdown, base_revision}. Agents patch Work
+// through maintenance; nobody writes free-text sections anymore.
+type actmemSaveRequest struct {
 	BaseRevision *uint64 `json:"base_revision"`
-	Pulse        *string `json:"pulse"`
-	Recap        *string `json:"recap"`
-	Work         *string `json:"work"`
+	Markdown     *string `json:"markdown"`
 }
 
 func (s *Server) handleActmemPut(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requirePrincipal(w, r, PrincipalUser, PrincipalAgent); !ok {
+	if _, ok := s.requirePrincipal(w, r, PrincipalUser); !ok {
 		return
 	}
 	if s.Actmem == nil {
@@ -145,35 +219,45 @@ func (s *Server) handleActmemPut(w http.ResponseWriter, r *http.Request) {
 		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("content type must be application/json"))
 		return
 	}
-	var body actmemPatchRequest
+	var body actmemSaveRequest
 	if err := decodeJSON(w, r, 4<<20, &body); err != nil {
 		writeRequestError(w, err)
 		return
 	}
-	if body.BaseRevision == nil {
-		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("base_revision is required"))
+	if body.BaseRevision == nil || body.Markdown == nil {
+		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("markdown and base_revision are required"))
 		return
 	}
-	result, err := s.Actmem.Put(actmem.ActmemPatch{Pulse: body.Pulse, Recap: body.Recap, Work: body.Work, BaseRevision: *body.BaseRevision})
+	result, err := s.Actmem.Save(*body.Markdown, *body.BaseRevision)
 	if err != nil {
 		writeActmemError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, actmemWritePayload(result))
+	writeJSON(w, http.StatusOK, map[string]any{"changed": result.Changed, "revision": result.Revision})
 }
 
 type actmemMaintenanceRequest struct {
-	Operation    string  `json:"operation"`
-	SessionKey   string  `json:"session_key"`
-	Content      string  `json:"content"`
-	Section      string  `json:"section"`
-	Replacement  string  `json:"replacement"`
-	ItemIndex    *int    `json:"item_index"`
-	BaseRevision *uint64 `json:"base_revision"`
+	Operation string `json:"operation"`
+	// system_append: caller supplies event identity; the store allocs the id.
+	// Scope is derived from the caller, never supplied: strict decoding
+	// rejects subject_id/kind/workspace_id fields in this struct.
+	Entry *struct {
+		Section   string                `json:"section"`
+		Field     string                `json:"field,omitempty"`
+		SessionID string                `json:"session_id"`
+		EventID   string                `json:"event_id,omitempty"`
+		Body      string                `json:"body"`
+		Sources   []evolution.SourceRef `json:"sources,omitempty"`
+	} `json:"entry,omitempty"`
+	// work_patch: scoped Work changes against base_revision.
+	WorkPatch *evolution.WorkPatch `json:"work_patch,omitempty"`
+	// fold_session.
+	SessionKey string `json:"session_key,omitempty"`
 }
 
 func (s *Server) handleActmemMaintenance(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requirePrincipal(w, r, PrincipalUser, PrincipalAgent); !ok {
+	principal, ok := s.requirePrincipal(w, r, PrincipalUser, PrincipalAgent)
+	if !ok {
 		return
 	}
 	if s.Actmem == nil {
@@ -189,77 +273,63 @@ func (s *Server) handleActmemMaintenance(w http.ResponseWriter, r *http.Request)
 		writeRequestError(w, err)
 		return
 	}
-	var (
-		result   actmem.WriteResult
-		capsules []actmem.CapsuleSummary
-		err      error
-	)
-	switch strings.TrimSpace(body.Operation) {
-	case "append_pulse":
-		if strings.TrimSpace(body.SessionKey) == "" {
-			err = errors.New("session_key is required")
-			break
-		}
-		result, err = s.Actmem.AppendPulse(body.SessionKey, body.Content)
-	case "append_recap":
-		if strings.TrimSpace(body.SessionKey) == "" {
-			err = errors.New("session_key is required")
-			break
-		}
-		result, err = s.Actmem.AppendRecap(body.SessionKey, body.Content)
-	case "edit_work":
-		if body.BaseRevision == nil {
-			err = errors.New("base_revision is required")
-		} else {
-			result, err = s.Actmem.EditWork(body.Section, body.Replacement, *body.BaseRevision)
-		}
-	case "complete_open_item":
-		if body.BaseRevision == nil || body.ItemIndex == nil {
-			err = errors.New("item_index and base_revision are required")
-		} else {
-			result, err = s.Actmem.CompleteOpenItem(*body.ItemIndex, *body.BaseRevision)
-		}
-	case "drop_item":
-		if body.BaseRevision == nil || body.ItemIndex == nil {
-			err = errors.New("section, item_index and base_revision are required")
-		} else {
-			result, err = s.Actmem.DropItem(body.Section, *body.ItemIndex, *body.BaseRevision)
-		}
-	case "fold_session":
-		if strings.TrimSpace(body.SessionKey) == "" {
-			err = errors.New("session_key is required")
-			break
-		}
-		capsules, err = s.Actmem.FoldSession(body.SessionKey)
-		if err == nil {
-			document, readErr := s.Actmem.Read()
-			err = readErr
-			result = actmem.WriteResult{Changed: len(capsules) > 0, Document: document}
-		}
-	default:
-		err = errors.New("unknown ACTMEM maintenance operation")
-	}
+	scope, err := s.actmemCallerScope(principal)
 	if err != nil {
-		if strings.HasPrefix(err.Error(), "unknown ACTMEM") || strings.Contains(err.Error(), "required") {
-			writeErrorWithCode(w, http.StatusBadRequest, "actmem_invalid_edit", err)
-		} else {
-			writeActmemError(w, err)
-		}
+		writeErrorWithCode(w, http.StatusInternalServerError, "actmem_scope_error", err)
 		return
 	}
-	payload := map[string]any{"result": actmemWritePayload(result)}
-	if capsules != nil {
+	payload := map[string]any{}
+	switch strings.TrimSpace(body.Operation) {
+	case "system_append":
+		if body.Entry == nil || strings.TrimSpace(body.Entry.SessionID) == "" || body.Entry.Body == "" {
+			writeErrorWithCode(w, http.StatusBadRequest, "actmem_invalid_edit", errors.New("entry with session_id and body is required"))
+			return
+		}
+		result, opErr := s.Actmem.AppendEntry(evolution.Entry{
+			Section:   evolution.EntrySection(body.Entry.Section),
+			Scope:     scope,
+			Field:     evolution.WorkField(body.Entry.Field),
+			SessionID: body.Entry.SessionID,
+			EventID:   body.Entry.EventID,
+			Body:      body.Entry.Body,
+			Sources:   body.Entry.Sources,
+		})
+		if opErr != nil {
+			writeActmemError(w, opErr)
+			return
+		}
+		payload["result"] = map[string]any{"changed": result.Changed, "revision": result.Revision, "entries": result.Entries}
+	case "work_patch":
+		if body.WorkPatch == nil {
+			writeErrorWithCode(w, http.StatusBadRequest, "actmem_invalid_edit", errors.New("work_patch is required"))
+			return
+		}
+		result, opErr := s.Actmem.ApplyWorkPatch(scope, *body.WorkPatch)
+		if opErr != nil {
+			writeActmemError(w, opErr)
+			return
+		}
+		payload["result"] = map[string]any{"changed": result.Changed, "revision": result.Revision, "entries": result.Entries}
+	case "fold_session":
+		if strings.TrimSpace(body.SessionKey) == "" {
+			writeErrorWithCode(w, http.StatusBadRequest, "actmem_invalid_edit", errors.New("session_key is required"))
+			return
+		}
+		capsules, opErr := s.Actmem.FoldSession(body.SessionKey)
+		if opErr != nil {
+			writeActmemError(w, opErr)
+			return
+		}
 		payload["capsules"] = capsules
+	default:
+		writeErrorWithCode(w, http.StatusBadRequest, "actmem_invalid_edit", errors.New("unknown ACTMEM maintenance operation"))
+		return
 	}
 	writeJSON(w, http.StatusOK, payload)
 }
 
-func actmemWritePayload(result actmem.WriteResult) map[string]any {
-	return map[string]any{"changed": result.Changed, "revision": result.Document.Revision, "updated_at": result.Document.UpdatedAt.UTC().Format("2006-01-02T15:04:05.000Z07:00")}
-}
-
 func (s *Server) handleActmemCapsules(w http.ResponseWriter, r *http.Request) {
-	if !s.actmemReadPrincipal(w, r) {
+	if _, ok := s.actmemReadPrincipal(w, r); !ok {
 		return
 	}
 	if s.Actmem == nil {
@@ -275,7 +345,7 @@ func (s *Server) handleActmemCapsules(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleActmemCapsule(w http.ResponseWriter, r *http.Request) {
-	if !s.actmemReadPrincipal(w, r) {
+	if _, ok := s.actmemReadPrincipal(w, r); !ok {
 		return
 	}
 	if s.Actmem == nil {
@@ -291,7 +361,7 @@ func (s *Server) handleActmemCapsule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleActmemCapsuleDelete(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requirePrincipal(w, r, PrincipalUser, PrincipalAgent); !ok {
+	if _, ok := s.requirePrincipal(w, r, PrincipalUser); !ok {
 		return
 	}
 	if s.Actmem == nil {
@@ -310,12 +380,12 @@ func writeActmemError(w http.ResponseWriter, err error) {
 	code := actmem.CodeOf(err)
 	status := http.StatusInternalServerError
 	switch code {
-	case "actmem_malformed", "actmem_invalid_edit":
+	case "actmem_malformed", "actmem_invalid_edit", "actmem_invalid_entry", "actmem_format_error", "actmem_unclassified_head", "actmem_scope_forbidden":
 		status = http.StatusBadRequest
 	case "actmem_capsule_invalid":
 		code = "actmem_capsule_not_found"
 		status = http.StatusNotFound
-	case "actmem_revision_conflict":
+	case "actmem_revision_conflict", "actmem_fold_conflict":
 		status = http.StatusConflict
 	case "actmem_cap_exceeded":
 		status = http.StatusRequestEntityTooLarge

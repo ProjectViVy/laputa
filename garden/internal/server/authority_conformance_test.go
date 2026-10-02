@@ -50,14 +50,11 @@ func TestAuthorityHTTPTokenPrincipalConformsToAgentPolicy(t *testing.T) {
 		{"ACTMEM query", http.MethodPost, "/v2/actmem/query", agentapi.OpActmemQuery, map[string]any{"query": "pulse"}, http.StatusOK},
 		{"ACTMEM capsules", http.MethodGet, "/v2/actmem/capsules", agentapi.OpActmemRead, nil, http.StatusOK},
 		{"ACTMEM capsule read", http.MethodGet, "/v2/actmem/capsules/missing", agentapi.OpActmemRead, nil, http.StatusNotFound},
-		{"ACTMEM write", http.MethodPut, "/v2/actmem", agentapi.OpActmemWrite, map[string]any{}, http.StatusBadRequest},
-		{"ACTMEM append pulse", http.MethodPost, "/v2/actmem/maintenance", agentapi.OpActmemMaintain, map[string]any{"operation": "append_pulse"}, http.StatusBadRequest},
-		{"ACTMEM append recap", http.MethodPost, "/v2/actmem/maintenance", agentapi.OpActmemMaintain, map[string]any{"operation": "append_recap"}, http.StatusBadRequest},
-		{"ACTMEM edit work", http.MethodPost, "/v2/actmem/maintenance", agentapi.OpActmemMaintain, map[string]any{"operation": "edit_work"}, http.StatusBadRequest},
-		{"ACTMEM complete item", http.MethodPost, "/v2/actmem/maintenance", agentapi.OpActmemMaintain, map[string]any{"operation": "complete_open_item"}, http.StatusBadRequest},
-		{"ACTMEM drop item", http.MethodPost, "/v2/actmem/maintenance", agentapi.OpActmemMaintain, map[string]any{"operation": "drop_item"}, http.StatusBadRequest},
+		{"ACTMEM owner save", http.MethodPut, "/v2/actmem", agentapi.OpActmemSave, map[string]any{}, http.StatusBadRequest},
+		{"ACTMEM system append", http.MethodPost, "/v2/actmem/maintenance", agentapi.OpActmemMaintain, map[string]any{"operation": "system_append"}, http.StatusBadRequest},
+		{"ACTMEM work patch", http.MethodPost, "/v2/actmem/maintenance", agentapi.OpActmemMaintain, map[string]any{"operation": "work_patch"}, http.StatusBadRequest},
 		{"ACTMEM fold session", http.MethodPost, "/v2/actmem/maintenance", agentapi.OpActmemMaintain, map[string]any{"operation": "fold_session"}, http.StatusBadRequest},
-		{"ACTMEM capsule delete", http.MethodDelete, "/v2/actmem/capsules/missing", agentapi.OpActmemMaintain, nil, http.StatusNotFound},
+		{"ACTMEM capsule delete", http.MethodDelete, "/v2/actmem/capsules/missing", agentapi.OpActmemSave, nil, http.StatusNotFound},
 	}
 	for _, route := range routes {
 		t.Run(route.name, func(t *testing.T) {
