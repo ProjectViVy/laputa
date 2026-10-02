@@ -182,7 +182,7 @@ func TestConformanceAutomaticContextEmbeddedAndWire(t *testing.T) {
 			if !reflect.DeepEqual(wire.FrozenCore, embeddedCore) || wire.Context != embeddedContext || wire.Degraded != embeddedDegraded || !reflect.DeepEqual(wire.Warnings, embeddedWarnings) || !reflect.DeepEqual(wire.Evidence, embeddedEvidence) {
 				t.Fatalf("embedded/wire context differs: embedded=%+v/%q/%v/%v/%v wire=%+v", embeddedCore, embeddedContext, embeddedDegraded, embeddedWarnings, embeddedEvidence, wire)
 			}
-			if len(wire.FrozenCore.Sections) != 6 || wire.FrozenCore.SessionID != f.binding.SessionID || wire.FrozenCore.Sections[0].Content != "identity fixture" || !wire.Degraded || len(wire.Evidence) != 0 || len(wire.Warnings) == 0 || !strings.Contains(wire.Warnings[0], "mentle unavailable") || len([]rune(wire.Context)) > 2048 {
+			if len(wire.FrozenCore.Sections) != 7 || wire.FrozenCore.SessionID != f.binding.SessionID || wire.FrozenCore.Sections[1].Content != "identity fixture" || !wire.Degraded || len(wire.Evidence) != 0 || len(wire.Warnings) == 0 || !strings.Contains(wire.Warnings[0], "mentle unavailable") || len([]rune(wire.Context)) > 2048 {
 				t.Fatalf("invalid bounded frozen-only response: %+v", wire)
 			}
 			assertToolOnlyAbsent(t, raw)
@@ -264,7 +264,7 @@ func TestConformanceFrozenCoreDoesNotDriftAfterPersonaWriteOrStoreReopen(t *test
 	}
 	defer reopened.Close()
 	reloaded, err := reopened.Capture(ctx, f.binding.SessionID, f.persona)
-	if err != nil || reloaded.Sections[0].Content != "identity fixture" || reloaded.Sections[0].SourceRevision != 1 {
+	if err != nil || reloaded.Sections[1].Content != "identity fixture" || reloaded.Sections[1].SourceRevision != 1 {
 		t.Fatalf("reopened frozen session drifted: %+v err=%v", reloaded, err)
 	}
 }

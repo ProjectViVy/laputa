@@ -836,7 +836,8 @@ type fileBackup struct {
 
 func (s *Service) writeDocumentCoreLocked(kind Kind, content string, baseRevision uint64, actor string, source WriteSource, reason string, force bool, acceptingRequest string) (*WriteOutcome, error) {
 	normalized := NormalizeMarkdown(content)
-	if err := validateContent(kind, normalized, true); err != nil {
+	// MISSION.MD alone permits an empty body: clearing unassigns the mission.
+	if err := validateContent(kind, normalized, kind != KindMission); err != nil {
 		return nil, err
 	}
 	current, err := s.currentDocumentForWriteLocked(kind, force)

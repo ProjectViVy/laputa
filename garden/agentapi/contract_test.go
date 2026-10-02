@@ -6,22 +6,24 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dashimaki/laputa/evolution"
 )
 
 func TestBootstrapWireRoundTrip(t *testing.T) {
-	wire := `{"trace_id":"t1","context":"bounded","frozen_core":{"session_id":"s1","captured_at":"2026-09-27T00:00:00Z","sections":[{"section":0,"content":"id","source_revision":1,"source_hash":"h"},{"section":1,"content":"rel","source_revision":1,"source_hash":"h"},{"section":2,"content":"red","source_revision":1,"source_hash":"h"},{"section":3,"content":"user","source_revision":1,"source_hash":"h"},{"section":4,"content":"dream","source_revision":1,"source_hash":"h"},{"section":5,"content":"dark","source_revision":1,"source_hash":"h"}]},"evidence":[],"degraded":false,"warnings":[]}`
+	wire := `{"trace_id":"t1","context":"bounded","frozen_core":{"schema_version":"laputa.frozen-core/v2","session_id":"s1","captured_at":"2026-09-27T00:00:00Z","mission_status":"unassigned","sections":[{"kind":"mission","content":"","source_revision":0,"source_hash":""},{"kind":"identity","content":"id","source_revision":1,"source_hash":"h"},{"kind":"relationship","content":"rel","source_revision":1,"source_hash":"h"},{"kind":"redline","content":"red","source_revision":1,"source_hash":"h"},{"kind":"user","content":"user","source_revision":1,"source_hash":"h"},{"kind":"dream","content":"","source_revision":1,"source_hash":"h"},{"kind":"dark","content":"","source_revision":1,"source_hash":"h"}]},"evidence":[],"degraded":false,"warnings":[]}`
 	var response BootstrapResponse
 	if err := json.Unmarshal([]byte(wire), &response); err != nil {
 		t.Fatal(err)
 	}
-	if response.FrozenCore.Sections[5].Section != 5 || response.FrozenCore.CapturedAt.IsZero() {
+	if response.FrozenCore.Sections[5].Kind != evolution.FrozenKindDream || response.FrozenCore.CapturedAt.IsZero() {
 		t.Fatalf("frozen core lost: %+v", response.FrozenCore)
 	}
 	assertSameJSON(t, wire, response)
 }
 
 func TestPublicContextViewWireAndNoAutomaticAuthorityFields(t *testing.T) {
-	view := ContextView{TraceID: "t", Scope: "", Mode: "fast", FrozenCore: FrozenCore{Sections: [6]FrozenSection{}}, Cards: []MemoryCard{}, Evidence: []EvidenceFragment{}, Context: "bounded", BudgetChars: 8000, Warnings: []string{}}
+	view := ContextView{TraceID: "t", Scope: "", Mode: "fast", FrozenCore: FrozenCore{SchemaVersion: evolution.FrozenCoreV2SchemaVersion, MissionStatus: evolution.MissionUnassigned, Sections: []evolution.FrozenSectionV2{{Kind: evolution.FrozenKindMission}, {Kind: evolution.FrozenKindIdentity}, {Kind: evolution.FrozenKindRelationship}, {Kind: evolution.FrozenKindRedline}, {Kind: evolution.FrozenKindUser}, {Kind: evolution.FrozenKindDream}, {Kind: evolution.FrozenKindDark}}}, Cards: []MemoryCard{}, Evidence: []EvidenceFragment{}, Context: "bounded", BudgetChars: 8000, Warnings: []string{}}
 	encoded, err := json.Marshal(view)
 	if err != nil {
 		t.Fatal(err)

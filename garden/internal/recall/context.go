@@ -9,7 +9,7 @@ import (
 
 func assembleContext(core personactx.FrozenCore, evidence []facade.EvidenceFragment, budget int) string {
 	var parts []string
-	if frozen := core.Render(budget); frozen != "" {
+	if frozen := personactx.Render(core, budget); frozen != "" {
 		parts = append(parts, frozen)
 	}
 	for _, item := range evidence {

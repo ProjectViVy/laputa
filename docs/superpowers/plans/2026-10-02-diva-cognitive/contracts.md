@@ -101,7 +101,9 @@ FrozenCore v2 has `schema_version:"laputa.frozen-core/v2"`, `session_id`, `captu
 
 Unassigned Mission slot has empty content/revision zero and explicit mission_status:unassigned at the envelope level; assigned has mission_status:assigned and a positive source_revision. No generated Mission. Existing six projection limits remain unchanged. Add Mission without shifting existing numeric kind identities in storage. User-facing human operations authenticate outside this envelope. Old v1 is not silently relabelled v2.
 
-Mutation checks occur again before effects: changed Mission -> mission_revision_changed; revoked scope -> authority_denied. New sessions observe applied revisions; admitted session snapshot remains immutable. Direct agent Dream tool uses the existing P16 revision-aware domain path with reason; evolution Effect intentionally cannot encode Dream or Mission writes.
+The `/v2/recall/*` `frozen_core` field and `agentapi` `BootstrapResponse`/`ContextView` carry this envelope directly (`agentapi.FrozenCore = evolution.FrozenCoreV2`). `personactx` is the sole v2 assembler. A session admitted under the numeric six-slot v1 shape is never relabelled: reading it returns `recovery_required` and the host must open a new session.
+
+Mutation checks occur again before effects: `RunBinding.CheckMissionRevision` re-verifies the pin — changed Mission -> mission_revision_changed; revoked scope -> authority_denied. New sessions observe applied revisions; admitted session snapshot remains immutable. Direct agent Dream tool uses the existing P16 revision-aware domain path with reason; evolution Effect intentionally cannot encode Dream or Mission writes.
 
 ## 6. Backend boundary and receipts
 

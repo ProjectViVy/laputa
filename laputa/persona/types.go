@@ -18,7 +18,8 @@ import (
 	"time"
 )
 
-// Kind is one of the seven Persona authority files.
+// Kind is one of the eight Persona authority files. Mission is appended as
+// the eighth; the storage integers of the original seven are unchanged.
 type Kind int
 
 const (
@@ -29,16 +30,18 @@ const (
 	KindWorld
 	KindDream
 	KindDark
+	KindMission
 )
 
-// AllKinds lists the seven kinds in contract order.
-var AllKinds = []Kind{KindIdentity, KindRelationship, KindRedline, KindUser, KindDream, KindDark, KindWorld}
+// AllKinds lists the eight kinds in contract order.
+var AllKinds = []Kind{KindIdentity, KindRelationship, KindRedline, KindUser, KindDream, KindDark, KindWorld, KindMission}
 
 // RequiredKinds are the five files whose presence defines initialization.
+// MISSION.MD is never required: absence is the unassigned state.
 var RequiredKinds = []Kind{KindIdentity, KindRelationship, KindRedline, KindUser, KindWorld}
 
-// FrozenKinds are the six files allowed in the Frozen Core projection.
-var FrozenKinds = []Kind{KindIdentity, KindRelationship, KindRedline, KindUser, KindDream, KindDark}
+// FrozenKinds are the seven files allowed in the Frozen Core v2 projection.
+var FrozenKinds = []Kind{KindMission, KindIdentity, KindRelationship, KindRedline, KindUser, KindDream, KindDark}
 
 // String returns the lowercase wire name, e.g. "identity".
 func (k Kind) String() string {
@@ -57,6 +60,8 @@ func (k Kind) String() string {
 		return "dream"
 	case KindDark:
 		return "dark"
+	case KindMission:
+		return "mission"
 	}
 	return "unknown"
 }
@@ -78,6 +83,8 @@ func (k Kind) FileName() string {
 		return "DREAM.MD"
 	case KindDark:
 		return "DARK.MD"
+	case KindMission:
+		return "MISSION.MD"
 	}
 	return "UNKNOWN.MD"
 }
@@ -99,6 +106,8 @@ func (k Kind) ContentLimit() int {
 		return 40
 	case KindDark:
 		return 300
+	case KindMission:
+		return 400
 	}
 	return 0
 }
