@@ -171,7 +171,18 @@ func (s *Service) ReadEvidence(ctx context.Context, principal Principal, binding
 	}
 	result := make([]EvidenceFragment, 0, len(fragments))
 	for _, fragment := range fragments {
-		result = append(result, EvidenceFragment(fragment))
+		result = append(result, EvidenceFragment{
+			CardID:       fragment.CardID,
+			MaterialRef:  fragment.MaterialRef,
+			SourceURI:    fragment.SourceURI,
+			SourceRev:    fragment.SourceRev,
+			Excerpt:      fragment.Excerpt,
+			StartOffset:  fragment.StartOffset,
+			EndOffset:    fragment.EndOffset,
+			ContentHash:  fragment.ContentHash,
+			Validity:     fragment.Validity,
+			EvidenceRefs: fragment.EvidenceRefs,
+		})
 	}
 	return result, nil
 }

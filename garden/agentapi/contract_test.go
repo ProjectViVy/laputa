@@ -56,6 +56,32 @@ func TestCaptureHostTerminalDTOAndWireReceipt(t *testing.T) {
 	assertSameJSON(t, `{"ingestion_id":"i","session_id":"s","event_id":"event","status":"accepted"}`, CaptureReceipt{IngestionID: "i", SessionID: "s", EventID: "event", Status: "accepted"})
 }
 
+func TestTrustedWorkspaceBinding(t *testing.T) {
+	bound := &BoundClient{binding: Binding{ProfileID: "default", AgentID: "vivy", Platform: "vivy", SessionID: "s", WorkspaceID: "ws-x"}}
+	if _, err := bound.requestBinding(Binding{ProfileID: "default", AgentID: "vivy", Platform: "vivy", SessionID: "s", WorkspaceID: "ws-y"}); err == nil {
+		t.Fatalf("request-supplied workspace must not override the host binding")
+	}
+	got, err := bound.requestBinding(Binding{})
+	if err != nil || got.WorkspaceID != "ws-x" {
+		t.Fatalf("host workspace binding lost: %+v %v", got, err)
+	}
+	scope, err := got.TrustedScope()
+	if err != nil || scope.WorkspaceID != "ws-x" || scope.SubjectID != "default" || scope.Kind == "" {
+		t.Fatalf("trusted scope derivation failed: %+v %v", scope, err)
+	}
+	personal, err := (Binding{ProfileID: "default", AgentID: "vivy", Platform: "vivy"}).TrustedScope()
+	if err != nil || personal.Kind == "" || personal.WorkspaceID != "" {
+		t.Fatalf("empty workspace must derive the implicit personal scope: %+v", personal)
+	}
+	wire, err := json.Marshal(Binding{ProfileID: "default", AgentID: "vivy", Platform: "vivy", SessionID: "s", WorkspaceID: "ws-x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(wire), `"workspace_id":"ws-x"`) {
+		t.Fatalf("workspace_id missing from binding wire shape: %s", wire)
+	}
+}
+
 func TestPolicyErrorMatchesHTTPEnvelope(t *testing.T) {
 	err := Authorize("default", Binding{ProfileID: "default"}, PrincipalAgent, OpPersonaReview)
 	assertSameJSON(t, `{"code":"principal_forbidden","message":"principal is not permitted for this operation","error":"principal is not permitted for this operation","retryable":false,"request_id":"","details":{}}`, err)

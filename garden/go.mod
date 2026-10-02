@@ -29,6 +29,7 @@ require (
 	github.com/gomlx/gomlx v0.27.3 // indirect
 	github.com/gomlx/onnx-gomlx v0.4.2 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
+	github.com/google/renameio v1.0.1 // indirect
 	github.com/knights-analytics/hugot v0.7.5 // indirect
 	github.com/knights-analytics/ortgenai v0.3.1 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
@@ -59,6 +60,7 @@ require (
 	golang.org/x/term v0.43.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	modernc.org/libc v1.75.7 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
