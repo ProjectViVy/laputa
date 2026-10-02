@@ -12,7 +12,7 @@ import (
 
 func TestFrozenCoreInContextAndDTO(t *testing.T) {
 	core := testCore()
-	core.Sections[1] = personactx.FrozenSection{Section: personactx.SectionRelationship, Content: "relationship"}
+	core.Sections[2] = personactx.FrozenSection{Kind: personactx.SectionRelationship, Content: "relationship"}
 	searcher := &fakeSearcher{cards: []facade.MemoryCard{{ID: "card", Kind: "fact"}}, evidence: []facade.EvidenceFragment{{CardID: "card", Excerpt: "evidence"}}}
 	view, err := (&FastService{Frozen: staticFrozen{core: core}, Searcher: searcher}).Recall(context.Background(), FastRequest{Query: "context", SessionID: "session-1", BudgetChars: 6000})
 	if err != nil {

@@ -215,6 +215,17 @@ type RunBinding struct {
 // MissionAssigned reports whether a Mission is bound to this run.
 func (b RunBinding) MissionAssigned() bool { return b.MissionRevision > 0 }
 
+// CheckMissionRevision re-verifies the Mission pin immediately before
+// mission-driven autonomous effects. A human edit after admission changes the
+// revision, so the pinned run is refused with mission_revision_changed; the
+// run must open a new session rather than execute against the stale Mission.
+func (b RunBinding) CheckMissionRevision(current uint64) error {
+	if b.MissionRevision != current {
+		return &ContractError{Code: ErrMissionRevisionChanged, Message: "Mission revision changed since admission; open a new session"}
+	}
+	return nil
+}
+
 // Scope derives the run's scope from the binding (empty workspace_id is the
 // implicit personal workspace).
 func (b RunBinding) Scope() Scope {

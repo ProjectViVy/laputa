@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/dashimaki/garden/internal/personactx"
+	"github.com/dashimaki/laputa/evolution"
 	"github.com/dashimaki/mentle/facade"
 )
 
@@ -41,10 +42,20 @@ func (f staticFrozen) Get(context.Context, string) (personactx.FrozenCore, error
 }
 
 func testCore() personactx.FrozenCore {
-	var core personactx.FrozenCore
-	core.SessionID = "session-1"
-	core.Sections[0] = personactx.FrozenSection{Section: personactx.SectionIdentity, Content: "identity"}
-	return core
+	return personactx.FrozenCore{
+		SchemaVersion: evolution.FrozenCoreV2SchemaVersion,
+		SessionID:     "session-1",
+		MissionStatus: evolution.MissionUnassigned,
+		Sections: []personactx.FrozenSection{
+			{Kind: personactx.SectionMission},
+			{Kind: personactx.SectionIdentity, Content: "identity"},
+			{Kind: personactx.SectionRelationship},
+			{Kind: personactx.SectionRedline},
+			{Kind: personactx.SectionUser},
+			{Kind: personactx.SectionDream},
+			{Kind: personactx.SectionDark},
+		},
+	}
 }
 
 func TestFastRecallLexicalOnlyReturnsCardsAndReportsDegraded(t *testing.T) {

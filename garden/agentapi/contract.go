@@ -106,19 +106,11 @@ func (e *Error) Error() string {
 	return e.Message
 }
 
-// FrozenSection.Section is numeric on the existing wire (0 through 5).
-// A fixed array prevents an automatic seventh WORLD slot.
-type FrozenSection struct {
-	Section        uint8  `json:"section"`
-	Content        string `json:"content"`
-	SourceRevision uint64 `json:"source_revision"`
-	SourceHash     string `json:"source_hash"`
-}
-type FrozenCore struct {
-	SessionID  string           `json:"session_id"`
-	CapturedAt time.Time        `json:"captured_at"`
-	Sections   [6]FrozenSection `json:"sections"`
-}
+// FrozenCore is the shared v2 envelope: schema_version, mission first of
+// exactly seven named slots, mission_status. WORLD and ACTMEM can never be
+// slots; a pre-Mission v1 admission cannot masquerade as v2.
+type FrozenCore = evolution.FrozenCoreV2
+type FrozenSection = evolution.FrozenSectionV2
 
 type MemoryCard struct {
 	ID             string     `json:"id"`

@@ -1,11 +1,11 @@
 # ADR-0017: DIVA Cognitive Contract Deltas vs ADR-0012/0014/0016
 
-**Status:** proposed record (S01 shared contracts frozen; downstream stories not started)
+**Status:** proposed record (S01 contracts frozen; S02 migrated the `frozen_core` wire to v2 — see below)
 **Date:** 2026-10-02
 **Decision owner:** project owner
 **Refines:** ADR-0012, ADR-0014, ADR-0016
 **Contract revision:** `diva-cognitive/v1-review-1` (`docs/superpowers/plans/2026-10-02-diva-cognitive/contracts.md`)
-**Evidence:** `laputa/evolution/`, `laputa/evolution/testkit/`, `garden/memory/`, `garden/agentapi/` (S01, commit `547e35d`)
+**Evidence:** `laputa/evolution/`, `laputa/evolution/testkit/`, `garden/memory/`, `garden/agentapi/` (S01, commit `547e35d`); `garden/internal/personactx/`, `garden/agentapi/contract.go` (S02)
 
 ## Purpose
 
@@ -28,13 +28,21 @@ authority files. The v2 envelope adds a leading `mission` slot:
   source revision. No generated Mission.
 - The persona storage intenum is unchanged (`KindIdentity=0` …
   `KindDark=6`). Mission is a new named wire kind, not a renumbered integer.
-- The existing `agentapi.FrozenCore` six-slot wire is unchanged. v1 data
-  labelled v2, v2 data with a WORLD/ACTMEM slot, and wrong-order slots are
-  rejected by `evolution.DecodeFrozenCoreV2`. Old v1 is not silently
-  relabelled v2.
-- Classification: v1 six-slot wire — **Keep** (existing wire profile);
-  six-slot data labelled v2 — **Drop** (rejected); automatic Mission
-  generation — **Drop** (envelope requires explicit status).
+- S02 migrated the `agentapi`/`recall` `frozen_core` field to the v2
+  envelope (`agentapi.FrozenCore = evolution.FrozenCoreV2`). A session
+  admitted under the numeric six-slot v1 shape can never be relabelled:
+  `personactx.Store` refuses it with `recovery_required` and the host must
+  open a new session. v1 data labelled v2, a WORLD/ACTMEM slot, and
+  wrong-order slots are rejected by `evolution.DecodeFrozenCoreV2`.
+- `personactx` is the sole v2 assembler: mission first, verbatim; the six
+  bounded slots keep their existing FrozenLimit truncation and the USER
+  Preferences-only projection. `RunBinding.CheckMissionRevision`
+  re-verifies the mission pin before mission-driven effects;
+  `mission_revision_changed` forces a new session.
+- Classification: v1 six-slot wire — **Cut** (replaced by v2 in S02);
+  six-slot data labelled v2 — **Drop** (rejected); v1 admitted snapshot —
+  **Keep** (immutable, never reinterpreted); automatic Mission generation
+  — **Drop** (envelope requires explicit status).
 
 ## Scope (vs ADR-0012/0016)
 

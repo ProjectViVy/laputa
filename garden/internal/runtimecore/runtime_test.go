@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dashimaki/garden/internal/ingest"
+	"github.com/dashimaki/garden/internal/personactx"
 	"github.com/dashimaki/garden/internal/recall"
 	"github.com/dashimaki/laputa/persona"
 	"github.com/dashimaki/mentle/facade"
@@ -224,7 +225,7 @@ func TestBootstrapFrozenAcrossReopenExcludesToolOnlyAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.Content(0) != second.Content(0) {
+	if first.Content(personactx.SectionIdentity) != second.Content(personactx.SectionIdentity) {
 		t.Fatal("frozen session drifted after reopen")
 	}
 	view, err := core.FastRecall.Recall(context.Background(), recall.FastRequest{Query: "identity", SessionID: "session-1"})

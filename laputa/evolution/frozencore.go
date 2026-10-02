@@ -59,6 +59,31 @@ type FrozenCoreV2 struct {
 	Sections      []FrozenSectionV2 `json:"sections"`
 }
 
+// Section returns the named slot, or false when the kind is not part of the
+// v2 roster.
+func (c FrozenCoreV2) Section(kind FrozenCoreKind) (FrozenSectionV2, bool) {
+	for _, section := range c.Sections {
+		if section.Kind == kind {
+			return section, true
+		}
+	}
+	return FrozenSectionV2{}, false
+}
+
+// Content is the named slot's projected content, or "" when absent.
+func (c FrozenCoreV2) Content(kind FrozenCoreKind) string {
+	section, ok := c.Section(kind)
+	if !ok {
+		return ""
+	}
+	return section.Content
+}
+
+// MissionRevision is the pinned Mission source revision (0 when unassigned).
+func (c FrozenCoreV2) MissionRevision() uint64 {
+	return c.Sections[0].SourceRevision
+}
+
 // DecodeFrozenCoreV2 strict-decodes and validates the v2 envelope: exact
 // schema marker, exactly seven slots in the declared order, and a mission
 // section consistent with mission_status.

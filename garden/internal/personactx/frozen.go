@@ -1,7 +1,11 @@
 // Package personactx is Garden's narrow, session-frozen consumer of Laputa
-// Persona Markdown. It stores only the six bounded projections allowed by
-// the architecture; activity memory and the tool-only seventh document have
-// no field or route in this package.
+// Persona Markdown. It stores only the seven bounded v2 projections allowed
+// by the architecture; activity memory and WORLD.MD have no field or route in
+// this package.
+//
+// Snapshots are versioned: every new capture is the FrozenCoreV2 envelope.
+// An admitted snapshot is immutable — a pre-Mission v1 row can never be
+// relabelled, it requires an explicit new session.
 package personactx
 
 import (
@@ -14,26 +18,48 @@ import (
 	"time"
 
 	"github.com/dashimaki/garden/internal/sqliteconn"
+	"github.com/dashimaki/laputa/evolution"
 	"github.com/dashimaki/laputa/persona"
 	"github.com/rivo/uniseg"
 )
 
 var ErrSessionNotFound = errors.New("personactx: frozen session not found")
 
-// Section is a closed set. No arbitrary authority kind can be placed in a
-// FrozenCore value by using this type.
-type Section uint8
+// ErrSessionRenewalRequired marks an admitted snapshot that predates the v2
+// envelope. The session cannot be reinterpreted; the host must open a new
+// session to observe current authority.
+var ErrSessionRenewalRequired = errors.New("personactx: frozen session predates frozen-core v2; open a new session")
 
-const (
-	SectionIdentity Section = iota
-	SectionRelationship
-	SectionRedline
-	SectionUser
-	SectionDream
-	SectionDark
+// sessionRenewalError keeps the sentinel matchable while carrying the stable
+// recovery_required contract code through a single unwrap chain.
+type sessionRenewalError struct{ cause error }
+
+func (e sessionRenewalError) Error() string { return e.cause.Error() }
+func (e sessionRenewalError) Unwrap() error { return e.cause }
+func (e sessionRenewalError) Is(target error) bool {
+	return target == ErrSessionRenewalRequired
+}
+
+// The wire/storage DTOs are the shared contract types: no second
+// representation exists inside Garden.
+type (
+	FrozenCore    = evolution.FrozenCoreV2
+	FrozenSection = evolution.FrozenSectionV2
+	Section       = evolution.FrozenCoreKind
 )
 
-var sections = [...]Section{
+const (
+	SectionMission      = evolution.FrozenKindMission
+	SectionIdentity     = evolution.FrozenKindIdentity
+	SectionRelationship = evolution.FrozenKindRelationship
+	SectionRedline      = evolution.FrozenKindRedline
+	SectionUser         = evolution.FrozenKindUser
+	SectionDream        = evolution.FrozenKindDream
+	SectionDark         = evolution.FrozenKindDark
+)
+
+// boundedKinds are the six non-mission slots in roster order.
+var boundedKinds = []Section{
 	SectionIdentity,
 	SectionRelationship,
 	SectionRedline,
@@ -42,27 +68,10 @@ var sections = [...]Section{
 	SectionDark,
 }
 
-func (s Section) String() string {
-	switch s {
-	case SectionIdentity:
-		return "identity"
-	case SectionRelationship:
-		return "relationship"
-	case SectionRedline:
-		return "redline"
-	case SectionUser:
-		return "user"
-	case SectionDream:
-		return "dream"
-	case SectionDark:
-		return "dark"
-	default:
-		return "unknown"
-	}
-}
-
-func (s Section) personaKind() persona.Kind {
-	switch s {
+func personaKindFor(section Section) persona.Kind {
+	switch section {
+	case SectionMission:
+		return persona.KindMission
 	case SectionIdentity:
 		return persona.KindIdentity
 	case SectionRelationship:
@@ -81,42 +90,22 @@ func (s Section) personaKind() persona.Kind {
 }
 
 func frozenLimit(section Section) int {
-	limit, _ := section.personaKind().FrozenLimit()
+	limit, _ := personaKindFor(section).FrozenLimit()
 	return limit
 }
 
-type FrozenSection struct {
-	Section        Section `json:"section"`
-	Content        string  `json:"content"`
-	SourceRevision uint64  `json:"source_revision"`
-	SourceHash     string  `json:"source_hash"`
-}
-
-// FrozenCore has exactly six slots and is immutable by convention after
-// capture. Garden recall receives a value copy, never a live Persona reader.
-type FrozenCore struct {
-	SessionID  string           `json:"session_id"`
-	CapturedAt time.Time        `json:"captured_at"`
-	Sections   [6]FrozenSection `json:"sections"`
-}
-
-func (c FrozenCore) Content(section Section) string {
-	if int(section) < 0 || int(section) >= len(c.Sections) {
-		return ""
-	}
-	return c.Sections[section].Content
-}
-
-func (c FrozenCore) Render(maxChars int) string {
+// Render formats the frozen sections for a bounded ContextView, mission
+// first in roster order.
+func Render(core FrozenCore, maxChars int) string {
 	if maxChars <= 0 {
 		maxChars = 4000
 	}
 	var builder strings.Builder
-	for _, section := range c.Sections {
+	for _, section := range core.Sections {
 		if section.Content == "" {
 			continue
 		}
-		part := fmt.Sprintf("## Frozen Core — %s\n%s\n", section.Section.String(), section.Content)
+		part := fmt.Sprintf("## Frozen Core — %s\n%s\n", section.Kind, section.Content)
 		if runeLen(builder.String())+runeLen(part) > maxChars {
 			remaining := maxChars - runeLen(builder.String())
 			if remaining > 0 {
@@ -133,9 +122,10 @@ type Reader interface {
 	GetDocument(persona.Kind) (*persona.Document, error)
 }
 
-// Capture reads the six source documents once. USER contributes its
-// Preferences subsection only, preserving the architecture's projection
-// boundary.
+// Capture reads the seven source documents once and returns the v2 envelope.
+// Mission is projected verbatim in full; an absent or empty MISSION.MD yields
+// the explicit unassigned state. USER contributes its Preferences subsection
+// only, preserving the architecture's projection boundary.
 func Capture(reader Reader, sessionID string, clock func() time.Time) (FrozenCore, error) {
 	if reader == nil {
 		return FrozenCore{}, errors.New("personactx: Persona reader is required")
@@ -146,9 +136,30 @@ func Capture(reader Reader, sessionID string, clock func() time.Time) (FrozenCor
 	if clock == nil {
 		clock = time.Now
 	}
-	core := FrozenCore{SessionID: sessionID, CapturedAt: clock().UTC()}
-	for index, section := range sections {
-		document, err := reader.GetDocument(section.personaKind())
+	core := FrozenCore{
+		SchemaVersion: evolution.FrozenCoreV2SchemaVersion,
+		SessionID:     sessionID,
+		CapturedAt:    clock().UTC(),
+		Sections:      make([]FrozenSection, 0, len(evolution.FrozenCoreV2Kinds)),
+	}
+	mission, err := reader.GetDocument(persona.KindMission)
+	if err != nil {
+		return FrozenCore{}, err
+	}
+	if mission.Exists && strings.TrimSpace(mission.Content) != "" {
+		core.MissionStatus = evolution.MissionAssigned
+		core.Sections = append(core.Sections, FrozenSection{
+			Kind:           SectionMission,
+			Content:        persona.NormalizeMarkdown(mission.Content),
+			SourceRevision: mission.Revision,
+			SourceHash:     mission.ContentHash,
+		})
+	} else {
+		core.MissionStatus = evolution.MissionUnassigned
+		core.Sections = append(core.Sections, FrozenSection{Kind: SectionMission})
+	}
+	for _, section := range boundedKinds {
+		document, err := reader.GetDocument(personaKindFor(section))
 		if err != nil {
 			return FrozenCore{}, err
 		}
@@ -158,12 +169,15 @@ func Capture(reader Reader, sessionID string, clock func() time.Time) (FrozenCor
 				content = preferences
 			}
 		}
-		core.Sections[index] = FrozenSection{
-			Section:        section,
+		core.Sections = append(core.Sections, FrozenSection{
+			Kind:           section,
 			Content:        truncateVisible(content, frozenLimit(section)),
 			SourceRevision: document.Revision,
 			SourceHash:     document.ContentHash,
-		}
+		})
+	}
+	if err := core.Validate(); err != nil {
+		return FrozenCore{}, fmt.Errorf("personactx: capture produced invalid v2 envelope: %w", err)
 	}
 	return core, nil
 }
@@ -218,16 +232,9 @@ func (s *Store) Capture(ctx context.Context, sessionID string, reader Reader) (F
 	if strings.TrimSpace(sessionID) == "" {
 		return FrozenCore{}, errors.New("personactx: session_id is required")
 	}
-	var raw string
-	err := s.db.QueryRowContext(ctx, `SELECT core_json FROM frozen_core_sessions WHERE session_id=?`, sessionID).Scan(&raw)
-	if err == nil {
-		var core FrozenCore
-		if unmarshalErr := json.Unmarshal([]byte(raw), &core); unmarshalErr != nil {
-			return FrozenCore{}, fmt.Errorf("personactx: corrupted frozen session: %w", unmarshalErr)
-		}
-		return core, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
+	if persisted, err := s.load(ctx, sessionID); err == nil {
+		return persisted, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
 		return FrozenCore{}, err
 	}
 	core, err := Capture(reader, sessionID, nil)
@@ -251,15 +258,36 @@ func (s *Store) Capture(ctx context.Context, sessionID string, reader Reader) (F
 }
 
 func (s *Store) Get(ctx context.Context, sessionID string) (FrozenCore, error) {
-	var raw string
-	if err := s.db.QueryRowContext(ctx, `SELECT core_json FROM frozen_core_sessions WHERE session_id=?`, sessionID).Scan(&raw); err != nil {
+	core, err := s.load(ctx, sessionID)
+	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return FrozenCore{}, ErrSessionNotFound
 		}
 		return FrozenCore{}, err
 	}
-	var core FrozenCore
-	if err := json.Unmarshal([]byte(raw), &core); err != nil {
+	return core, nil
+}
+
+// load reads and decodes the admitted snapshot. A row without the v2 schema
+// marker is a pre-Mission admission: it can never be relabelled, so the call
+// fails with ErrSessionRenewalRequired (recovery_required on the wire).
+func (s *Store) load(ctx context.Context, sessionID string) (FrozenCore, error) {
+	var raw string
+	if err := s.db.QueryRowContext(ctx, `SELECT core_json FROM frozen_core_sessions WHERE session_id=?`, sessionID).Scan(&raw); err != nil {
+		return FrozenCore{}, err
+	}
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &probe); err != nil {
+		return FrozenCore{}, fmt.Errorf("personactx: corrupted frozen session: %w", err)
+	}
+	if _, versioned := probe["schema_version"]; !versioned {
+		return FrozenCore{}, sessionRenewalError{cause: &evolution.ContractError{
+			Code:    evolution.ErrRecoveryRequired,
+			Message: "frozen session snapshot predates frozen-core v2; open a new session",
+		}}
+	}
+	core, err := evolution.DecodeFrozenCoreV2([]byte(raw))
+	if err != nil {
 		return FrozenCore{}, fmt.Errorf("personactx: corrupted frozen session: %w", err)
 	}
 	return core, nil
