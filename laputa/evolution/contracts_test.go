@@ -387,3 +387,31 @@ func TestContractDeltaRecordPresent(t *testing.T) {
 		}
 	}
 }
+
+// TestAuthorityKindRoster pins the closed eight-kind authority roster from the
+// spec: MISSION.MD joins the seven existing files; ACTMEM stays outside.
+func TestAuthorityKindRoster(t *testing.T) {
+	want := []evolution.AuthorityKind{
+		evolution.AuthorityMission, evolution.AuthorityIdentity,
+		evolution.AuthorityRelationship, evolution.AuthorityRedline,
+		evolution.AuthorityUser, evolution.AuthorityDream,
+		evolution.AuthorityDark, evolution.AuthorityWorld,
+	}
+	if len(evolution.AuthorityKinds) != 8 {
+		t.Fatalf("authority roster = %d kinds, want 8", len(evolution.AuthorityKinds))
+	}
+	for i, k := range want {
+		if evolution.AuthorityKinds[i] != k {
+			t.Fatalf("roster[%d] = %q, want %q", i, evolution.AuthorityKinds[i], k)
+		}
+	}
+	view := evolution.AuthorityView{Kind: evolution.AuthorityMission, Revision: 1, Content: "# M"}
+	if err := view.Validate(); err != nil {
+		t.Fatalf("mission view rejected: %v", err)
+	}
+	for _, bad := range []evolution.AuthorityKind{"actmem", "memrules", "pulse", ""} {
+		if err := (evolution.AuthorityView{Kind: bad, Revision: 1, Content: "x"}).Validate(); err == nil {
+			t.Fatalf("kind %q accepted outside the eight-kind roster", bad)
+		}
+	}
+}

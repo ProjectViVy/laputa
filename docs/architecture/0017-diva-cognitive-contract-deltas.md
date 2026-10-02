@@ -115,9 +115,12 @@ owner permission:
 
 - Root `AGENTS.md`: "Frozen Core contains bounded, session-frozen
   projections of the first six authority files only" needs v2 wording (seven
-  named slots including the mission slot).
+  named slots including the mission slot), and the seven-file authority
+  list needs MISSION.MD added (the design's eight-file roster, pinned as
+  `evolution.AuthorityKinds`).
 - `laputa/AGENTS.md`: "Frozen Core is a bounded projection of the first six
-  authority files" needs the same v2 update.
+  authority files" needs the same v2 update, and its authority-file list
+  gains MISSION.MD.
 - `garden/AGENTS.md`: Context Discipline's six-file frozen list needs the
   v2 roster plus `mission_status` envelope; the new `garden/memory` backend
   boundary package should be named in the boundary table.

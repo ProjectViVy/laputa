@@ -408,12 +408,44 @@ type Entry struct {
 	Sources    []SourceRef  `json:"sources"`
 }
 
+// AuthorityKind names the closed eight-file authority roster: MISSION.MD plus
+// the seven existing files. ACTMEM stays outside it.
+type AuthorityKind string
+
+const (
+	AuthorityMission      AuthorityKind = "mission"
+	AuthorityIdentity     AuthorityKind = "identity"
+	AuthorityRelationship AuthorityKind = "relationship"
+	AuthorityRedline      AuthorityKind = "redline"
+	AuthorityUser         AuthorityKind = "user"
+	AuthorityDream        AuthorityKind = "dream"
+	AuthorityDark         AuthorityKind = "dark"
+	AuthorityWorld        AuthorityKind = "world"
+)
+
+// AuthorityKinds is the exact closed roster in spec order.
+var AuthorityKinds = []AuthorityKind{
+	AuthorityMission, AuthorityIdentity, AuthorityRelationship,
+	AuthorityRedline, AuthorityUser, AuthorityDream, AuthorityDark,
+	AuthorityWorld,
+}
+
 // AuthorityView is a bounded, authorized Markdown projection of one
 // authority kind.
 type AuthorityView struct {
-	Kind     string `json:"kind"`
-	Revision uint64 `json:"revision"`
-	Content  string `json:"content"`
+	Kind     AuthorityKind `json:"kind"`
+	Revision uint64        `json:"revision"`
+	Content  string        `json:"content"`
+}
+
+// Validate enforces the closed eight-kind roster.
+func (v AuthorityView) Validate() error {
+	for _, k := range AuthorityKinds {
+		if v.Kind == k {
+			return nil
+		}
+	}
+	return invalidSchema("unknown authority kind %q", v.Kind)
 }
 
 // EvidenceBatch is the collect output for a run window.
