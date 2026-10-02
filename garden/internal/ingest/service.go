@@ -39,6 +39,9 @@ type Accepted struct {
 	SessionID   string `json:"session_id"`
 	EventID     string `json:"event_id"`
 	Status      string `json:"status"`
+	// Seq is the durable ledger sequence assigned at commit; deduped
+	// deliveries return the original seq, never a new one.
+	Seq uint64 `json:"seq"`
 }
 
 type Status struct {
@@ -181,7 +184,7 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, erro
 	}
 	var existing Accepted
 	var savedHash string
-	err := s.db.QueryRowContext(ctx, `SELECT ingestion_id,session_id,event_id,status,content_hash FROM ingestions WHERE event_id=?`, req.EventID).Scan(&existing.IngestionID, &existing.SessionID, &existing.EventID, &existing.Status, &savedHash)
+	err := s.db.QueryRowContext(ctx, `SELECT rowid,ingestion_id,session_id,event_id,status,content_hash FROM ingestions WHERE event_id=?`, req.EventID).Scan(&existing.Seq, &existing.IngestionID, &existing.SessionID, &existing.EventID, &existing.Status, &savedHash)
 	if err == nil {
 		if savedHash != req.ContentHash {
 			return Accepted{}, ErrEventConflict
@@ -191,7 +194,7 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, erro
 	if !errors.Is(err, sql.ErrNoRows) {
 		return Accepted{}, err
 	}
-	err = s.db.QueryRowContext(ctx, `SELECT ingestion_id,session_id,event_id,status FROM ingestions WHERE session_id=? AND content_hash=?`, req.SessionID, req.ContentHash).Scan(&existing.IngestionID, &existing.SessionID, &existing.EventID, &existing.Status)
+	err = s.db.QueryRowContext(ctx, `SELECT rowid,ingestion_id,session_id,event_id,status FROM ingestions WHERE session_id=? AND content_hash=?`, req.SessionID, req.ContentHash).Scan(&existing.Seq, &existing.IngestionID, &existing.SessionID, &existing.EventID, &existing.Status)
 	if err == nil {
 		return existing, nil
 	}
@@ -209,6 +212,10 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, erro
 	if err != nil {
 		return Accepted{}, err
 	}
+	var seq uint64
+	if err = s.db.QueryRowContext(ctx, `SELECT rowid FROM ingestions WHERE ingestion_id=?`, id).Scan(&seq); err != nil {
+		return Accepted{}, err
+	}
 	if s.started {
 		select {
 		case s.queue <- id:
@@ -219,7 +226,57 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, erro
 	if s.Activity != nil {
 		_ = s.Activity.Append(ctx, activity.Event{ID: req.EventID, SessionID: req.SessionID, Type: "ingest", Timestamp: req.OccurredAt, Data: map[string]any{"phase": req.Phase, "ingestion_id": id}})
 	}
-	return Accepted{IngestionID: id, SessionID: req.SessionID, EventID: req.EventID, Status: "accepted"}, nil
+	return Accepted{IngestionID: id, SessionID: req.SessionID, EventID: req.EventID, Status: "accepted", Seq: seq}, nil
+}
+
+// WindowRow is one committed ingestion inside an (after, through] window of
+// the durable ledger sequence.
+type WindowRow struct {
+	Seq         uint64    `json:"seq"`
+	IngestionID string    `json:"ingestion_id"`
+	SessionID   string    `json:"session_id"`
+	EventID     string    `json:"event_id"`
+	Phase       string    `json:"phase"`
+	Content     string    `json:"content"`
+	ContentHash string    `json:"content_hash"`
+	Workspace   string    `json:"workspace"`
+	Status      string    `json:"status"`
+	OccurredAt  time.Time `json:"occurred_at"`
+}
+
+// Window returns committed ingestions in (after, through] for one workspace
+// in ledger order. The workspace string is the binding's raw workspace id
+// (empty selects personal-scope captures), never a decoded scope.
+func (s *Service) Window(ctx context.Context, workspace string, after, through uint64) ([]WindowRow, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT rowid,ingestion_id,session_id,event_id,phase,content,content_hash,workspace,status,occurred_at FROM ingestions WHERE rowid>? AND rowid<=? AND workspace=? ORDER BY rowid ASC`, int64(after), int64(through), workspace)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []WindowRow
+	for rows.Next() {
+		var row WindowRow
+		var occurred string
+		if err := rows.Scan(&row.Seq, &row.IngestionID, &row.SessionID, &row.EventID, &row.Phase, &row.Content, &row.ContentHash, &row.Workspace, &row.Status, &occurred); err != nil {
+			return nil, err
+		}
+		row.OccurredAt, _ = time.Parse(time.RFC3339Nano, occurred)
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
+// HighWatermark returns the highest committed ledger sequence for the
+// workspace; zero means nothing captured yet.
+func (s *Service) HighWatermark(ctx context.Context, workspace string) (uint64, error) {
+	var seq sql.NullInt64
+	if err := s.db.QueryRowContext(ctx, `SELECT MAX(rowid) FROM ingestions WHERE workspace=?`, workspace).Scan(&seq); err != nil {
+		return 0, err
+	}
+	if !seq.Valid {
+		return 0, nil
+	}
+	return uint64(seq.Int64), nil
 }
 
 func (s *Service) Get(ctx context.Context, id string) (Status, error) {

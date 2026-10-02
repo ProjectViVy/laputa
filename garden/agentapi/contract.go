@@ -102,6 +102,9 @@ type CaptureReceipt struct {
 	SessionID   string `json:"session_id"`
 	EventID     string `json:"event_id"`
 	Status      string `json:"status"`
+	// Seq is the durable ledger sequence; deduped deliveries return the
+	// original seq, never a new one.
+	Seq uint64 `json:"seq"`
 }
 
 // Error retains the current wire envelope while exposing a normalized code.
