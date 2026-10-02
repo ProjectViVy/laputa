@@ -175,6 +175,38 @@ func (s *Searcher) Store(ctx context.Context, drawer palace.Drawer) error {
 		return err
 	}
 
+	payload := drawerPayload(drawer)
+
+	if err := s.store.Add(drawer.ID, vector, payload); err != nil {
+		return err
+	}
+
+	// Index content in BM25 with payload for filtering.
+	s.IndexBM25(drawer.ID, drawer.Content, payload)
+	return nil
+}
+
+// Lexical reports whether this searcher has no vector path (embedder or
+// store unavailable) — writes then index BM25 directly.
+func (s *Searcher) Lexical() bool {
+	return s == nil || s.embedder == nil || s.store == nil
+}
+
+// IndexBM25Drawer indexes one drawer into BM25 only; used when the vector
+// store is unavailable.
+func (s *Searcher) IndexBM25Drawer(drawer palace.Drawer) {
+	s.IndexBM25(drawer.ID, drawer.Content, drawerPayload(drawer))
+}
+
+// RemoveBM25 drops one physical id from BM25; used when the vector store
+// is unavailable.
+func (s *Searcher) RemoveBM25(id string) {
+	s.bm25Mu.Lock()
+	s.bm25.Remove(id)
+	s.bm25Mu.Unlock()
+}
+
+func drawerPayload(drawer palace.Drawer) map[string]any {
 	payload := map[string]any{
 		"wing":    drawer.Wing,
 		"room":    drawer.Room,
@@ -186,14 +218,7 @@ func (s *Searcher) Store(ctx context.Context, drawer palace.Drawer) error {
 			payload[key] = value
 		}
 	}
-
-	if err := s.store.Add(drawer.ID, vector, payload); err != nil {
-		return err
-	}
-
-	// Index content in BM25 with payload for filtering.
-	s.IndexBM25(drawer.ID, drawer.Content, payload)
-	return nil
+	return payload
 }
 
 // StoreVectors stores pre-computed embeddings and indexes content in BM25.

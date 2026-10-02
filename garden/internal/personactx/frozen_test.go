@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dashimaki/laputa/evolution"
 	"github.com/dashimaki/laputa/persona"
 )
 
@@ -13,10 +14,13 @@ type fakeReader struct {
 }
 
 func (r fakeReader) GetDocument(kind persona.Kind) (*persona.Document, error) {
-	return r.documents[kind], nil
+	if document, ok := r.documents[kind]; ok {
+		return document, nil
+	}
+	return &persona.Document{}, nil
 }
 
-func TestCaptureHasExactlySixBoundedSections(t *testing.T) {
+func TestCaptureHasExactlySevenBoundedSections(t *testing.T) {
 	reader := fakeReader{documents: map[persona.Kind]*persona.Document{
 		persona.KindIdentity:     {Content: "identity " + repeat("i", 300), Revision: 2, ContentHash: "id"},
 		persona.KindRelationship: {Content: "relationship " + repeat("r", 200), Revision: 3, ContentHash: "rel"},
@@ -29,19 +33,22 @@ func TestCaptureHasExactlySixBoundedSections(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(core.Sections) != 6 {
+	if len(core.Sections) != 7 {
 		t.Fatalf("sections = %d", len(core.Sections))
+	}
+	if core.Sections[0].Kind != SectionMission || core.MissionStatus != evolution.MissionUnassigned {
+		t.Fatalf("mission slot = %+v status=%q", core.Sections[0], core.MissionStatus)
 	}
 	if core.Content(SectionUser) != "user preferences" {
 		t.Fatalf("user projection = %q", core.Content(SectionUser))
 	}
-	if core.Sections[0].SourceRevision != 2 {
-		t.Fatalf("source revision = %#v", core.Sections[0])
+	if core.Sections[1].SourceRevision != 2 {
+		t.Fatalf("source revision = %#v", core.Sections[1])
 	}
 	if persona.VisibleLen(core.Content(SectionIdentity)) > 200 {
 		t.Fatalf("identity not bounded")
 	}
-	if core.Render(4000) == "" {
+	if Render(core, 4000) == "" {
 		t.Fatal("render is empty")
 	}
 }
@@ -74,7 +81,7 @@ func TestStoreDoesNotDriftAcrossRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if second.Content(SectionIdentity) != first.Content(SectionIdentity) || second.Sections[0].SourceRevision != 1 {
+	if second.Content(SectionIdentity) != first.Content(SectionIdentity) || second.Sections[1].SourceRevision != 1 {
 		t.Fatalf("frozen session drifted: first=%#v second=%#v", first, second)
 	}
 }

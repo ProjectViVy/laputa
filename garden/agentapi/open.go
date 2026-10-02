@@ -20,6 +20,9 @@ type Config struct {
 	Platform          string
 	RequireLocalModel bool
 	Principal         Principal
+	// WorkspaceID is the host-issued trusted workspace binding; empty is the
+	// implicit personal workspace.
+	WorkspaceID string
 }
 
 // Client owns a domain runtime without opening a listener or exporting storage handles.
@@ -48,7 +51,7 @@ func Open(ctx context.Context, cfg Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{runtime: core, principal: cfg.Principal, identity: Binding{ProfileID: cfg.ProfileID, AgentID: cfg.AgentID, Platform: cfg.Platform}}, nil
+	return &Client{runtime: core, principal: cfg.Principal, identity: Binding{ProfileID: cfg.ProfileID, AgentID: cfg.AgentID, Platform: cfg.Platform, WorkspaceID: cfg.WorkspaceID}}, nil
 }
 
 // Close releases owned resources; a bound handle cannot continue after closure.

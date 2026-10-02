@@ -81,7 +81,7 @@ func TestGardenCleanBreakEndToEnd(t *testing.T) {
 		} `json:"documents"`
 	}
 	requestJSON(t, client, http.MethodGet, baseURL+"/v2/persona/documents", nil, readToken, http.StatusOK, "", &beforeInit)
-	if beforeInit.Status != "uninitialized" || len(beforeInit.Documents) != 7 {
+	if beforeInit.Status != "uninitialized" || len(beforeInit.Documents) != 8 {
 		t.Fatalf("initial Persona status=%+v", beforeInit)
 	}
 
@@ -108,7 +108,7 @@ func TestGardenCleanBreakEndToEnd(t *testing.T) {
 		Documents []map[string]any `json:"documents"`
 	}
 	requestJSON(t, client, http.MethodPost, baseURL+"/v2/persona/initialize", initialize, userToken, http.StatusCreated, "", &initialized)
-	if initialized.Status != "ready" || len(initialized.Documents) != 7 {
+	if initialized.Status != "ready" || len(initialized.Documents) != 8 {
 		t.Fatalf("initialized Persona=%+v", initialized)
 	}
 
@@ -141,8 +141,8 @@ func TestGardenCleanBreakEndToEnd(t *testing.T) {
 	requestJSON(t, client, http.MethodPost, baseURL+"/v2/recall/fast", map[string]any{
 		"query": "E2E identity", "session_id": "frozen-session", "budget_chars": 4000,
 	}, "", http.StatusOK, "", &frozenBefore)
-	if len(frozenBefore.FrozenCore.Sections) != 6 {
-		t.Fatalf("Frozen Core sections=%d, want 6", len(frozenBefore.FrozenCore.Sections))
+	if len(frozenBefore.FrozenCore.Sections) != 7 {
+		t.Fatalf("Frozen Core sections=%d, want 7", len(frozenBefore.FrozenCore.Sections))
 	}
 	assertAutomaticContextOmits(t, frozenBefore.Context, "before Persona review")
 
@@ -186,8 +186,8 @@ func TestGardenCleanBreakEndToEnd(t *testing.T) {
 	requestJSON(t, client, http.MethodPost, baseURL+"/v2/recall/fast", map[string]any{
 		"query": "approved review", "session_id": "frozen-session", "budget_chars": 4000,
 	}, "", http.StatusOK, "", &frozenSameSession)
-	if len(frozenSameSession.FrozenCore.Sections) != 6 || frozenSameSession.FrozenCore.Sections[0].Content != frozenBefore.FrozenCore.Sections[0].Content {
-		t.Fatalf("Frozen Core drifted after Persona edit: before=%+v after=%+v", frozenBefore.FrozenCore.Sections[0], frozenSameSession.FrozenCore.Sections[0])
+	if len(frozenSameSession.FrozenCore.Sections) != 7 || frozenSameSession.FrozenCore.Sections[1].Content != frozenBefore.FrozenCore.Sections[1].Content {
+		t.Fatalf("Frozen Core drifted after Persona edit: before=%+v after=%+v", frozenBefore.FrozenCore.Sections[1], frozenSameSession.FrozenCore.Sections[1])
 	}
 	assertAutomaticContextOmits(t, frozenSameSession.Context, "same-session recall")
 
@@ -217,7 +217,8 @@ func TestGardenCleanBreakEndToEnd(t *testing.T) {
 		} `json:"result"`
 	}
 	requestJSON(t, client, http.MethodPost, baseURL+"/v2/actmem/maintenance", map[string]any{
-		"operation": "append_pulse", "session_key": "e2e-session", "content": actmemMarker,
+		"operation": "system_append",
+		"entry":     map[string]any{"section": "pulse", "session_id": "e2e-session", "body": actmemMarker},
 	}, agentToken, http.StatusOK, "", &actmemWrite)
 	if !actmemWrite.Result.Changed || actmemWrite.Result.Revision != 1 {
 		t.Fatalf("ACTMEM write=%+v", actmemWrite)
@@ -331,7 +332,7 @@ func TestGardenCleanBreakEndToEnd(t *testing.T) {
 	requestJSON(t, client, http.MethodPost, baseURL+"/v2/recall/bootstrap", map[string]any{
 		"session_id": "frozen-session", "intent": "restart proof", "budget_chars": 4000,
 	}, "", http.StatusOK, "", &frozenAfterRestart)
-	if len(frozenAfterRestart.FrozenCore.Sections) != 6 || frozenAfterRestart.FrozenCore.Sections[0].Content != frozenBefore.FrozenCore.Sections[0].Content {
+	if len(frozenAfterRestart.FrozenCore.Sections) != 7 || frozenAfterRestart.FrozenCore.Sections[1].Content != frozenBefore.FrozenCore.Sections[1].Content {
 		t.Fatalf("restart changed Frozen Core=%+v", frozenAfterRestart.FrozenCore)
 	}
 
@@ -345,7 +346,7 @@ func TestGardenCleanBreakEndToEnd(t *testing.T) {
 	requestJSON(t, client, http.MethodPost, baseURL+"/v2/recall/fast", map[string]any{
 		"query": "approved review", "session_id": "new-session", "budget_chars": 4000,
 	}, "", http.StatusOK, "", &newSession)
-	if len(newSession.FrozenCore.Sections) != 6 || !strings.Contains(newSession.FrozenCore.Sections[0].Content, "after approved review") {
+	if len(newSession.FrozenCore.Sections) != 7 || !strings.Contains(newSession.FrozenCore.Sections[1].Content, "after approved review") {
 		t.Fatalf("new session did not capture current Persona=%+v", newSession.FrozenCore)
 	}
 

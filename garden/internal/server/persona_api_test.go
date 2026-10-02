@@ -70,7 +70,7 @@ func TestPersonaCleanBreakMetadataAndExplicitRead(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
 		t.Fatal(err)
 	}
-	if payload.Status != persona.StatusReady || len(payload.Documents) != 7 {
+	if payload.Status != persona.StatusReady || len(payload.Documents) != 8 {
 		t.Fatalf("payload=%+v", payload)
 	}
 	if bytes.Contains(rec.Body.Bytes(), []byte(`"content"`)) {

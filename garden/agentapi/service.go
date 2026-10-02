@@ -119,7 +119,7 @@ func (s *Service) Capture(ctx context.Context, principal Principal, req CaptureR
 	event := eventPrefix(req.Binding) + req.Provenance.RunID + ":" + fmt.Sprint(req.Provenance.EventSeq)
 	// The host phase is terminal provenance; ingest's session_end phase is its
 	// own ingestion lifecycle and must not be confused with the host phase.
-	accepted, err := s.runtime.Ingest.Submit(ctx, ingest.SubmitRequest{SessionID: req.Binding.SessionID, EventID: event, Phase: "session_end", Content: req.Content, ContentHash: req.ContentHash, OccurredAt: req.OccurredAt})
+	accepted, err := s.runtime.Ingest.Submit(ctx, ingest.SubmitRequest{SessionID: req.Binding.SessionID, EventID: event, Phase: "session_end", Content: req.Content, ContentHash: req.ContentHash, Workspace: req.Binding.WorkspaceID, OccurredAt: req.OccurredAt})
 	if errors.Is(err, ingest.ErrEventConflict) {
 		return CaptureReceipt{}, failure("event_conflict", err.Error())
 	}
@@ -131,7 +131,7 @@ func (s *Service) Capture(ctx context.Context, principal Principal, req CaptureR
 	if accepted.EventID != event {
 		return CaptureReceipt{}, failure("event_conflict", "content already captured for a different event")
 	}
-	return CaptureReceipt(accepted), nil
+	return CaptureReceipt{IngestionID: accepted.IngestionID, SessionID: accepted.SessionID, EventID: accepted.EventID, Status: accepted.Status, Seq: accepted.Seq}, nil
 }
 func (s *Service) CaptureStatus(ctx context.Context, principal Principal, binding Binding, id string) (CaptureStatus, error) {
 	if err := s.check(binding, principal, OpCapture); err != nil {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/dashimaki/garden/internal/runtimecore"
 	"github.com/dashimaki/laputa/actmem"
+	"github.com/dashimaki/laputa/evolution"
 	"github.com/dashimaki/laputa/persona"
 )
 
@@ -30,7 +31,7 @@ func TestBoundReadPersonaExplicitWorld(t *testing.T) {
 
 func TestBoundReadACTMEMAndQueryACTMEM(t *testing.T) {
 	a := actmem.New(t.TempDir())
-	if _, err := a.AppendPulse("session", "unique milestone"); err != nil {
+	if _, err := a.AppendEntry(evolution.Entry{Section: evolution.SectionPulse, Scope: evolution.Scope{SubjectID: "default", Kind: evolution.ScopePersonal}, SessionID: "session", Body: "unique milestone"}); err != nil {
 		t.Fatal(err)
 	}
 	b := &BoundClient{client: &Client{runtime: &runtimecore.Garden{ProfileID: "default", Actmem: a}, principal: PrincipalAgent}, binding: binding()}
@@ -50,7 +51,7 @@ func TestBoundMaterialReadsDelegateAndEnforcePrincipal(t *testing.T) {
 	b := &BoundClient{client: &Client{runtime: &runtimecore.Garden{ProfileID: "default"}, principal: PrincipalAgent}, binding: binding()}
 	_, err := b.SearchCards(context.Background(), CardSearch{Query: "signal"})
 	assertCode(t, err, "unavailable")
-	_, err = b.ReadEvidence(context.Background(), EvidenceRead{CardIDs: []string{"card"}})
+	_, err = b.ReadEvidence(context.Background(), EvidenceRead{Items: []EvidenceRef{{CardID: "card", ExpectedRevision: 1}}})
 	assertCode(t, err, "unavailable")
 	_, err = b.ReadEvidence(context.Background(), EvidenceRead{})
 	assertCode(t, err, "invalid_request")
@@ -90,7 +91,7 @@ func TestBoundExplicitReadsRejectUnavailableHandles(t *testing.T) {
 	assertCode(t, err, "unavailable")
 	_, err = b.SearchCards(context.Background(), CardSearch{Query: "hello"})
 	assertCode(t, err, "unavailable")
-	_, err = b.ReadEvidence(context.Background(), EvidenceRead{CardIDs: []string{"card"}})
+	_, err = b.ReadEvidence(context.Background(), EvidenceRead{Items: []EvidenceRef{{CardID: "card", ExpectedRevision: 1}}})
 	assertCode(t, err, "unavailable")
 	b = &BoundClient{client: &Client{principal: PrincipalAgent}, binding: binding()}
 	_, err = b.ReadPersona(context.Background(), "world")

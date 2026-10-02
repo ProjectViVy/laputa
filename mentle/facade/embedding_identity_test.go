@@ -150,7 +150,7 @@ func TestDimensionMismatchRejection(t *testing.T) {
 	store := &fakeStore{}
 	svc := &Service{
 		Catalog:  cat,
-		Embedder: emb, // dimension 384
+		Embedder: emb,                                            // dimension 384
 		Hybrid:   hybrid.NewSearcher(store, fakeEmbedder{}, 0.7), // avoid nil pointer error
 	}
 
@@ -171,9 +171,9 @@ func TestDimensionMismatchRejection(t *testing.T) {
 func TestEveryEmbeddingIdentityFieldMismatchIsExplicit(t *testing.T) {
 	base := embedder.Identity{Model: "model-a", Dimension: 384, Metric: "cosine", Normalize: true, Provider: "provider-a", Version: "v1", CapturedAt: time.Now().UTC()}
 	cases := []struct {
-		name string
+		name   string
 		mutate func(*embedder.Identity)
-		want error
+		want   error
 	}{
 		{name: "dimension", mutate: func(id *embedder.Identity) { id.Dimension = 768 }, want: ErrEmbeddingDimensionMismatch},
 		{name: "metric", mutate: func(id *embedder.Identity) { id.Metric = "dot" }, want: ErrEmbeddingMetricMismatch},

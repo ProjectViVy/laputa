@@ -13,6 +13,8 @@ import (
 
 	"github.com/dashimaki/garden/internal/activity"
 	"github.com/dashimaki/garden/internal/sqliteconn"
+	"github.com/dashimaki/garden/memory"
+	"github.com/dashimaki/laputa/evolution"
 	"github.com/dashimaki/mentle/facade"
 	"github.com/google/uuid"
 )
@@ -37,6 +39,9 @@ type Accepted struct {
 	SessionID   string `json:"session_id"`
 	EventID     string `json:"event_id"`
 	Status      string `json:"status"`
+	// Seq is the durable ledger sequence assigned at commit; deduped
+	// deliveries return the original seq, never a new one.
+	Seq uint64 `json:"seq"`
 }
 
 type Status struct {
@@ -53,14 +58,17 @@ type Service struct {
 	memory   MemoryWriter
 	Activity *activity.Store
 	Spool    *activity.TransientSpool
-	queue    chan string
-	mu       sync.Mutex
-	started  bool
-	closed   bool
-	ctx      context.Context
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
-	workerID string
+	// ProfileID binds ingestions to the host profile's subject scope; set
+	// by composition before Start.
+	ProfileID string
+	queue     chan string
+	mu        sync.Mutex
+	started   bool
+	closed    bool
+	ctx       context.Context
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+	workerID  string
 }
 
 type MemoryWriter interface {
@@ -176,7 +184,7 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, erro
 	}
 	var existing Accepted
 	var savedHash string
-	err := s.db.QueryRowContext(ctx, `SELECT ingestion_id,session_id,event_id,status,content_hash FROM ingestions WHERE event_id=?`, req.EventID).Scan(&existing.IngestionID, &existing.SessionID, &existing.EventID, &existing.Status, &savedHash)
+	err := s.db.QueryRowContext(ctx, `SELECT rowid,ingestion_id,session_id,event_id,status,content_hash FROM ingestions WHERE event_id=?`, req.EventID).Scan(&existing.Seq, &existing.IngestionID, &existing.SessionID, &existing.EventID, &existing.Status, &savedHash)
 	if err == nil {
 		if savedHash != req.ContentHash {
 			return Accepted{}, ErrEventConflict
@@ -186,7 +194,7 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, erro
 	if !errors.Is(err, sql.ErrNoRows) {
 		return Accepted{}, err
 	}
-	err = s.db.QueryRowContext(ctx, `SELECT ingestion_id,session_id,event_id,status FROM ingestions WHERE session_id=? AND content_hash=?`, req.SessionID, req.ContentHash).Scan(&existing.IngestionID, &existing.SessionID, &existing.EventID, &existing.Status)
+	err = s.db.QueryRowContext(ctx, `SELECT rowid,ingestion_id,session_id,event_id,status FROM ingestions WHERE session_id=? AND content_hash=?`, req.SessionID, req.ContentHash).Scan(&existing.Seq, &existing.IngestionID, &existing.SessionID, &existing.EventID, &existing.Status)
 	if err == nil {
 		return existing, nil
 	}
@@ -204,6 +212,10 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, erro
 	if err != nil {
 		return Accepted{}, err
 	}
+	var seq uint64
+	if err = s.db.QueryRowContext(ctx, `SELECT rowid FROM ingestions WHERE ingestion_id=?`, id).Scan(&seq); err != nil {
+		return Accepted{}, err
+	}
 	if s.started {
 		select {
 		case s.queue <- id:
@@ -214,7 +226,57 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, erro
 	if s.Activity != nil {
 		_ = s.Activity.Append(ctx, activity.Event{ID: req.EventID, SessionID: req.SessionID, Type: "ingest", Timestamp: req.OccurredAt, Data: map[string]any{"phase": req.Phase, "ingestion_id": id}})
 	}
-	return Accepted{IngestionID: id, SessionID: req.SessionID, EventID: req.EventID, Status: "accepted"}, nil
+	return Accepted{IngestionID: id, SessionID: req.SessionID, EventID: req.EventID, Status: "accepted", Seq: seq}, nil
+}
+
+// WindowRow is one committed ingestion inside an (after, through] window of
+// the durable ledger sequence.
+type WindowRow struct {
+	Seq         uint64    `json:"seq"`
+	IngestionID string    `json:"ingestion_id"`
+	SessionID   string    `json:"session_id"`
+	EventID     string    `json:"event_id"`
+	Phase       string    `json:"phase"`
+	Content     string    `json:"content"`
+	ContentHash string    `json:"content_hash"`
+	Workspace   string    `json:"workspace"`
+	Status      string    `json:"status"`
+	OccurredAt  time.Time `json:"occurred_at"`
+}
+
+// Window returns committed ingestions in (after, through] for one workspace
+// in ledger order. The workspace string is the binding's raw workspace id
+// (empty selects personal-scope captures), never a decoded scope.
+func (s *Service) Window(ctx context.Context, workspace string, after, through uint64) ([]WindowRow, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT rowid,ingestion_id,session_id,event_id,phase,content,content_hash,workspace,status,occurred_at FROM ingestions WHERE rowid>? AND rowid<=? AND workspace=? ORDER BY rowid ASC`, int64(after), int64(through), workspace)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []WindowRow
+	for rows.Next() {
+		var row WindowRow
+		var occurred string
+		if err := rows.Scan(&row.Seq, &row.IngestionID, &row.SessionID, &row.EventID, &row.Phase, &row.Content, &row.ContentHash, &row.Workspace, &row.Status, &occurred); err != nil {
+			return nil, err
+		}
+		row.OccurredAt, _ = time.Parse(time.RFC3339Nano, occurred)
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
+// HighWatermark returns the highest committed ledger sequence for the
+// workspace; zero means nothing captured yet.
+func (s *Service) HighWatermark(ctx context.Context, workspace string) (uint64, error) {
+	var seq sql.NullInt64
+	if err := s.db.QueryRowContext(ctx, `SELECT MAX(rowid) FROM ingestions WHERE workspace=?`, workspace).Scan(&seq); err != nil {
+		return 0, err
+	}
+	if !seq.Valid {
+		return 0, nil
+	}
+	return uint64(seq.Int64), nil
 }
 
 func (s *Service) Get(ctx context.Context, id string) (Status, error) {
@@ -268,8 +330,8 @@ func (s *Service) worker(ctx context.Context) {
 func (s *Service) process(ctx context.Context, id string) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, _ = s.db.ExecContext(ctx, `UPDATE ingestions SET status='running',updated_at=? WHERE ingestion_id=?`, now, id)
-	var session, event, content, hash, occurredAt string
-	if err := s.db.QueryRowContext(ctx, `SELECT session_id,event_id,content,content_hash,occurred_at FROM ingestions WHERE ingestion_id=?`, id).Scan(&session, &event, &content, &hash, &occurredAt); err != nil {
+	var session, event, content, hash, occurredAt, workspace string
+	if err := s.db.QueryRowContext(ctx, `SELECT session_id,event_id,content,content_hash,occurred_at,workspace FROM ingestions WHERE ingestion_id=?`, id).Scan(&session, &event, &content, &hash, &occurredAt, &workspace); err != nil {
 		s.fail(ctx, id, err)
 		return
 	}
@@ -293,7 +355,7 @@ func (s *Service) process(ctx context.Context, id string) {
 		}
 		defer func() { _ = state.ReleaseSessionLease(context.Background(), session, s.workerID) }()
 	}
-	m, err := s.memory.CreateMemory(ctx, facade.CreateMemoryRequest{Content: content, Kind: "source_artifact", Source: facade.MemorySource{Type: "session", SessionID: session, EventID: event}, Metadata: map[string]any{"content_hash": hash, "lifecycle": "stm", "collection": "working"}}, "session:"+event, hash)
+	m, err := s.memory.CreateMemory(ctx, facade.CreateMemoryRequest{Content: content, Kind: "source_artifact", Scope: s.scopeFor(workspace), Source: facade.MemorySource{Type: "session", SessionID: session, EventID: event}, Metadata: map[string]any{"content_hash": hash, "lifecycle": "stm", "collection": "working"}}, "session:"+event, hash)
 	if err != nil {
 		s.spool(ctx, id, session, event, content, hash)
 		return
@@ -308,9 +370,23 @@ func (s *Service) process(ctx context.Context, id string) {
 	_, _ = s.db.ExecContext(ctx, `UPDATE ingestions SET status='completed',memory_id=?,trace_id=?,error=NULL,updated_at=? WHERE ingestion_id=?`, m.ID, "run_"+id, now, id)
 }
 
+// scopeFor encodes the profile's personal or workspace scope for one
+// ingestion row. The value is derived server-side from the stored
+// workspace binding — the request body never supplies a scope string.
+func (s *Service) scopeFor(workspace string) string {
+	scope := evolution.Scope{SubjectID: s.ProfileID, Kind: evolution.ScopePersonal}
+	if workspace != "" {
+		scope.Kind = evolution.ScopeWorkspace
+		scope.WorkspaceID = workspace
+	}
+	return memory.EncodeScope(scope)
+}
+
 func (s *Service) spool(ctx context.Context, id, session, event, content, hash string) {
+	var workspace string
+	_ = s.db.QueryRowContext(ctx, `SELECT workspace FROM ingestions WHERE ingestion_id=?`, id).Scan(&workspace)
 	if s.Spool != nil {
-		_ = s.Spool.Append(ctx, activity.TransientEntry{EventID: event, SessionID: session, ContentHash: hash, Content: content, Kind: "source_artifact"})
+		_ = s.Spool.Append(ctx, activity.TransientEntry{EventID: event, SessionID: session, ContentHash: hash, Content: content, Kind: "source_artifact", Scope: s.scopeFor(workspace)})
 	}
 	_, _ = s.db.ExecContext(ctx, `UPDATE ingestions SET status='spooled',error=?,updated_at=? WHERE ingestion_id=?`, "mentle unavailable; spooled", time.Now().UTC().Format(time.RFC3339Nano), id)
 }

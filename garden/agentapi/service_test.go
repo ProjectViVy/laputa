@@ -13,15 +13,26 @@ import (
 	"github.com/dashimaki/garden/internal/personactx"
 	"github.com/dashimaki/garden/internal/recall"
 	"github.com/dashimaki/garden/internal/runtimecore"
+	"github.com/dashimaki/laputa/evolution"
 )
 
 type frozenFixture struct{}
 
 func (frozenFixture) Get(_ context.Context, session string) (personactx.FrozenCore, error) {
-	var c personactx.FrozenCore
-	c.SessionID = session
-	c.Sections[0] = personactx.FrozenSection{Section: personactx.SectionIdentity, Content: "safe-identity"}
-	return c, nil
+	return personactx.FrozenCore{
+		SchemaVersion: evolution.FrozenCoreV2SchemaVersion,
+		SessionID:     session,
+		MissionStatus: evolution.MissionUnassigned,
+		Sections: []personactx.FrozenSection{
+			{Kind: personactx.SectionMission},
+			{Kind: personactx.SectionIdentity, Content: "safe-identity"},
+			{Kind: personactx.SectionRelationship},
+			{Kind: personactx.SectionRedline},
+			{Kind: personactx.SectionUser},
+			{Kind: personactx.SectionDream},
+			{Kind: personactx.SectionDark},
+		},
+	}, nil
 }
 func fixture(t *testing.T) *Service {
 	t.Helper()

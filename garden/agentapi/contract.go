@@ -1,17 +1,55 @@
 package agentapi
 
-import "time"
+import (
+	"time"
+
+	"github.com/dashimaki/garden/memory"
+	"github.com/dashimaki/laputa/evolution"
+)
+
+// ACTMEM scoped-operation DTOs alias the shared contract; the agentapi
+// surface adds no second representation.
+type (
+	ReadRequest    = evolution.ReadRequest
+	WorkPatch      = evolution.WorkPatch
+	WorkChange     = evolution.WorkChange
+	WorkChangeKind = evolution.WorkChangeKind
+	WorkField      = evolution.WorkField
+	Entry          = evolution.Entry
+	EntrySection   = evolution.EntrySection
+	ActivityResult = evolution.ActivityResult
+	SourceRef      = evolution.SourceRef
+	Scope          = evolution.Scope
+)
 
 // Binding is host identity and audit provenance, not an authorization claim.
 // ProfileID is checked against server configuration on every request.
+// WorkspaceID is the trusted workspace binding issued by the host at Open;
+// an empty value is the implicit personal workspace. It is never a
+// model-supplied grant.
 type Binding struct {
-	ProfileID string `json:"profile_id"`
-	AgentID   string `json:"agent_id"`
-	Platform  string `json:"platform"`
-	SessionID string `json:"session_id"`
-	TurnID    string `json:"turn_id,omitempty"`
-	EventID   string `json:"event_id,omitempty"`
+	ProfileID   string `json:"profile_id"`
+	AgentID     string `json:"agent_id"`
+	Platform    string `json:"platform"`
+	SessionID   string `json:"session_id"`
+	TurnID      string `json:"turn_id,omitempty"`
+	EventID     string `json:"event_id,omitempty"`
+	WorkspaceID string `json:"workspace_id,omitempty"`
+}
 
+// TrustedScope derives the contract scope from the host-bound identity:
+// ProfileID is the stable subject; an empty workspace_id is the implicit
+// personal workspace.
+func (b Binding) TrustedScope() (evolution.Scope, error) {
+	kind := evolution.ScopePersonal
+	if b.WorkspaceID != "" {
+		kind = evolution.ScopeWorkspace
+	}
+	scope := evolution.Scope{SubjectID: b.ProfileID, Kind: kind, WorkspaceID: b.WorkspaceID}
+	if err := scope.Validate(); err != nil {
+		return evolution.Scope{}, err
+	}
+	return scope, nil
 }
 
 // BootstrapRequest extends the existing recall/bootstrap body with a binding.
@@ -64,6 +102,9 @@ type CaptureReceipt struct {
 	SessionID   string `json:"session_id"`
 	EventID     string `json:"event_id"`
 	Status      string `json:"status"`
+	// Seq is the durable ledger sequence; deduped deliveries return the
+	// original seq, never a new one.
+	Seq uint64 `json:"seq"`
 }
 
 // Error retains the current wire envelope while exposing a normalized code.
@@ -84,50 +125,15 @@ func (e *Error) Error() string {
 	return e.Message
 }
 
-// FrozenSection.Section is numeric on the existing wire (0 through 5).
-// A fixed array prevents an automatic seventh WORLD slot.
-type FrozenSection struct {
-	Section        uint8  `json:"section"`
-	Content        string `json:"content"`
-	SourceRevision uint64 `json:"source_revision"`
-	SourceHash     string `json:"source_hash"`
-}
-type FrozenCore struct {
-	SessionID  string           `json:"session_id"`
-	CapturedAt time.Time        `json:"captured_at"`
-	Sections   [6]FrozenSection `json:"sections"`
-}
+// FrozenCore is the shared v2 envelope: schema_version, mission first of
+// exactly seven named slots, mission_status. WORLD and ACTMEM can never be
+// slots; a pre-Mission v1 admission cannot masquerade as v2.
+type FrozenCore = evolution.FrozenCoreV2
+type FrozenSection = evolution.FrozenSectionV2
 
-type MemoryCard struct {
-	ID             string     `json:"id"`
-	Kind           string     `json:"kind"`
-	Collection     string     `json:"collection"`
-	Scope          string     `json:"scope"`
-	Title          string     `json:"title"`
-	Summary        string     `json:"summary"`
-	SourceRef      string     `json:"source_ref"`
-	Revision       int        `json:"revision"`
-	Status         string     `json:"status"`
-	ValidFrom      time.Time  `json:"valid_from"`
-	ValidTo        *time.Time `json:"valid_to,omitempty"`
-	SupersededBy   *string    `json:"superseded_by,omitempty"`
-	Tags           []string   `json:"tags"`
-	HeatScore      float64    `json:"heat_score"`
-	LastActivated  *time.Time `json:"last_activated,omitempty"`
-	CandidateScore float64    `json:"candidate_score"`
-}
-type EvidenceFragment struct {
-	CardID       string   `json:"card_id"`
-	MaterialRef  string   `json:"material_ref"`
-	SourceURI    string   `json:"source_uri,omitempty"`
-	SourceRev    string   `json:"source_rev,omitempty"`
-	Excerpt      string   `json:"excerpt"`
-	StartOffset  int      `json:"start_offset"`
-	EndOffset    int      `json:"end_offset"`
-	ContentHash  string   `json:"content_hash"`
-	Validity     string   `json:"validity"`
-	EvidenceRefs []string `json:"evidence_refs,omitempty"`
-}
+type MemoryCard = memory.MemoryCard
+
+type EvidenceFragment = memory.EvidenceFragment
 
 // ContextView mirrors the recall/fast JSON fields without importing internal
 // packages or exposing storage handles. Automatic context has no tool-only slot.

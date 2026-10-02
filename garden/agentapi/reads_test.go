@@ -8,6 +8,7 @@ import (
 
 	"github.com/dashimaki/garden/internal/runtimecore"
 	"github.com/dashimaki/laputa/actmem"
+	"github.com/dashimaki/laputa/evolution"
 	"github.com/dashimaki/laputa/persona"
 	"github.com/dashimaki/mentle/facade"
 )
@@ -41,7 +42,7 @@ func TestReadPersonaExplicitWorldAndBinding(t *testing.T) {
 
 func TestExplicitActmemReadAndQuery(t *testing.T) {
 	a := actmem.New(t.TempDir())
-	_, err := a.AppendPulse("session", "unique milestone")
+	_, err := a.AppendEntry(evolution.Entry{Section: evolution.SectionPulse, Scope: evolution.Scope{SubjectID: "default", Kind: evolution.ScopePersonal}, SessionID: "session", Body: "unique milestone"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,12 +111,12 @@ func TestExplicitMaterialReadsAreBoundAndUnavailableWithoutMentle(t *testing.T) 
 	assertCode(t, err, "authentication_required")
 	_, err = s.SearchCards(context.Background(), PrincipalAgent, binding(), CardSearch{Query: "signal"})
 	assertCode(t, err, "unavailable")
-	_, err = s.ReadEvidence(context.Background(), PrincipalAgent, binding(), EvidenceRead{CardIDs: []string{"card"}, PerItemBudget: 20, TotalBudget: 20})
+	_, err = s.ReadEvidence(context.Background(), PrincipalAgent, binding(), EvidenceRead{Items: []EvidenceRef{{CardID: "card", ExpectedRevision: 1}}, PerItemBudget: 20, TotalBudget: 20})
 	assertCode(t, err, "unavailable")
 	_, err = s.ReadEvidence(context.Background(), PrincipalAgent, binding(), EvidenceRead{})
 	assertCode(t, err, "invalid_request")
 	b := binding()
 	b.ProfileID = "other"
-	_, err = s.ReadEvidence(context.Background(), PrincipalAgent, b, EvidenceRead{CardIDs: []string{"card"}})
+	_, err = s.ReadEvidence(context.Background(), PrincipalAgent, b, EvidenceRead{Items: []EvidenceRef{{CardID: "card", ExpectedRevision: 1}}})
 	assertCode(t, err, "profile_mismatch")
 }
