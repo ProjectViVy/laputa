@@ -228,3 +228,23 @@ Each owning Story adds behavior tests listed in its plan. S01 fixtures do not as
   baseline `71e2c9b` via local replace (unreleased pin; no tag publication).
 - Stage envelopes are internal wire format, strict-decoded; only node IDs
   and semantics are frozen.
+
+### S07 — bound Domain adapter and durable capture seq (diva-cognitive/v1-review-1, amended)
+
+- `garden/evolution` (new package) implements `laputa/evolution.Domain`
+  over the existing authorities: ingest ledger rows become committed
+  `Entry` evidence; ACTMEM `Read` supplies `activity_revision`; Persona
+  documents project as `AuthorityView`s; apply routes work_patch →
+  ACTMEM `ApplyWorkPatch`, memory_mutation → `memory.Backend.Mutate`,
+  persona_request → `persona.CreateRequest` (revision-pinned, agent or
+  autodream actor), capability_proposal → EvoMap proposer port,
+  reflection_note → Domain-owned notes ledger (never source evidence).
+  `Lookup` consults the Domain effect ledger first, then the backend's
+  durable `MutationStatus`; `effect_not_found` otherwise.
+- `ingest.Accepted` and `agentapi.CaptureReceipt` gain `seq:uint64`, the
+  ingest ledger `rowid`; deduped deliveries replay the original seq. The
+  committed-activity window is the half-open `(after, through]` range over
+  that seq. `ingest` gains `WindowRow` + `Window(after,through,workspace)`
+  + `HighWatermark(workspace)`.
+- `agentapi.Capture` now forwards `binding.workspace_id` into the ingest
+  request so captures commit to the same durable scope the window reads.

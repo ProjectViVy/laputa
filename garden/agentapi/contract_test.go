@@ -55,7 +55,7 @@ func TestCaptureHostTerminalDTOAndWireReceipt(t *testing.T) {
 			t.Errorf("missing %s in %s", name, encoded)
 		}
 	}
-	assertSameJSON(t, `{"ingestion_id":"i","session_id":"s","event_id":"event","status":"accepted"}`, CaptureReceipt{IngestionID: "i", SessionID: "s", EventID: "event", Status: "accepted"})
+	assertSameJSON(t, `{"ingestion_id":"i","session_id":"s","event_id":"event","status":"accepted","seq":3}`, CaptureReceipt{IngestionID: "i", SessionID: "s", EventID: "event", Status: "accepted", Seq: 3})
 }
 
 func TestTrustedWorkspaceBinding(t *testing.T) {
