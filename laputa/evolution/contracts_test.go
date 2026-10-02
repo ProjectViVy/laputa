@@ -2,6 +2,7 @@ package evolution_test
 
 import (
 	"encoding/json"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -368,4 +369,21 @@ func TestPersonaKindNumbersUnmoved(t *testing.T) {
 
 func itoa(n int) string {
 	return strconv.Itoa(n)
+}
+
+// TestContractDeltaRecordPresent pins the deliberate-change record required by
+// S01 task 2: Mission/FrozenCore, scope, backend and trusted-strategy deltas
+// recorded against ADR-0012/0014/0016, plus the list of guard updates the
+// accepted changes require.
+func TestContractDeltaRecordPresent(t *testing.T) {
+	data, err := os.ReadFile("../../docs/architecture/0017-diva-cognitive-contract-deltas.md")
+	if err != nil {
+		t.Fatalf("contract delta record missing: %v", err)
+	}
+	text := string(data)
+	for _, required := range []string{"ADR-0012", "ADR-0014", "ADR-0016", "mission_status", "workspace_id", "canonical", "guard", "Keep", "Deferred"} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("contract delta record must cover %q", required)
+		}
+	}
 }
