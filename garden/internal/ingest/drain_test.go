@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/dashimaki/garden/internal/activity"
+	"github.com/dashimaki/garden/memory"
+	"github.com/dashimaki/laputa/evolution"
 	"github.com/dashimaki/mentle/facade"
 )
 
@@ -31,7 +33,7 @@ func newDrainFixture(t *testing.T, writer MemoryWriter) (*Service, activity.Tran
 	}
 	t.Cleanup(func() { _ = spool.Close() })
 	svc.Spool = spool
-	entry := activity.TransientEntry{EventID: "event-drain", SessionID: "session-drain", ContentHash: "hash-drain", Content: "recover me", Kind: "source_artifact"}
+	entry := activity.TransientEntry{EventID: "event-drain", SessionID: "session-drain", ContentHash: "hash-drain", Content: "recover me", Kind: "source_artifact", Scope: memory.EncodeScope(evolution.Scope{SubjectID: "profile_1", Kind: evolution.ScopePersonal})}
 	if err := spool.Append(ctx, entry); err != nil {
 		t.Fatal(err)
 	}

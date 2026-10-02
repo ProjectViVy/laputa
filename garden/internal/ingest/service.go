@@ -13,6 +13,8 @@ import (
 
 	"github.com/dashimaki/garden/internal/activity"
 	"github.com/dashimaki/garden/internal/sqliteconn"
+	"github.com/dashimaki/garden/memory"
+	"github.com/dashimaki/laputa/evolution"
 	"github.com/dashimaki/mentle/facade"
 	"github.com/google/uuid"
 )
@@ -53,14 +55,17 @@ type Service struct {
 	memory   MemoryWriter
 	Activity *activity.Store
 	Spool    *activity.TransientSpool
-	queue    chan string
-	mu       sync.Mutex
-	started  bool
-	closed   bool
-	ctx      context.Context
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
-	workerID string
+	// ProfileID binds ingestions to the host profile's subject scope; set
+	// by composition before Start.
+	ProfileID string
+	queue     chan string
+	mu        sync.Mutex
+	started   bool
+	closed    bool
+	ctx       context.Context
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+	workerID  string
 }
 
 type MemoryWriter interface {
@@ -268,8 +273,8 @@ func (s *Service) worker(ctx context.Context) {
 func (s *Service) process(ctx context.Context, id string) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, _ = s.db.ExecContext(ctx, `UPDATE ingestions SET status='running',updated_at=? WHERE ingestion_id=?`, now, id)
-	var session, event, content, hash, occurredAt string
-	if err := s.db.QueryRowContext(ctx, `SELECT session_id,event_id,content,content_hash,occurred_at FROM ingestions WHERE ingestion_id=?`, id).Scan(&session, &event, &content, &hash, &occurredAt); err != nil {
+	var session, event, content, hash, occurredAt, workspace string
+	if err := s.db.QueryRowContext(ctx, `SELECT session_id,event_id,content,content_hash,occurred_at,workspace FROM ingestions WHERE ingestion_id=?`, id).Scan(&session, &event, &content, &hash, &occurredAt, &workspace); err != nil {
 		s.fail(ctx, id, err)
 		return
 	}
@@ -293,7 +298,7 @@ func (s *Service) process(ctx context.Context, id string) {
 		}
 		defer func() { _ = state.ReleaseSessionLease(context.Background(), session, s.workerID) }()
 	}
-	m, err := s.memory.CreateMemory(ctx, facade.CreateMemoryRequest{Content: content, Kind: "source_artifact", Source: facade.MemorySource{Type: "session", SessionID: session, EventID: event}, Metadata: map[string]any{"content_hash": hash, "lifecycle": "stm", "collection": "working"}}, "session:"+event, hash)
+	m, err := s.memory.CreateMemory(ctx, facade.CreateMemoryRequest{Content: content, Kind: "source_artifact", Scope: s.scopeFor(workspace), Source: facade.MemorySource{Type: "session", SessionID: session, EventID: event}, Metadata: map[string]any{"content_hash": hash, "lifecycle": "stm", "collection": "working"}}, "session:"+event, hash)
 	if err != nil {
 		s.spool(ctx, id, session, event, content, hash)
 		return
@@ -308,9 +313,23 @@ func (s *Service) process(ctx context.Context, id string) {
 	_, _ = s.db.ExecContext(ctx, `UPDATE ingestions SET status='completed',memory_id=?,trace_id=?,error=NULL,updated_at=? WHERE ingestion_id=?`, m.ID, "run_"+id, now, id)
 }
 
+// scopeFor encodes the profile's personal or workspace scope for one
+// ingestion row. The value is derived server-side from the stored
+// workspace binding — the request body never supplies a scope string.
+func (s *Service) scopeFor(workspace string) string {
+	scope := evolution.Scope{SubjectID: s.ProfileID, Kind: evolution.ScopePersonal}
+	if workspace != "" {
+		scope.Kind = evolution.ScopeWorkspace
+		scope.WorkspaceID = workspace
+	}
+	return memory.EncodeScope(scope)
+}
+
 func (s *Service) spool(ctx context.Context, id, session, event, content, hash string) {
+	var workspace string
+	_ = s.db.QueryRowContext(ctx, `SELECT workspace FROM ingestions WHERE ingestion_id=?`, id).Scan(&workspace)
 	if s.Spool != nil {
-		_ = s.Spool.Append(ctx, activity.TransientEntry{EventID: event, SessionID: session, ContentHash: hash, Content: content, Kind: "source_artifact"})
+		_ = s.Spool.Append(ctx, activity.TransientEntry{EventID: event, SessionID: session, ContentHash: hash, Content: content, Kind: "source_artifact", Scope: s.scopeFor(workspace)})
 	}
 	_, _ = s.db.ExecContext(ctx, `UPDATE ingestions SET status='spooled',error=?,updated_at=? WHERE ingestion_id=?`, "mentle unavailable; spooled", time.Now().UTC().Format(time.RFC3339Nano), id)
 }

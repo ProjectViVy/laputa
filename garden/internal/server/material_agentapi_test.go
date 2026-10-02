@@ -14,7 +14,7 @@ func TestMaterialsGETUsesAgentAPIReadDomain(t *testing.T) {
 	s := materialsTestServer(t)
 	s.ProfileID = "profile_1"
 	s.AgentAPI = agentapi.NewService(&runtimecore.Garden{ProfileID: s.ProfileID})
-	for _, path := range []string{"/v2/materials/cards?query=signal", "/v2/materials/cards/card_1/evidence", "/v2/materials/collections"} {
+	for _, path := range []string{"/v2/materials/cards?query=signal", "/v2/materials/cards/card_1/evidence?expected_revision=1", "/v2/materials/collections"} {
 		t.Run(path, func(t *testing.T) {
 			rec := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodGet, path, nil)

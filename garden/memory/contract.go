@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/dashimaki/garden/agentapi"
 	"github.com/dashimaki/laputa/evolution"
 )
 
@@ -34,6 +33,7 @@ func (c Capabilities) ServesPrimaryWriter() bool {
 type AuthorizedSearch struct {
 	Scopes      []evolution.Scope `json:"scopes"`
 	Query       string            `json:"query"`
+	Collection  string            `json:"collection,omitempty"`
 	Cursor      string            `json:"cursor"`
 	Limit       int               `json:"limit"`
 	BudgetChars int               `json:"budget_chars"`
@@ -70,16 +70,23 @@ func DecodeAuthorizedSearch(data []byte) (AuthorizedSearch, error) {
 // AuthorizedExpansion is a scoped bounded evidence read. A missing or
 // changed expected_revision fails rather than refetching different content.
 type AuthorizedExpansion struct {
-	Scope            evolution.Scope `json:"scope"`
-	CardID           string          `json:"card_id"`
-	ExpectedRevision uint64          `json:"expected_revision"`
-	BudgetChars      int             `json:"budget_chars"`
+	Scopes           []evolution.Scope `json:"scopes"`
+	CardID           string            `json:"card_id"`
+	ExpectedRevision uint64            `json:"expected_revision"`
+	BudgetChars      int               `json:"budget_chars"`
 }
 
-// Validate requires a valid scope, a card id and a positive revision.
+// Validate requires at least one valid admitted scope, a card id and a
+// positive revision. The backend checks the record's own scope against
+// this admitted union — the caller never declares which scope it is in.
 func (e AuthorizedExpansion) Validate() error {
-	if err := e.Scope.Validate(); err != nil {
-		return err
+	if len(e.Scopes) == 0 {
+		return &evolution.ContractError{Code: evolution.ErrInvalidScope, Message: "expansion requires at least one scope"}
+	}
+	for _, scope := range e.Scopes {
+		if err := scope.Validate(); err != nil {
+			return err
+		}
 	}
 	if e.CardID == "" {
 		return &evolution.ContractError{Code: evolution.ErrInvalidSchema, Message: "card_id required"}
@@ -251,15 +258,15 @@ func (r *MutationReceipt) UnmarshalJSON(data []byte) error {
 // CardPage is a bounded card page; the cursor is opaque and bound to the
 // scope and query.
 type CardPage struct {
-	Items      []agentapi.MemoryCard `json:"items"`
-	NextCursor string                `json:"next_cursor"`
+	Items      []MemoryCard `json:"items"`
+	NextCursor string       `json:"next_cursor"`
 }
 
 // EvidencePage is a bounded evidence page. Scope/revision/status ride in
 // each evidence envelope so the adapter can verify results.
 type EvidencePage struct {
-	Items     []agentapi.EvidenceFragment `json:"items"`
-	Truncated bool                        `json:"truncated"`
+	Items     []EvidenceFragment `json:"items"`
+	Truncated bool               `json:"truncated"`
 }
 
 // HealthStatus is the closed backend health vocabulary.

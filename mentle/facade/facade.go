@@ -175,6 +175,35 @@ func (s *Service) Init(ctx context.Context, opts Options) error {
 	return nil
 }
 
+// IsReadOnly reports whether this service is a lexical-only projection
+// (read paths open, canonical writes rejected).
+func (s *Service) IsReadOnly() bool { return s != nil && s.lexicalOnly }
+
+// OpenCatalogService opens a canonical-authority service without a local
+// embedding model: writes are accepted into canonical SQLite, retrieval is
+// lexical (BM25) rebuilt from canonical state, vector search is
+// unavailable. It is the supported fixture/development seam for
+// model-free deployments — not a silent degradation of a configured model.
+func OpenCatalogService(ctx context.Context, palacePath string) (*Service, error) {
+	if err := os.MkdirAll(palacePath, 0700); err != nil {
+		return nil, err
+	}
+	s := &Service{PalacePath: palacePath}
+	catalog, err := OpenCatalog(palacePath + "/canonical.sqlite3")
+	if err != nil {
+		return nil, err
+	}
+	s.Catalog = catalog
+	s.Hybrid = hybrid.NewSearcher(unavailableVectorStore{}, nil, 0)
+	snapshot, err := s.readCanonicalSnapshot(ctx)
+	if err != nil {
+		s.Close()
+		return nil, err
+	}
+	s.Hybrid.RebuildBM25FromDrawers(snapshot.Drawers)
+	return s, nil
+}
+
 // initLexicalOnly never opens models or persistent derived indexes and does not
 // run the index outbox. Canonical SQLite must already exist and is opened with
 // SQLite's read-only mode so even unguarded maintenance cannot mutate it.
