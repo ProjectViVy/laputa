@@ -13,6 +13,7 @@ import (
 
 	gardenevol "github.com/dashimaki/garden/evolution"
 	"github.com/dashimaki/garden/memory"
+	"github.com/dashimaki/mentle/facade"
 	"github.com/dashimaki/laputa/evolution"
 	"github.com/dashimaki/laputa/persona"
 )
@@ -385,6 +386,80 @@ func (c *Client) BindEvolutionSource(scope evolution.Scope, destinationID string
 			return doc.Revision, nil
 		},
 	}, nil
+}
+
+// --- human reads -----------------------------------------------------------
+
+// ReadPersona retrieves one named authority document through the human
+// principal; the closed eight-kind roster is enforced by the authority.
+func (h *HumanClient) ReadPersona(ctx context.Context, kind string) (PersonaDocument, error) {
+	s, unlock, err := h.runtime()
+	if err != nil {
+		return PersonaDocument{}, err
+	}
+	defer unlock()
+	return s.ReadPersona(ctx, h.principal, h.binding, kind)
+}
+
+// PersonaStatus returns the authority's own per-kind file states — the
+// revisions the control surface reports verbatim.
+func (h *HumanClient) PersonaStatus(ctx context.Context) (*persona.StatusView, error) {
+	s, unlock, err := h.runtime()
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	if err := s.check(h.binding, h.principal, OpPersonaGet); err != nil {
+		return nil, err
+	}
+	if s.runtime.Persona == nil {
+		return nil, failure("unavailable", "persona unavailable")
+	}
+	return s.runtime.Persona.Status()
+}
+
+// ReadActivity returns the scoped ACTMEM projection (personal union);
+// sections and max_chars stay inside the domain's own caps.
+func (h *HumanClient) ReadActivity(ctx context.Context, req ReadRequest) (ActivityResult, error) {
+	s, unlock, err := h.runtime()
+	if err != nil {
+		return ActivityResult{}, err
+	}
+	defer unlock()
+	return s.ReadActivity(ctx, h.principal, h.binding, req)
+}
+
+// ApplyWorkPatch applies scoped Work edits against base_revision; hidden
+// entries and stale bases are rejected by the store, never refetched.
+func (h *HumanClient) ApplyWorkPatch(ctx context.Context, patch WorkPatch) (ActivityResult, error) {
+	s, unlock, err := h.runtime()
+	if err != nil {
+		return ActivityResult{}, err
+	}
+	defer unlock()
+	return s.ApplyWorkPatch(ctx, h.principal, h.binding, patch)
+}
+
+// ReadOwnerACTMEM returns the whole authority document — the human owner
+// view, never the agent's scoped projection.
+func (h *HumanClient) ReadOwnerACTMEM(ctx context.Context) (ActmemDocument, error) {
+	s, unlock, err := h.runtime()
+	if err != nil {
+		return ActmemDocument{}, err
+	}
+	defer unlock()
+	return s.ReadACTMEM(ctx, h.principal, h.binding)
+}
+
+// IndexHealth reports live canonical/derived-index health for the bound
+// scope; a degraded index is a valid report, never a silent zero.
+func (h *HumanClient) IndexHealth(ctx context.Context) (facade.IndexHealth, error) {
+	s, unlock, err := h.runtime()
+	if err != nil {
+		return facade.IndexHealth{}, err
+	}
+	defer unlock()
+	return s.IndexHealth(ctx, h.principal, h.binding)
 }
 
 // --- human writes ----------------------------------------------------------
