@@ -13,9 +13,9 @@ import (
 
 	gardenevol "github.com/dashimaki/garden/evolution"
 	"github.com/dashimaki/garden/memory"
-	"github.com/dashimaki/mentle/facade"
 	"github.com/dashimaki/laputa/evolution"
 	"github.com/dashimaki/laputa/persona"
+	"github.com/dashimaki/mentle/facade"
 )
 
 // Embedded-domain capabilities derive from the one Garden owner opened by
