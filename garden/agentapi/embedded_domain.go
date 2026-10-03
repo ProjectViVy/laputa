@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -321,6 +322,67 @@ func (c *Client) BindEvolution(scope evolution.Scope, destinationID string) (Evo
 				return 0, err
 			}
 			return domain.MissionRevision(ctx)
+		},
+	}, nil
+}
+
+// SourcePorts is the bound committed-activity input set for a fixed
+// scope/destination: the source identity stamped on every window, the
+// durable ingest high watermark, and the authority Mission revision. It
+// resolves no memory backend, so arming capture/source cannot fail on an
+// unavailable selected writer; the bound Domain keeps BindEvolution's eager
+// writer check.
+type SourcePorts struct {
+	SourceID        string
+	HighWatermark   func(context.Context) (uint64, error)
+	MissionRevision func(context.Context) (uint64, error)
+}
+
+// BindEvolutionSource binds the input ports for one scope/destination
+// without resolving the selected memory backend. A Mission revision read on
+// an uninitialized authority reports 0 (unassigned), not an error.
+func (c *Client) BindEvolutionSource(scope evolution.Scope, destinationID string) (SourcePorts, error) {
+	if c == nil {
+		return SourcePorts{}, failure("unavailable", "Garden runtime unavailable")
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.runtime == nil {
+		return SourcePorts{}, failure("unavailable", "Garden runtime unavailable")
+	}
+	if err := scope.Validate(); err != nil {
+		return SourcePorts{}, failure("invalid_binding", err.Error())
+	}
+	if scope.SubjectID != c.runtime.ProfileID {
+		return SourcePorts{}, failure("invalid_binding", "scope subject is not this profile")
+	}
+	if c.destinationID != "" && destinationID != c.destinationID {
+		return SourcePorts{}, failure("invalid_binding", "destination does not match the configured writer")
+	}
+	return SourcePorts{
+		SourceID: fmt.Sprintf("%s/%s/%s", c.runtime.ProfileID, memory.EncodeScope(scope), destinationID),
+		HighWatermark: func(ctx context.Context) (uint64, error) {
+			c.mu.RLock()
+			defer c.mu.RUnlock()
+			if c.runtime == nil || c.runtime.Ingest == nil {
+				return 0, failure("unavailable", "Garden runtime unavailable")
+			}
+			return c.runtime.Ingest.HighWatermark(ctx, scope.WorkspaceID)
+		},
+		MissionRevision: func(ctx context.Context) (uint64, error) {
+			c.mu.RLock()
+			defer c.mu.RUnlock()
+			if c.runtime == nil || c.runtime.Persona == nil {
+				return 0, failure("unavailable", "Garden runtime unavailable")
+			}
+			doc, err := c.runtime.Persona.GetDocument(persona.KindMission)
+			if errors.Is(err, persona.ErrUninitialized) {
+				return 0, nil
+			}
+			if err != nil {
+				return 0, err
+			}
+			return doc.Revision, nil
 		},
 	}, nil
 }
