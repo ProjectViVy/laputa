@@ -2,10 +2,12 @@ package agentapi
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/dashimaki/garden/internal/runtimecore"
+	"github.com/dashimaki/garden/memory"
 )
 
 // Config contains explicit host-owned paths and trusted identity. Callers can
@@ -23,14 +25,28 @@ type Config struct {
 	// WorkspaceID is the host-issued trusted workspace binding; empty is the
 	// implicit personal workspace.
 	WorkspaceID string
+	// BackendID names the configured memory writer ("mentle" selects the
+	// canonical adapter; any other id without an injected Backends binding is
+	// unavailable and never falls back to another backend). Empty = "mentle".
+	BackendID string
+	// DestinationID is the mutation destination the selected writer binds to;
+	// required for human memory writes when a non-mentle writer is selected.
+	DestinationID string
+	// Backends injects scope-bound memory backends keyed by
+	// memory.EncodeScope(scope); each entry wins over the configured writer
+	// for exactly that scope.
+	Backends map[string]memory.Backend
 }
 
 // Client owns a domain runtime without opening a listener or exporting storage handles.
 type Client struct {
-	mu        sync.RWMutex
-	runtime   *runtimecore.Garden
-	principal Principal
-	identity  Binding
+	mu            sync.RWMutex
+	runtime       *runtimecore.Garden
+	principal     Principal
+	identity      Binding
+	backendID     string
+	destinationID string
+	evolutionDir  string
 }
 
 // Open composes an isolated single-profile domain runtime for a trusted Go host.
@@ -44,14 +60,33 @@ func Open(ctx context.Context, cfg Config) (*Client, error) {
 	if err := Authorize(cfg.ProfileID, Binding{ProfileID: cfg.ProfileID}, cfg.Principal, OpBootstrap); err != nil {
 		return nil, err
 	}
+	backendID := cfg.BackendID
+	if backendID == "" {
+		backendID = BackendMentle
+	}
+	if backendID != BackendMentle && strings.TrimSpace(cfg.DestinationID) == "" {
+		return nil, failure("invalid_binding", "destination_id required for a non-mentle writer")
+	}
+	destinationID := cfg.DestinationID
+	if destinationID == "" {
+		destinationID = BackendMentle
+	}
 	core, err := runtimecore.Open(ctx, runtimecore.Config{
 		PersonaDir: cfg.PersonaDir, PalacePath: cfg.PalacePath, ModelsDir: cfg.ModelsDir,
 		StateDB: cfg.StateDB, ProfileID: cfg.ProfileID, RequireLocalModel: cfg.RequireLocalModel,
+		Backends: cfg.Backends,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &Client{runtime: core, principal: cfg.Principal, identity: Binding{ProfileID: cfg.ProfileID, AgentID: cfg.AgentID, Platform: cfg.Platform, WorkspaceID: cfg.WorkspaceID}}, nil
+	return &Client{
+		runtime:       core,
+		principal:     cfg.Principal,
+		identity:      Binding{ProfileID: cfg.ProfileID, AgentID: cfg.AgentID, Platform: cfg.Platform, WorkspaceID: cfg.WorkspaceID},
+		backendID:     backendID,
+		destinationID: destinationID,
+		evolutionDir:  filepath.Join(filepath.Dir(cfg.PersonaDir), "evolution"),
+	}, nil
 }
 
 // Close releases owned resources; a bound handle cannot continue after closure.
@@ -74,6 +109,17 @@ func (c *Client) Close() error {
 type BoundClient struct {
 	client  *Client
 	binding Binding
+	// principal is the per-handle reduction; empty falls back to the owner's
+	// configured principal. BindAgentSession stamps PrincipalAgent here.
+	principal Principal
+}
+
+// caller resolves the effective principal for this handle's calls.
+func (b *BoundClient) caller() Principal {
+	if b.principal != "" {
+		return b.principal
+	}
+	return b.client.principal
 }
 
 // BindSession fixes only the host session; trusted identity comes from Open.
@@ -125,7 +171,7 @@ func (b *BoundClient) Bootstrap(ctx context.Context, req BootstrapRequest) (Boot
 	if err != nil {
 		return BootstrapResponse{}, err
 	}
-	return s.Bootstrap(ctx, b.client.principal, req)
+	return s.Bootstrap(ctx, b.caller(), req)
 }
 
 func (b *BoundClient) FastRecall(ctx context.Context, req FastRecallRequest) (ContextView, error) {
@@ -138,7 +184,7 @@ func (b *BoundClient) FastRecall(ctx context.Context, req FastRecallRequest) (Co
 	if err != nil {
 		return ContextView{}, err
 	}
-	return s.FastRecall(ctx, b.client.principal, req)
+	return s.FastRecall(ctx, b.caller(), req)
 }
 
 func (b *BoundClient) Capture(ctx context.Context, req CaptureRequest) (CaptureReceipt, error) {
@@ -151,7 +197,7 @@ func (b *BoundClient) Capture(ctx context.Context, req CaptureRequest) (CaptureR
 	if err != nil {
 		return CaptureReceipt{}, err
 	}
-	return s.Capture(ctx, b.client.principal, req)
+	return s.Capture(ctx, b.caller(), req)
 }
 
 // CaptureStatus uses the durable receipt identity, scoped to this bound host session.
@@ -163,5 +209,5 @@ func (b *BoundClient) CaptureStatus(ctx context.Context, ingestionID, eventID st
 	defer unlock()
 	bound := b.binding
 	bound.EventID = eventID
-	return s.CaptureStatus(ctx, b.client.principal, bound, ingestionID)
+	return s.CaptureStatus(ctx, b.caller(), bound, ingestionID)
 }

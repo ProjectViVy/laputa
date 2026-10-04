@@ -7,6 +7,7 @@ package evolution
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -498,4 +499,112 @@ func splitLines(data []byte) [][]byte {
 		lines = append(lines, data[start:])
 	}
 	return lines
+}
+
+// ResultItem is one bounded ledger projection: an applied/rejected effect
+// receipt or a persisted reflection note. Notes carry body; receipts carry
+// status/target. Reflection notes never re-enter evidence through this read.
+type ResultItem struct {
+	OperationID   string                      `json:"operation_id"`
+	PayloadDigest string                      `json:"payload_digest,omitempty"`
+	Kind          string                      `json:"kind"`
+	Status        string                      `json:"status,omitempty"`
+	TargetRef     string                      `json:"target_ref,omitempty"`
+	Revision      uint64                      `json:"revision,omitempty"`
+	ErrorCode     string                      `json:"error_code,omitempty"`
+	Body          string                      `json:"body,omitempty"`
+	Sources       []laputaevolution.SourceRef `json:"sources,omitempty"`
+	At            string                      `json:"at,omitempty"`
+}
+
+// ResultPage is one page of ledger results; there is deliberately no total —
+// the cursor already binds the observed ledger version.
+type ResultPage struct {
+	Items      []ResultItem `json:"items"`
+	NextCursor string       `json:"next_cursor,omitempty"`
+}
+
+type resultsCursor struct {
+	Offset int `json:"o"`
+	Total  int `json:"n"`
+}
+
+// Results pages the domain's own durable ledgers (effect receipts, then
+// reflection notes). The cursor is opaque and ledger-version-bound: a read
+// after new records were appended with an older cursor is rejected as stale,
+// never silently shifted.
+func (d *Domain) Results(cursor string, limit int) (ResultPage, error) {
+	var cur resultsCursor
+	if cursor != "" {
+		raw, err := base64.RawURLEncoding.DecodeString(cursor)
+		if err != nil || json.Unmarshal(raw, &cur) != nil || cur.Offset < 0 {
+			return ResultPage{}, errors.New("evolution: malformed results cursor")
+		}
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	items, err := d.ledger.readAll()
+	if err != nil {
+		return ResultPage{}, err
+	}
+	if cursor != "" && cur.Total != len(items) {
+		return ResultPage{}, errors.New("evolution: results cursor is stale")
+	}
+	if cur.Offset > len(items) {
+		return ResultPage{}, errors.New("evolution: malformed results cursor")
+	}
+	end := cur.Offset + limit
+	if end > len(items) {
+		end = len(items)
+	}
+	page := ResultPage{Items: append([]ResultItem{}, items[cur.Offset:end]...)}
+	if end < len(items) {
+		raw, err := json.Marshal(resultsCursor{Offset: end, Total: len(items)})
+		if err != nil {
+			return ResultPage{}, err
+		}
+		page.NextCursor = base64.RawURLEncoding.EncodeToString(raw)
+	}
+	return page, nil
+}
+
+// readAll projects both ledgers in durable order: effect receipts first, then
+// reflection notes. Malformed lines are ledger corruption, not an empty page.
+func (l *effectLedger) readAll() ([]ResultItem, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var items []ResultItem
+	if data, err := os.ReadFile(l.path); err == nil {
+		for _, line := range splitLines(data) {
+			var rec effectRecord
+			if err := json.Unmarshal(line, &rec); err != nil {
+				return nil, fmt.Errorf("evolution: corrupt effect ledger: %w", err)
+			}
+			items = append(items, ResultItem{
+				OperationID: rec.OperationID, PayloadDigest: rec.PayloadDigest,
+				Kind: rec.Kind, Status: string(rec.Status), TargetRef: rec.TargetRef,
+				Revision: rec.Revision, ErrorCode: rec.ErrorCode,
+			})
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	notesPath := filepath.Join(filepath.Dir(l.path), "notes.jsonl")
+	if data, err := os.ReadFile(notesPath); err == nil {
+		for _, line := range splitLines(data) {
+			var rec noteRecord
+			if err := json.Unmarshal(line, &rec); err != nil {
+				return nil, fmt.Errorf("evolution: corrupt notes ledger: %w", err)
+			}
+			items = append(items, ResultItem{
+				OperationID: rec.OperationID, PayloadDigest: rec.PayloadDigest,
+				Kind: string(laputaevolution.KindReflectionNote),
+				Body: rec.Body, Sources: rec.Sources, At: rec.At,
+			})
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	return items, nil
 }

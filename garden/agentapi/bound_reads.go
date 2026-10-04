@@ -14,7 +14,7 @@ func (b *BoundClient) ReadPersona(ctx context.Context, kind string) (PersonaDocu
 		return PersonaDocument{}, err
 	}
 	defer unlock()
-	return s.ReadPersona(ctx, b.client.principal, b.binding, kind)
+	return s.ReadPersona(ctx, b.caller(), b.binding, kind)
 }
 
 func (b *BoundClient) ReadACTMEM(ctx context.Context) (ActmemDocument, error) {
@@ -23,7 +23,7 @@ func (b *BoundClient) ReadACTMEM(ctx context.Context) (ActmemDocument, error) {
 		return ActmemDocument{}, err
 	}
 	defer unlock()
-	return s.ReadACTMEM(ctx, b.client.principal, b.binding)
+	return s.ReadACTMEM(ctx, b.caller(), b.binding)
 }
 
 func (b *BoundClient) QueryACTMEM(ctx context.Context, q ActmemQuery) (ActmemResult, error) {
@@ -32,7 +32,7 @@ func (b *BoundClient) QueryACTMEM(ctx context.Context, q ActmemQuery) (ActmemRes
 		return ActmemResult{}, err
 	}
 	defer unlock()
-	return s.QueryACTMEM(ctx, b.client.principal, b.binding, q)
+	return s.QueryACTMEM(ctx, b.caller(), b.binding, q)
 }
 
 func (b *BoundClient) ReadActivity(ctx context.Context, req ReadRequest) (ActivityResult, error) {
@@ -41,7 +41,7 @@ func (b *BoundClient) ReadActivity(ctx context.Context, req ReadRequest) (Activi
 		return ActivityResult{}, err
 	}
 	defer unlock()
-	return s.ReadActivity(ctx, b.client.principal, b.binding, req)
+	return s.ReadActivity(ctx, b.caller(), b.binding, req)
 }
 
 func (b *BoundClient) ApplyWorkPatch(ctx context.Context, patch WorkPatch) (ActivityResult, error) {
@@ -50,7 +50,7 @@ func (b *BoundClient) ApplyWorkPatch(ctx context.Context, patch WorkPatch) (Acti
 		return ActivityResult{}, err
 	}
 	defer unlock()
-	return s.ApplyWorkPatch(ctx, b.client.principal, b.binding, patch)
+	return s.ApplyWorkPatch(ctx, b.caller(), b.binding, patch)
 }
 
 func (b *BoundClient) AppendActivity(ctx context.Context, entry Entry) (ActivityResult, error) {
@@ -59,7 +59,7 @@ func (b *BoundClient) AppendActivity(ctx context.Context, entry Entry) (Activity
 		return ActivityResult{}, err
 	}
 	defer unlock()
-	return s.AppendActivity(ctx, b.client.principal, b.binding, entry)
+	return s.AppendActivity(ctx, b.caller(), b.binding, entry)
 }
 
 func (b *BoundClient) SearchCards(ctx context.Context, q CardSearch) (CardPage, error) {
@@ -68,7 +68,7 @@ func (b *BoundClient) SearchCards(ctx context.Context, q CardSearch) (CardPage, 
 		return CardPage{}, err
 	}
 	defer unlock()
-	return s.SearchCards(ctx, b.client.principal, b.binding, q)
+	return s.SearchCards(ctx, b.caller(), b.binding, q)
 }
 
 func (b *BoundClient) ReadEvidence(ctx context.Context, q EvidenceRead) ([]EvidenceFragment, error) {
@@ -77,7 +77,7 @@ func (b *BoundClient) ReadEvidence(ctx context.Context, q EvidenceRead) ([]Evide
 		return nil, err
 	}
 	defer unlock()
-	return s.ReadEvidence(ctx, b.client.principal, b.binding, q)
+	return s.ReadEvidence(ctx, b.caller(), b.binding, q)
 }
 
 // IndexHealth preserves the Mentle public health report, including probe
@@ -88,5 +88,5 @@ func (b *BoundClient) IndexHealth(ctx context.Context) (facade.IndexHealth, erro
 		return facade.IndexHealth{}, err
 	}
 	defer unlock()
-	return s.IndexHealth(ctx, b.client.principal, b.binding)
+	return s.IndexHealth(ctx, b.caller(), b.binding)
 }
