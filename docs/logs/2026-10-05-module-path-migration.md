@@ -9,6 +9,12 @@ Laputa now requires INOFY at `v0.0.0-20260930141905-71e2c9bbe47d` rather than
 requiring an external `../../INOFY` checkout. Module checksum metadata was
 refreshed, including Mentle's previously missing renameio checksums.
 
+After publishing the canonical module identities at `1b60b4b48d10`, Garden and
+the embedding example pin their Laputa/Mentle dependencies to the real revision
+`v0.0.0-20261005120813-1b60b4b48d10`. This replaces placeholder `v0.0.0`
+requirements so external consumers can resolve the module graph without
+inheriting this repository's development replacements.
+
 ## Verification
 
 - Before the fix, VIVY `go list -m all` failed on the missing Garden sibling.

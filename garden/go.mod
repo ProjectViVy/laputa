@@ -3,8 +3,8 @@ module github.com/ProjectViVy/laputa/garden
 go 1.26.4
 
 require (
-	github.com/ProjectViVy/laputa/laputa v0.0.0
-	github.com/ProjectViVy/laputa/mentle v0.0.0
+	github.com/ProjectViVy/laputa/laputa v0.0.0-20261005120813-1b60b4b48d10
+	github.com/ProjectViVy/laputa/mentle v0.0.0-20261005120813-1b60b4b48d10
 	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v0.58.0
 	github.com/rivo/uniseg v0.4.7

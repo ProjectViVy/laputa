@@ -3,15 +3,15 @@ module example.com/vivy-embed-smoke
 go 1.26.4
 
 require (
-	github.com/ProjectViVy/laputa/garden v0.0.0
-	github.com/ProjectViVy/laputa/laputa v0.0.0
+	github.com/ProjectViVy/laputa/garden v0.0.0-20261005120813-1b60b4b48d10
+	github.com/ProjectViVy/laputa/laputa v0.0.0-20261005120813-1b60b4b48d10
 )
 
 require (
 	github.com/DotNetAge/govector v0.1.8 // indirect
+	github.com/ProjectViVy/laputa/mentle v0.0.0-20261005120813-1b60b4b48d10 // indirect
 	github.com/chewxy/math32 v1.11.1 // indirect
 	github.com/coder/hnsw v0.6.1 // indirect
-	github.com/ProjectViVy/laputa/mentle v0.0.0 // indirect
 	github.com/daulet/tokenizers v1.27.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
@@ -24,6 +24,7 @@ require (
 	github.com/gomlx/go-xla v0.2.2 // indirect
 	github.com/gomlx/gomlx v0.27.3 // indirect
 	github.com/gomlx/onnx-gomlx v0.4.2 // indirect
+	github.com/google/renameio v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/knights-analytics/hugot v0.7.5 // indirect
 	github.com/knights-analytics/ortgenai v0.3.1 // indirect
@@ -55,6 +56,7 @@ require (
 	golang.org/x/term v0.43.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	modernc.org/libc v1.75.7 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
