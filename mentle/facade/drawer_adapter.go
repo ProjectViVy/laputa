@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/dashimaki/mentle/internal/palace"
+	"github.com/ProjectViVy/laputa/mentle/internal/palace"
 )
 
 // DrawerWriter is the narrow mutation capability granted to import and

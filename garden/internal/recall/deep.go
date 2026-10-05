@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dashimaki/garden/internal/arbiter"
-	"github.com/dashimaki/garden/internal/rag"
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/garden/internal/arbiter"
+	"github.com/ProjectViVy/laputa/garden/internal/rag"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 type GraphSource interface {

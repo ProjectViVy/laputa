@@ -17,9 +17,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dashimaki/garden/internal/sqliteconn"
-	"github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/laputa/persona"
+	"github.com/ProjectViVy/laputa/garden/internal/sqliteconn"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/persona"
 	"github.com/rivo/uniseg"
 )
 

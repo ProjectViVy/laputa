@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dashimaki/mentle/internal/embedder"
-	"github.com/dashimaki/mentle/internal/hybrid"
-	govector "github.com/dashimaki/mentle/storage/govector"
+	"github.com/ProjectViVy/laputa/mentle/internal/embedder"
+	"github.com/ProjectViVy/laputa/mentle/internal/hybrid"
+	govector "github.com/ProjectViVy/laputa/mentle/storage/govector"
 )
 
 func main() {

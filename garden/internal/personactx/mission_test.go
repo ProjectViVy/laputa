@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/laputa/persona"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/persona"
 )
 
 // initMissionPersona opens a Persona store with the five required files.

@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/dashimaki/garden/internal/sqliteconn"
+	"github.com/ProjectViVy/laputa/garden/internal/sqliteconn"
 )
 
 var ErrSpoolFull = errors.New("transient spool is full")

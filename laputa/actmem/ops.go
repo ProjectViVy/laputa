@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 	"gopkg.in/yaml.v3"
 )
 

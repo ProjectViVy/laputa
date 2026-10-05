@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 // --- fakes (host-side Domain/Model bound on construction) ---

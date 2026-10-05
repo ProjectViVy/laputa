@@ -3,15 +3,15 @@ module example.com/vivy-embed-smoke
 go 1.26.4
 
 require (
-	github.com/dashimaki/garden v0.0.0
-	github.com/dashimaki/laputa v0.0.0
+	github.com/ProjectViVy/laputa/garden v0.0.0
+	github.com/ProjectViVy/laputa/laputa v0.0.0
 )
 
 require (
 	github.com/DotNetAge/govector v0.1.8 // indirect
 	github.com/chewxy/math32 v1.11.1 // indirect
 	github.com/coder/hnsw v0.6.1 // indirect
-	github.com/dashimaki/mentle v0.0.0 // indirect
+	github.com/ProjectViVy/laputa/mentle v0.0.0 // indirect
 	github.com/daulet/tokenizers v1.27.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
@@ -62,8 +62,8 @@ require (
 	modernc.org/sqlite v1.59.0 // indirect
 )
 
-replace github.com/dashimaki/garden => ../../garden
+replace github.com/ProjectViVy/laputa/garden => ../../garden
 
-replace github.com/dashimaki/laputa => ../../laputa
+replace github.com/ProjectViVy/laputa/laputa => ../../laputa
 
-replace github.com/dashimaki/mentle => ../../mentle
+replace github.com/ProjectViVy/laputa/mentle => ../../mentle

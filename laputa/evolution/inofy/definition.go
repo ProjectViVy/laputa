@@ -10,8 +10,8 @@ import (
 	"encoding/json"
 
 	"github.com/ProjectViVy/inofy"
-	"github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/laputa/evolution/diva"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/evolution/diva"
 )
 
 // ImplementationID is the catalog identity of this strategy build. It moves

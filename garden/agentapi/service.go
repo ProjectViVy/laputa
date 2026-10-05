@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dashimaki/garden/internal/ingest"
-	"github.com/dashimaki/garden/internal/recall"
-	"github.com/dashimaki/garden/internal/runtimecore"
+	"github.com/ProjectViVy/laputa/garden/internal/ingest"
+	"github.com/ProjectViVy/laputa/garden/internal/recall"
+	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
 )
 
 // Service is the trusted in-process entrypoint. The caller supplies a principal

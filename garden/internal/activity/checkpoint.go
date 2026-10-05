@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dashimaki/garden/internal/sqliteconn"
+	"github.com/ProjectViVy/laputa/garden/internal/sqliteconn"
 )
 
 // CheckpointStore keeps runtime WorkingSet state in Garden's SQLite database.

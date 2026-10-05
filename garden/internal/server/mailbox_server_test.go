@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dashimaki/garden/internal/mailbox"
+	"github.com/ProjectViVy/laputa/garden/internal/mailbox"
 )
 
 func newMailboxTestServer(t *testing.T) (*Server, *mailbox.Store) {

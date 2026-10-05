@@ -132,7 +132,7 @@ type forbiddenPattern struct {
 
 var runtimePatterns = []forbiddenPattern{
 	{rule: "legacy-laputa-governance", patterns: []string{
-		"github.com/dashimaki/laputa/governance",
+		"github.com/ProjectViVy/laputa/laputa/governance",
 		"governance.NewFileStore",
 		"governance.NewEngine",
 		"governance.NewGovernedService",
@@ -171,7 +171,7 @@ var runtimePatterns = []forbiddenPattern{
 }
 
 var mentleBoundaryPatterns = []string{
-	"github.com/dashimaki/laputa",
+	"github.com/ProjectViVy/laputa/laputa",
 	"laputa/persona",
 	"PERSONA.MD",
 	"WORLD.MD",

@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dashimaki/garden/internal/activity"
-	"github.com/dashimaki/garden/memory"
-	"github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/garden/internal/activity"
+	"github.com/ProjectViVy/laputa/garden/memory"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 type drainWriterFunc func(context.Context, facade.CreateMemoryRequest, string, string) (facade.Memory, error)

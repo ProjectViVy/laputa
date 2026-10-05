@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/dashimaki/garden/internal/mailbox"
+	"github.com/ProjectViVy/laputa/garden/internal/mailbox"
 )
 
 func (s *Server) handleMailboxInbox(w http.ResponseWriter, r *http.Request) {

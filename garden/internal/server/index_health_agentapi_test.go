@@ -7,9 +7,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/dashimaki/garden/agentapi"
-	"github.com/dashimaki/garden/internal/runtimecore"
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/garden/agentapi"
+	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 func healthRequest(t *testing.T, srv *Server, path string, status int) map[string]any {

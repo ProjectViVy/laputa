@@ -1,10 +1,10 @@
-module github.com/dashimaki/garden
+module github.com/ProjectViVy/laputa/garden
 
 go 1.26.4
 
 require (
-	github.com/dashimaki/laputa v0.0.0
-	github.com/dashimaki/mentle v0.0.0
+	github.com/ProjectViVy/laputa/laputa v0.0.0
+	github.com/ProjectViVy/laputa/mentle v0.0.0
 	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v0.58.0
 	github.com/rivo/uniseg v0.4.7
@@ -68,6 +68,6 @@ require (
 )
 
 replace (
-	github.com/dashimaki/laputa => ../laputa
-	github.com/dashimaki/mentle => ../mentle
+	github.com/ProjectViVy/laputa/laputa => ../laputa
+	github.com/ProjectViVy/laputa/mentle => ../mentle
 )

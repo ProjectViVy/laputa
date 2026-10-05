@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dashimaki/garden/internal/evolution"
-	"github.com/dashimaki/garden/internal/sqliteconn"
+	"github.com/ProjectViVy/laputa/garden/internal/evolution"
+	"github.com/ProjectViVy/laputa/garden/internal/sqliteconn"
 	"github.com/google/uuid"
 )
 

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/dashimaki/garden/internal/ingest"
+	"github.com/ProjectViVy/laputa/garden/internal/ingest"
 )
 
 // SessionSubmitRequest is the ordinary Garden session-ingest payload. It is

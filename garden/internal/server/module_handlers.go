@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/dashimaki/garden/internal/report"
+	"github.com/ProjectViVy/laputa/garden/internal/report"
 )
 
 func (s *Server) handleModulesList(w http.ResponseWriter, r *http.Request) {

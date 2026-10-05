@@ -7,7 +7,7 @@ package testkit
 import (
 	"strings"
 
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 const (

@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/dashimaki/garden/agentapi"
-	"github.com/dashimaki/garden/internal/recall"
+	"github.com/ProjectViVy/laputa/garden/agentapi"
+	"github.com/ProjectViVy/laputa/garden/internal/recall"
 )
 
 func (s *Server) handleFastRecall(w http.ResponseWriter, r *http.Request) {

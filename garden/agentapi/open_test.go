@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dashimaki/laputa/persona"
+	"github.com/ProjectViVy/laputa/laputa/persona"
 )
 
 func clientConfig(t *testing.T) Config {

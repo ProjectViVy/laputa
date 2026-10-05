@@ -3,7 +3,7 @@ package agentapi
 import (
 	"context"
 
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 // Explicit reads keep the host-owned principal and session binding; callers

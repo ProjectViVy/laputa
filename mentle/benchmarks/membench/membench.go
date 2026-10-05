@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/dashimaki/mentle/internal/embedder"
-	"github.com/dashimaki/mentle/internal/search"
-	govector "github.com/dashimaki/mentle/storage/govector"
+	"github.com/ProjectViVy/laputa/mentle/internal/embedder"
+	"github.com/ProjectViVy/laputa/mentle/internal/search"
+	govector "github.com/ProjectViVy/laputa/mentle/storage/govector"
 )
 
 type MemBenchItem struct {

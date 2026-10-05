@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	govector "github.com/dashimaki/mentle/storage/govector"
+	govector "github.com/ProjectViVy/laputa/mentle/storage/govector"
 )
 
 type mockEmbedder struct {

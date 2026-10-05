@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dashimaki/mentle/internal/config"
-	"github.com/dashimaki/mentle/internal/search"
+	"github.com/ProjectViVy/laputa/mentle/internal/config"
+	"github.com/ProjectViVy/laputa/mentle/internal/search"
 )
 
 type Layer0 struct {

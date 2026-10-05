@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 type fakeArtifactGen struct {
@@ -19,14 +19,14 @@ type fakeArtifactGen struct {
 func dailyReportFixture() Report {
 	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	return Report{
-		Cadence:       "daily",
-		WindowStart:   now.Add(-24 * time.Hour),
-		WindowEnd:     now,
-		SourceIDs:     []string{"mem_1"},
-		Summary:       "deterministic summary",
-		Completed:     []string{"fallback complete"},
-		Decisions:     []string{"chose x"},
-		Generator:     GeneratorDeterministic,
+		Cadence:     "daily",
+		WindowStart: now.Add(-24 * time.Hour),
+		WindowEnd:   now,
+		SourceIDs:   []string{"mem_1"},
+		Summary:     "deterministic summary",
+		Completed:   []string{"fallback complete"},
+		Decisions:   []string{"chose x"},
+		Generator:   GeneratorDeterministic,
 	}
 }
 
@@ -117,7 +117,7 @@ func TestLLMEnricherTimeout(t *testing.T) {
 
 type blockingArtifactGen struct{ block time.Duration }
 
-	func (b *blockingArtifactGen) GenerateArtifact(ctx context.Context, _ string, _ string) (*ArtifactResult, error) {
+func (b *blockingArtifactGen) GenerateArtifact(ctx context.Context, _ string, _ string) (*ArtifactResult, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()

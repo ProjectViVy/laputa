@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dashimaki/mentle/facade"
-	"github.com/dashimaki/mentle/internal/config"
-	"github.com/dashimaki/mentle/internal/miner"
-	"github.com/dashimaki/mentle/internal/palace"
+	"github.com/ProjectViVy/laputa/mentle/facade"
+	"github.com/ProjectViVy/laputa/mentle/internal/config"
+	"github.com/ProjectViVy/laputa/mentle/internal/miner"
+	"github.com/ProjectViVy/laputa/mentle/internal/palace"
 
 	"github.com/spf13/cobra"
 )

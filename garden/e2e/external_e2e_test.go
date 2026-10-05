@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dashimaki/garden/internal/rag"
+	"github.com/ProjectViVy/laputa/garden/internal/rag"
 )
 
 func TestExternalPlannerEndToEnd(t *testing.T) {

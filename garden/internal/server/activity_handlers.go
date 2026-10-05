@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/dashimaki/garden/internal/activity"
+	"github.com/ProjectViVy/laputa/garden/internal/activity"
 )
 
 func (s *Server) handleActivityEvents(w http.ResponseWriter, r *http.Request) {

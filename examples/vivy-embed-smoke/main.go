@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dashimaki/garden/agentapi"
-	"github.com/dashimaki/laputa/persona"
+	"github.com/ProjectViVy/laputa/garden/agentapi"
+	"github.com/ProjectViVy/laputa/laputa/persona"
 )
 
 func main() {

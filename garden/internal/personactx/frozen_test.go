@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/laputa/persona"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/persona"
 )
 
 type fakeReader struct {

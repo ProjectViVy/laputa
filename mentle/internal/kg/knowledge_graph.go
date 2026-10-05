@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dashimaki/mentle/storage/sqlite"
+	"github.com/ProjectViVy/laputa/mentle/storage/sqlite"
 )
 
 var ErrInvalidTemporalInterval = errors.New("kg: inverted temporal interval (valid_to < valid_from)")

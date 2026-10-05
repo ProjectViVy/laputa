@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dashimaki/mentle/facade"
-	"github.com/dashimaki/mentle/internal/dialect"
+	"github.com/ProjectViVy/laputa/mentle/facade"
+	"github.com/ProjectViVy/laputa/mentle/internal/dialect"
 	"github.com/spf13/cobra"
 )
 

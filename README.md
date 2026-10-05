@@ -4,6 +4,22 @@
 
 Garden MemoryOS is a governed operating system for continuous agents. It connects material evidence, bounded working context, personality authority, and reusable capability without treating any one of them as another.
 
+## Go modules
+
+The repository owns three Go modules:
+
+| Directory | Import path |
+| --- | --- |
+| `garden/` | `github.com/ProjectViVy/laputa/garden` |
+| `mentle/` | `github.com/ProjectViVy/laputa/mentle` |
+| `laputa/` | `github.com/ProjectViVy/laputa/laputa` |
+
+Clone this repository once to obtain all three modules. Garden's local
+replacements resolve inside this checkout. Laputa pins INOFY to a published
+revision; no sibling `INOFY/` directory is needed. Build `garden/console` before
+building or testing the standalone Garden application because it embeds the
+console's `dist/` output.
+
 ## Current Architecture
 
 [ADR-0012: Laputa Markdown Clean Break](docs/architecture/0012-laputa-markdown-clean-break.md) is the current contract.

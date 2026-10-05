@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dashimaki/garden/internal/architectureguard"
+	"github.com/ProjectViVy/laputa/garden/internal/architectureguard"
 )
 
 func main() {

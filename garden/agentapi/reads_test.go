@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dashimaki/garden/internal/runtimecore"
-	"github.com/dashimaki/laputa/actmem"
-	"github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/laputa/persona"
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
+	"github.com/ProjectViVy/laputa/laputa/actmem"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/persona"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 func TestReadPersonaExplicitWorldAndBinding(t *testing.T) {

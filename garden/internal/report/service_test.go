@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 	_ "modernc.org/sqlite"
 )
 

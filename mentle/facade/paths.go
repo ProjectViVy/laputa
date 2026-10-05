@@ -3,7 +3,7 @@ package facade
 import (
 	"fmt"
 
-	"github.com/dashimaki/mentle/internal/config"
+	"github.com/ProjectViVy/laputa/mentle/internal/config"
 )
 
 // ResolveLegacyPaths resolves the palace and model paths using the legacy

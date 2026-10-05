@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dashimaki/mentle/storage/sqlite"
+	"github.com/ProjectViVy/laputa/mentle/storage/sqlite"
 )
 
 func TestLexicalOnlyOpensExistingCanonicalWithoutModelOrDerivedWrites(t *testing.T) {

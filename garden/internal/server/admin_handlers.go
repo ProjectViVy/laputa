@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/dashimaki/garden/agentapi"
-	"github.com/dashimaki/garden/internal/recall"
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/garden/agentapi"
+	"github.com/ProjectViVy/laputa/garden/internal/recall"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 func (s *Server) indexHealth(ctx context.Context, principal Principal) (facade.IndexHealth, error) {

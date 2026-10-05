@@ -3,7 +3,7 @@ package memory_test
 import (
 	"testing"
 
-	"github.com/dashimaki/garden/memory/memorytest"
+	"github.com/ProjectViVy/laputa/garden/memory/memorytest"
 )
 
 // The reference fake must satisfy the same conformance suite as real

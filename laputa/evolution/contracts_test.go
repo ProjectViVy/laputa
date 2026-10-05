@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/laputa/evolution/testkit"
-	"github.com/dashimaki/laputa/persona"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/evolution/testkit"
+	"github.com/ProjectViVy/laputa/laputa/persona"
 )
 
 // Shared contracts 2-5 wire fixtures. Decoders are strict: unknown fields,

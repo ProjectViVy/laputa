@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 func TestBootstrapWireRoundTrip(t *testing.T) {

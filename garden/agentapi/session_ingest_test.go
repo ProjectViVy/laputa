@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/dashimaki/garden/internal/runtimecore"
+	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
 )
 
 func TestSubmitSessionPreservesLegacyPayloadAndRoles(t *testing.T) {

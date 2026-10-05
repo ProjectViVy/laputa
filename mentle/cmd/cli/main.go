@@ -7,14 +7,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dashimaki/mentle/facade"
-	"github.com/dashimaki/mentle/internal/config"
-	"github.com/dashimaki/mentle/internal/embedder"
-	"github.com/dashimaki/mentle/internal/layers"
-	"github.com/dashimaki/mentle/internal/miner"
-	"github.com/dashimaki/mentle/internal/room"
-	"github.com/dashimaki/mentle/internal/search"
-	govector "github.com/dashimaki/mentle/storage/govector"
+	"github.com/ProjectViVy/laputa/mentle/facade"
+	"github.com/ProjectViVy/laputa/mentle/internal/config"
+	"github.com/ProjectViVy/laputa/mentle/internal/embedder"
+	"github.com/ProjectViVy/laputa/mentle/internal/layers"
+	"github.com/ProjectViVy/laputa/mentle/internal/miner"
+	"github.com/ProjectViVy/laputa/mentle/internal/room"
+	"github.com/ProjectViVy/laputa/mentle/internal/search"
+	govector "github.com/ProjectViVy/laputa/mentle/storage/govector"
 	"github.com/spf13/cobra"
 )
 

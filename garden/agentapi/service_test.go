@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dashimaki/garden/internal/ingest"
-	"github.com/dashimaki/garden/internal/personactx"
-	"github.com/dashimaki/garden/internal/recall"
-	"github.com/dashimaki/garden/internal/runtimecore"
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/garden/internal/ingest"
+	"github.com/ProjectViVy/laputa/garden/internal/personactx"
+	"github.com/ProjectViVy/laputa/garden/internal/recall"
+	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 type frozenFixture struct{}

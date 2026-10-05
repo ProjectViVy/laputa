@@ -11,10 +11,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/dashimaki/laputa/actmem"
-	laputaevolution "github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/laputa/evolution/diva"
-	"github.com/dashimaki/laputa/persona"
+	"github.com/ProjectViVy/laputa/laputa/actmem"
+	laputaevolution "github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/evolution/diva"
+	"github.com/ProjectViVy/laputa/laputa/persona"
 )
 
 type stageModel struct {

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 func openTestService(t *testing.T, items []facade.Memory) *Service {

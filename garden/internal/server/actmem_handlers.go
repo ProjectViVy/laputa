@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dashimaki/laputa/actmem"
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/actmem"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 // actmemCallerScope derives the trusted scope for HTTP principals from the

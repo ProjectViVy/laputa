@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dashimaki/garden/internal/evolution"
-	"github.com/dashimaki/garden/internal/evolution/hubtest"
+	"github.com/ProjectViVy/laputa/garden/internal/evolution"
+	"github.com/ProjectViVy/laputa/garden/internal/evolution/hubtest"
 )
 
 func evomapTestServer(t *testing.T, hub *hubtest.MockHub) (*Server, *evolution.Store) {

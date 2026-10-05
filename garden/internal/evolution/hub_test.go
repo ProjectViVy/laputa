@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dashimaki/garden/internal/evolution/hubtest"
+	"github.com/ProjectViVy/laputa/garden/internal/evolution/hubtest"
 )
 
 func newTestClient(t *testing.T, hub *hubtest.MockHub) *HubClient {

@@ -1,7 +1,7 @@
 package actmem
 
 import (
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 // Scope visibility (spec section 4): a caller's admitted union is the

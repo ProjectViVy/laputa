@@ -13,16 +13,16 @@ import (
 	"sync"
 	"time"
 
-	mentlebackends "github.com/dashimaki/garden/backends/mentle"
-	"github.com/dashimaki/garden/internal/activity"
-	"github.com/dashimaki/garden/internal/ingest"
-	"github.com/dashimaki/garden/internal/personactx"
-	"github.com/dashimaki/garden/internal/recall"
-	"github.com/dashimaki/garden/memory"
-	"github.com/dashimaki/laputa/actmem"
-	"github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/laputa/persona"
-	"github.com/dashimaki/mentle/facade"
+	mentlebackends "github.com/ProjectViVy/laputa/garden/backends/mentle"
+	"github.com/ProjectViVy/laputa/garden/internal/activity"
+	"github.com/ProjectViVy/laputa/garden/internal/ingest"
+	"github.com/ProjectViVy/laputa/garden/internal/personactx"
+	"github.com/ProjectViVy/laputa/garden/internal/recall"
+	"github.com/ProjectViVy/laputa/garden/memory"
+	"github.com/ProjectViVy/laputa/laputa/actmem"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/persona"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 // Config names every filesystem dependency. Empty, relative and home-expansion

@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dashimaki/garden/agentapi"
-	"github.com/dashimaki/garden/internal/server"
-	"github.com/dashimaki/laputa/persona"
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/garden/agentapi"
+	"github.com/ProjectViVy/laputa/garden/internal/server"
+	"github.com/ProjectViVy/laputa/laputa/persona"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 func TestRuntimeConfigNormalizesLegacyRelativePaths(t *testing.T) {

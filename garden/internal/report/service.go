@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dashimaki/garden/internal/sqliteconn"
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/garden/internal/sqliteconn"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 var ErrNotFound = errors.New("report not found")

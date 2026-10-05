@@ -5,13 +5,13 @@ Unified CLI / HTTP application and importable Garden domain entry for Laputa gov
 ## Module
 
 ```
-github.com/dashimaki/garden
+github.com/ProjectViVy/laputa/garden
 ```
 
 Depends on sibling modules via `go.mod` replace:
 
-- `../laputa` → `github.com/dashimaki/laputa/governance`
-- `../mentle` → `github.com/dashimaki/mentle/facade`
+- `../laputa` → `github.com/ProjectViVy/laputa/laputa/governance`
+- `../mentle` → `github.com/ProjectViVy/laputa/mentle/facade`
 
 ## HTTP API (v2)
 
@@ -55,7 +55,7 @@ made. See [ADR-0016](../docs/architecture/0016-laputa-embeddable-modular-monolit
 
 ## In-process Go host
 
-Import `github.com/dashimaki/garden/agentapi`, not `garden/internal/*` or the
+Import `github.com/ProjectViVy/laputa/garden/agentapi`, not `garden/internal/*` or the
 HTTP server. `agentapi.Open` fixes absolute storage/model paths and trusted
 profile/principal/agent/platform; `BindSession` supplies only the host session
 ID. `Bootstrap`/`FastRecall` expose bounded Frozen Core, explicit reads use

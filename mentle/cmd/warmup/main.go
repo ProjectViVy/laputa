@@ -7,8 +7,9 @@
 //   - onnx/model.onnx is fetched and the ORT session is built
 //
 // Usage:
-//   go run ./cmd/warmup            # default model
-//   go run ./cmd/warmup -model X   # custom HF repo id
+//
+//	go run ./cmd/warmup            # default model
+//	go run ./cmd/warmup -model X   # custom HF repo id
 package main
 
 import (
@@ -19,7 +20,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/dashimaki/mentle/internal/embedder"
+	"github.com/ProjectViVy/laputa/mentle/internal/embedder"
 )
 
 func main() {

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dashimaki/mentle/internal/embedder"
-	"github.com/dashimaki/mentle/storage/sqlite"
+	"github.com/ProjectViVy/laputa/mentle/internal/embedder"
+	"github.com/ProjectViVy/laputa/mentle/storage/sqlite"
 	"github.com/google/uuid"
 )
 

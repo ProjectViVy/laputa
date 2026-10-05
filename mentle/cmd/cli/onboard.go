@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dashimaki/mentle/internal/config"
-	"github.com/dashimaki/mentle/internal/registry"
+	"github.com/ProjectViVy/laputa/mentle/internal/config"
+	"github.com/ProjectViVy/laputa/mentle/internal/registry"
 	"github.com/spf13/cobra"
 )
 

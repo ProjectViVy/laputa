@@ -1,6 +1,6 @@
 package facade
 
-import govector "github.com/dashimaki/mentle/storage/govector"
+import govector "github.com/ProjectViVy/laputa/mentle/storage/govector"
 
 // unavailableVectorStore is an inert diagnostic adapter for lexical-only
 // services. It makes the existing IndexHealth vector probe report unavailable
