@@ -86,6 +86,63 @@ func TestStoreDoesNotDriftAcrossRestart(t *testing.T) {
 	}
 }
 
+func TestStoreDiscardSessionIsIdempotent(t *testing.T) {
+	path := t.TempDir() + "\\garden.db"
+	reader := fakeReader{documents: map[persona.Kind]*persona.Document{
+		persona.KindIdentity:     {Content: "first", Revision: 1},
+		persona.KindRelationship: &persona.Document{}, persona.KindRedline: &persona.Document{}, persona.KindUser: &persona.Document{}, persona.KindDream: &persona.Document{}, persona.KindDark: &persona.Document{},
+	}}
+	store, err := OpenStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	if _, err := store.Capture(ctx, "session-loser", reader); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Get(ctx, "session-loser"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DiscardSession(ctx, "session-loser"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Get(ctx, "session-loser"); err == nil {
+		t.Fatal("discarded session still readable")
+	}
+	if err := store.DiscardSession(ctx, "session-loser"); err != nil {
+		t.Fatalf("second discard = %v, want nil", err)
+	}
+	if err := store.DiscardSession(ctx, ""); err == nil {
+		t.Fatal("empty session_id accepted")
+	}
+}
+
+func TestStoreListFrozenSessionsFiltersByCaptureTime(t *testing.T) {
+	path := t.TempDir() + "\\garden.db"
+	reader := fakeReader{documents: map[persona.Kind]*persona.Document{
+		persona.KindIdentity:     {Content: "doc", Revision: 1},
+		persona.KindRelationship: &persona.Document{}, persona.KindRedline: &persona.Document{}, persona.KindUser: &persona.Document{}, persona.KindDream: &persona.Document{}, persona.KindDark: &persona.Document{},
+	}}
+	store, err := OpenStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	for _, id := range []string{"session-a", "session-b"} {
+		if _, err := store.Capture(ctx, id, reader); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if ids, err := store.ListFrozenSessions(ctx, time.Now().Add(time.Hour)); err != nil || len(ids) != 2 {
+		t.Fatalf("future cutoff = %v %v", ids, err)
+	}
+	if ids, err := store.ListFrozenSessions(ctx, time.Now().Add(-time.Hour)); err != nil || len(ids) != 0 {
+		t.Fatalf("past cutoff = %v %v", ids, err)
+	}
+}
+
 func repeat(value string, count int) string {
 	result := ""
 	for i := 0; i < count; i++ {

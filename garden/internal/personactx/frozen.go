@@ -293,6 +293,45 @@ func (s *Store) load(ctx context.Context, sessionID string) (FrozenCore, error) 
 	return core, nil
 }
 
+// DiscardSession deletes the admitted snapshot for one session. It is the
+// host's cleanup seam for provisional captures whose owning admission lost or
+// was never committed; deletion is idempotent — a missing row returns nil,
+// never ErrSessionNotFound.
+func (s *Store) DiscardSession(ctx context.Context, sessionID string) error {
+	if s == nil || s.db == nil {
+		return errors.New("personactx: store is unavailable")
+	}
+	if strings.TrimSpace(sessionID) == "" {
+		return errors.New("personactx: session_id is required")
+	}
+	_, err := s.db.ExecContext(ctx, `DELETE FROM frozen_core_sessions WHERE session_id=?`, sessionID)
+	return err
+}
+
+// ListFrozenSessions returns the session IDs whose snapshot was captured
+// before capturedBefore, oldest first. It exists so a host startup sweep can
+// enumerate orphan candidates and apply its own keep-predicate; the store
+// never decides which rows are orphans.
+func (s *Store) ListFrozenSessions(ctx context.Context, capturedBefore time.Time) ([]string, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("personactx: store is unavailable")
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT session_id FROM frozen_core_sessions WHERE captured_at < ? ORDER BY captured_at ASC`, capturedBefore.UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 func (s *Store) Close() error {
 	if s == nil || s.db == nil {
 		return nil
