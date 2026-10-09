@@ -83,10 +83,14 @@ type ResultPage = gardenevol.ResultPage
 // same owner: a fixed scope/destination Domain, the ingest high watermark and
 // the authority Mission revision.
 type EvolutionPorts struct {
-	Domain          evolution.Domain
-	SourceID        string
-	HighWatermark   func(context.Context) (uint64, error)
-	MissionRevision func(context.Context) (uint64, error)
+	Domain evolution.Domain
+	// ApplyAtMissionRevision holds the owner Mission read gate across revision
+	// validation and effect application. Human Mission writes take the paired
+	// exclusive gate, closing the check/apply race for an admitted run.
+	ApplyAtMissionRevision func(context.Context, uint64, evolution.Effect) (evolution.EffectReceipt, error)
+	SourceID               string
+	HighWatermark          func(context.Context) (uint64, error)
+	MissionRevision        func(context.Context) (uint64, error)
 }
 
 // handle is private per-capability state: the trusted binding, the reduced
@@ -264,6 +268,39 @@ func (g *guardedDomain) Apply(ctx context.Context, e evolution.Effect) (evolutio
 	return g.domain.Apply(ctx, e)
 }
 
+// ApplyAtMissionRevision validates and applies under the same owner gate used
+// by every human Mission write, making the pin check atomic with the effect.
+func (g *guardedDomain) ApplyAtMissionRevision(ctx context.Context, expected uint64, e evolution.Effect) (evolution.EffectReceipt, error) {
+	if g == nil || g.client == nil {
+		return evolution.EffectReceipt{}, failure("unavailable", "Garden runtime unavailable")
+	}
+	// Always take the owner lifecycle lock before the Mission gate. Human
+	// writes use the same order; Close therefore cannot create a lock cycle.
+	g.client.mu.RLock()
+	defer g.client.mu.RUnlock()
+	if g.client.runtime == nil {
+		return evolution.EffectReceipt{}, failure("unavailable", "Garden runtime unavailable")
+	}
+	g.client.missionMu.RLock()
+	defer g.client.missionMu.RUnlock()
+	var current uint64
+	if g.client.runtime.Persona != nil {
+		doc, err := g.client.runtime.Persona.GetDocument(persona.KindMission)
+		if errors.Is(err, persona.ErrUninitialized) {
+			err = nil
+		} else if err == nil {
+			current = doc.Revision
+		}
+		if err != nil {
+			return evolution.EffectReceipt{}, err
+		}
+	}
+	if err := (evolution.RunBinding{MissionRevision: expected}).CheckMissionRevision(current); err != nil {
+		return evolution.EffectReceipt{}, err
+	}
+	return g.domain.Apply(ctx, e)
+}
+
 func (g *guardedDomain) Lookup(ctx context.Context, operationID string) (evolution.EffectReceipt, error) {
 	if err := g.live(); err != nil {
 		return evolution.EffectReceipt{}, err
@@ -307,9 +344,11 @@ func (c *Client) BindEvolution(scope evolution.Scope, destinationID string) (Evo
 	if err != nil {
 		return EvolutionPorts{}, failure("unavailable", "evolution domain unavailable: "+err.Error())
 	}
+	guarded := &guardedDomain{client: c, domain: domain}
 	return EvolutionPorts{
-		Domain:   &guardedDomain{client: c, domain: domain},
-		SourceID: fmt.Sprintf("%s/%s/%s", c.runtime.ProfileID, memory.EncodeScope(scope), destinationID),
+		Domain:                 guarded,
+		ApplyAtMissionRevision: guarded.ApplyAtMissionRevision,
+		SourceID:               fmt.Sprintf("%s/%s/%s", c.runtime.ProfileID, memory.EncodeScope(scope), destinationID),
 		HighWatermark: func(ctx context.Context) (uint64, error) {
 			c.mu.RLock()
 			defer c.mu.RUnlock()
@@ -478,6 +517,8 @@ func (h *HumanClient) InitializePersona(ctx context.Context, in persona.Initiali
 	if s.runtime.Persona == nil {
 		return nil, failure("unavailable", "persona unavailable")
 	}
+	h.client.missionMu.Lock()
+	defer h.client.missionMu.Unlock()
 	return s.runtime.Persona.Initialize(in, "user", persona.SourceInit, reason)
 }
 
@@ -497,6 +538,10 @@ func (h *HumanClient) SavePersona(ctx context.Context, kind persona.Kind, conten
 	}
 	if s.runtime.Persona == nil {
 		return nil, failure("unavailable", "persona unavailable")
+	}
+	if kind == persona.KindMission {
+		h.client.missionMu.Lock()
+		defer h.client.missionMu.Unlock()
 	}
 	out, err := s.runtime.Persona.SaveUserDocument(kind, content, baseRevision, "user", persona.SourceUserDirect, reason)
 	if err != nil {
@@ -563,6 +608,8 @@ func (h *HumanClient) DecidePersonaReview(ctx context.Context, id string, decisi
 	if s.runtime.Persona == nil {
 		return nil, failure("unavailable", "persona unavailable")
 	}
+	h.client.missionMu.Lock()
+	defer h.client.missionMu.Unlock()
 	switch decision {
 	case ReviewAccept:
 		return s.runtime.Persona.AcceptRequest(id)

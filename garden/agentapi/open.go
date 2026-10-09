@@ -41,6 +41,7 @@ type Config struct {
 // Client owns a domain runtime without opening a listener or exporting storage handles.
 type Client struct {
 	mu            sync.RWMutex
+	missionMu     sync.RWMutex
 	runtime       *runtimecore.Garden
 	principal     Principal
 	identity      Binding

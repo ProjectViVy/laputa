@@ -7,13 +7,117 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/ProjectViVy/laputa/garden/memory"
 	"github.com/ProjectViVy/laputa/garden/memory/memorytest"
 	"github.com/ProjectViVy/laputa/laputa/evolution"
 	"github.com/ProjectViVy/laputa/laputa/persona"
 )
+
+type blockingEvolutionDomain struct {
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (d *blockingEvolutionDomain) Collect(context.Context, evolution.Window) (evolution.EvidenceBatch, error) {
+	return evolution.EvidenceBatch{}, nil
+}
+
+func (d *blockingEvolutionDomain) Apply(context.Context, evolution.Effect) (evolution.EffectReceipt, error) {
+	d.once.Do(func() { close(d.entered) })
+	<-d.release
+	return evolution.EffectReceipt{Status: evolution.StatusApplied}, nil
+}
+
+func (d *blockingEvolutionDomain) Lookup(context.Context, string) (evolution.EffectReceipt, error) {
+	return evolution.EffectReceipt{}, nil
+}
+
+func TestMissionGuardSerializesOwnerWriteWithEffectApply(t *testing.T) {
+	cfg := userEmbeddedConfig(t)
+	initAuthority(t, cfg)
+	client, err := Open(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	human, err := client.BindHumanSession("s1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mission, err := human.ReadPersona(context.Background(), persona.KindMission.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	domain := &blockingEvolutionDomain{entered: make(chan struct{}), release: make(chan struct{})}
+	guard := &guardedDomain{client: client, domain: domain}
+	effect := mustEffect(t, "op-1", evolution.KindReflectionNote, &evolution.ReflectionNotePayload{Body: "note"}, evolution.Scope{SubjectID: cfg.ProfileID, Kind: evolution.ScopePersonal}, "mentle")
+	applyDone := make(chan error, 1)
+	go func() {
+		_, applyErr := guard.ApplyAtMissionRevision(context.Background(), mission.Revision, effect)
+		applyDone <- applyErr
+	}()
+	<-domain.entered
+
+	if client.missionMu.TryLock() {
+		client.missionMu.Unlock()
+		t.Fatal("effect application did not retain the shared Mission read gate")
+	}
+	writeStarted := make(chan struct{})
+	writeDone := make(chan error, 1)
+	go func() {
+		close(writeStarted)
+		_, saveErr := human.SavePersona(context.Background(), persona.KindMission, "updated mission", mission.Revision, "edit")
+		writeDone <- saveErr
+	}()
+	<-writeStarted
+	select {
+	case err := <-writeDone:
+		t.Fatalf("Mission write crossed an in-flight effect application: %v", err)
+	case <-time.After(25 * time.Millisecond):
+	}
+	close(domain.release)
+	if err := <-applyDone; err != nil {
+		t.Fatalf("guarded effect apply: %v", err)
+	}
+	if err := <-writeDone; err != nil {
+		t.Fatalf("Mission write after effect: %v", err)
+	}
+}
+
+func TestMissionGuardRejectsStaleRevisionBeforeApply(t *testing.T) {
+	cfg := userEmbeddedConfig(t)
+	initAuthority(t, cfg)
+	client, err := Open(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	human, err := client.BindHumanSession("s1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mission, err := human.ReadPersona(context.Background(), persona.KindMission.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	domain := &blockingEvolutionDomain{entered: make(chan struct{}), release: make(chan struct{})}
+	guard := &guardedDomain{client: client, domain: domain}
+	effect := mustEffect(t, "op-stale", evolution.KindReflectionNote, &evolution.ReflectionNotePayload{Body: "note"}, evolution.Scope{SubjectID: cfg.ProfileID, Kind: evolution.ScopePersonal}, "mentle")
+	_, err = guard.ApplyAtMissionRevision(context.Background(), mission.Revision+1, effect)
+	if evolution.CodeOf(err) != evolution.ErrMissionRevisionChanged {
+		t.Fatalf("stale revision error = %v", err)
+	}
+	select {
+	case <-domain.entered:
+		t.Fatal("stale Mission reached effect application")
+	default:
+	}
+}
 
 func userEmbeddedConfig(t *testing.T) Config {
 	t.Helper()
