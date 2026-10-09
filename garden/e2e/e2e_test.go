@@ -48,7 +48,14 @@ func TestGardenCleanBreakEndToEnd(t *testing.T) {
 	if err := os.MkdirAll(mentleConfig, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	configJSON := fmt.Sprintf(`{"palace_path":%q}`, filepath.Join(tempDir, "palace"))
+	modelsDir, err := filepath.Abs(filepath.Join("..", "..", "mentle", "models"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(modelsDir, "onnx", "model.onnx")); err != nil {
+		t.Fatal(err)
+	}
+	configJSON := fmt.Sprintf(`{"palace_path":%q,"models_dir":%q}`, filepath.Join(tempDir, "palace"), modelsDir)
 	if err := os.WriteFile(filepath.Join(mentleConfig, "config.json"), []byte(configJSON), 0o600); err != nil {
 		t.Fatal(err)
 	}

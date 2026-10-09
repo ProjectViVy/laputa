@@ -2,6 +2,7 @@ package integration
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -21,16 +22,33 @@ type MCPClient struct {
 }
 
 func NewMCPClient(t *testing.T) *MCPClient {
-	execPath, _ := filepath.Abs("../mempalace-test")
+	t.Helper()
+	root := t.TempDir()
+	execPath := filepath.Join(root, "mempalace-test")
+	models, err := filepath.Abs("../models")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(models, "onnx", "model.onnx")); err != nil {
+		t.Fatal(err)
+	}
+	config, err := json.Marshal(map[string]string{"palace_path": filepath.Join(root, "palace"), "models_dir": models})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "config.json"), config, 0600); err != nil {
+		t.Fatal(err)
+	}
 
 	cmd := exec.Command("go", "build", "-buildvcs=false", "-o", execPath, ".")
 	cmd.Dir = ".."
 	if err := cmd.Run(); err != nil {
-		t.Skipf("skipping MCP test: failed to build binary: %v", err)
+		t.Fatalf("failed to build MCP binary: %v", err)
 	}
 
-	cmd = exec.Command(execPath, "server")
-	cmd.Env = append(os.Environ(), "MEMPALACE_HOME=/tmp/mempalace-test")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
+	cmd = exec.CommandContext(ctx, execPath, "server", "--config-dir", root)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -43,7 +61,7 @@ func NewMCPClient(t *testing.T) *MCPClient {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		t.Skipf("skipping MCP test: failed to start server: %v", err)
+		t.Fatalf("failed to start MCP server: %v", err)
 	}
 
 	return &MCPClient{
@@ -93,7 +111,6 @@ func (c *MCPClient) close() {
 		c.cmd.Wait()
 	}
 
-	exec.Command("bash", "-c", "pkill -9 -f 'mxbai.*--server' 2>/dev/null; pkill -9 -f 'Qwen.*--server' 2>/dev/null; true").Run()
 }
 
 func (c *MCPClient) initialize() bool {
@@ -123,12 +140,12 @@ func TestMCPProtocolLineFraming(t *testing.T) {
 	defer client.close()
 
 	if !client.initialize() {
-		t.Skip("Server not responding to initialize")
+		t.Fatal("Server not responding to initialize")
 	}
 
 	resp := client.send("tools/list", nil, 2)
 	if resp == nil {
-		t.Skip("Server not responding")
+		t.Fatal("Server not responding")
 	}
 
 	respJSON, _ := json.Marshal(resp)
@@ -142,12 +159,12 @@ func TestMCPToolsList(t *testing.T) {
 	defer client.close()
 
 	if !client.initialize() {
-		t.Skip("Server not responding to initialize")
+		t.Fatal("Server not responding to initialize")
 	}
 
 	resp := client.send("tools/list", nil, 2)
 	if resp == nil {
-		t.Skip("Server not responding")
+		t.Fatal("Server not responding")
 	}
 
 	if resp["jsonrpc"] != "2.0" {
@@ -172,12 +189,12 @@ func TestMCPErrorCodes(t *testing.T) {
 	defer client.close()
 
 	if !client.initialize() {
-		t.Skip("Server not responding to initialize")
+		t.Fatal("Server not responding to initialize")
 	}
 
 	resp := client.send("nonexistent_method", nil, 2)
 	if resp == nil {
-		t.Skip("Server not responding")
+		t.Fatal("Server not responding")
 	}
 
 	errObj, ok := resp["error"].(map[string]any)
@@ -205,13 +222,13 @@ func TestMCPResponseContainsID(t *testing.T) {
 	defer client.close()
 
 	if !client.initialize() {
-		t.Skip("Server not responding to initialize")
+		t.Fatal("Server not responding to initialize")
 	}
 
 	testID := float64(42)
 	resp := client.send("tools/list", nil, testID)
 	if resp == nil {
-		t.Skip("Server not responding")
+		t.Fatal("Server not responding")
 	}
 
 	if resp["id"] != testID {
@@ -241,12 +258,12 @@ func TestMCPRequestOrder(t *testing.T) {
 	defer client.close()
 
 	if !client.initialize() {
-		t.Skip("Server not responding to initialize")
+		t.Fatal("Server not responding to initialize")
 	}
 
 	resp1 := client.send("tools/list", nil, 1)
 	if resp1 == nil {
-		t.Skip("Server not responding")
+		t.Fatal("Server not responding")
 	}
 	resp2 := client.send("tools/list", nil, 2)
 	resp3 := client.send("tools/list", nil, 3)
