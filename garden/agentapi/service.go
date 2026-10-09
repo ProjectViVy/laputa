@@ -153,3 +153,26 @@ func (s *Service) CaptureStatus(ctx context.Context, principal Principal, bindin
 	}
 	return CaptureStatus(status), nil
 }
+
+// LookupCapture returns the original durable acceptance for one trusted host
+// event. It cannot mutate content or transfer a receipt to another binding.
+func (s *Service) LookupCapture(ctx context.Context, principal Principal, binding Binding, provenance CaptureProvenance) (CaptureReceipt, bool, error) {
+	if err := s.check(binding, principal, OpCapture); err != nil {
+		return CaptureReceipt{}, false, err
+	}
+	if strings.TrimSpace(provenance.RunID) == "" || provenance.EventSeq == 0 {
+		return CaptureReceipt{}, false, failure("invalid_request", "run_id and event_seq are required")
+	}
+	if s.runtime.Ingest == nil {
+		return CaptureReceipt{}, false, failure("unavailable", "ingest unavailable")
+	}
+	event := eventPrefix(binding) + provenance.RunID + ":" + fmt.Sprint(provenance.EventSeq)
+	accepted, err := s.runtime.Ingest.AcceptedByEvent(ctx, binding.SessionID, event)
+	if errors.Is(err, ingest.ErrNotFound) {
+		return CaptureReceipt{}, false, nil
+	}
+	if err != nil {
+		return CaptureReceipt{}, false, failure("unavailable", "capture receipt unavailable")
+	}
+	return CaptureReceipt{IngestionID: accepted.IngestionID, SessionID: accepted.SessionID, EventID: accepted.EventID, Status: accepted.Status, Seq: accepted.Seq}, true, nil
+}

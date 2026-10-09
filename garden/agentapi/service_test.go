@@ -184,3 +184,33 @@ func TestCaptureTerminalIdempotentAndStatusAuthorized(t *testing.T) {
 	_, err = s.Capture(context.Background(), PrincipalAgent, req)
 	assertCode(t, err, "event_conflict")
 }
+
+func TestCaptureReceiptLookupUsesTrustedEventIdentity(t *testing.T) {
+	s := fixture(t)
+	ctx := context.Background()
+	content := "legacy acknowledgement"
+	h := sha256.Sum256([]byte(content))
+	req := CaptureRequest{Binding: binding(), Phase: CaptureCompleted, Content: content, ContentHash: "sha256:" + hex.EncodeToString(h[:]), Provenance: CaptureProvenance{RunID: "old-run", EventSeq: 7}}
+	receipt, err := s.Capture(ctx, PrincipalAgent, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lookup, ok := any(s).(interface {
+		LookupCapture(context.Context, Principal, Binding, CaptureProvenance) (CaptureReceipt, bool, error)
+	})
+	if !ok {
+		t.Fatal("capture receipt lookup unavailable for accepted event recovery")
+	}
+	got, found, err := lookup.LookupCapture(ctx, PrincipalAgent, req.Binding, req.Provenance)
+	if err != nil || !found || got.IngestionID != receipt.IngestionID || got.Seq != receipt.Seq {
+		t.Fatalf("receipt changed: %+v found=%v err=%v", got, found, err)
+	}
+	for _, b := range []Binding{func() Binding { b := binding(); b.SessionID = "other-session"; return b }(), func() Binding { b := binding(); b.AgentID = "other-agent"; return b }()} {
+		_, found, err := lookup.LookupCapture(ctx, PrincipalAgent, b, req.Provenance)
+		if err != nil || found {
+			t.Fatalf("foreign binding read receipt: found=%v err=%v", found, err)
+		}
+	}
+	_, _, err = lookup.LookupCapture(ctx, "", req.Binding, req.Provenance)
+	assertCode(t, err, "authentication_required")
+}

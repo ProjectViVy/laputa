@@ -211,3 +211,14 @@ func (b *BoundClient) CaptureStatus(ctx context.Context, ingestionID, eventID st
 	bound.EventID = eventID
 	return s.CaptureStatus(ctx, b.caller(), bound, ingestionID)
 }
+
+// LookupCapture derives authorization from this bound session, never payload
+// content or an externally supplied ingestion identifier.
+func (b *BoundClient) LookupCapture(ctx context.Context, provenance CaptureProvenance) (CaptureReceipt, bool, error) {
+	s, unlock, err := b.service()
+	if err != nil {
+		return CaptureReceipt{}, false, err
+	}
+	defer unlock()
+	return s.LookupCapture(ctx, b.caller(), b.binding, provenance)
+}

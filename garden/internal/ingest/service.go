@@ -394,3 +394,14 @@ func (s *Service) spool(ctx context.Context, id, session, event, content, hash s
 func (s *Service) fail(ctx context.Context, id string, err error) {
 	_, _ = s.db.ExecContext(ctx, `UPDATE ingestions SET status='failed',error=?,updated_at=? WHERE ingestion_id=?`, fmt.Sprint(err), time.Now().UTC().Format(time.RFC3339Nano), id)
 }
+
+// AcceptedByEvent rejoins an already committed acceptance without resubmitting
+// changed content. Callers must supply their trusted session/event identity.
+func (s *Service) AcceptedByEvent(ctx context.Context, sessionID, eventID string) (Accepted, error) {
+	var accepted Accepted
+	err := s.db.QueryRowContext(ctx, `SELECT rowid,ingestion_id,session_id,event_id,status FROM ingestions WHERE session_id=? AND event_id=?`, sessionID, eventID).Scan(&accepted.Seq, &accepted.IngestionID, &accepted.SessionID, &accepted.EventID, &accepted.Status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Accepted{}, ErrNotFound
+	}
+	return accepted, err
+}

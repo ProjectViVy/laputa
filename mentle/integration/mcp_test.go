@@ -49,6 +49,12 @@ func NewMCPClient(t *testing.T) *MCPClient {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
 	cmd = exec.CommandContext(ctx, execPath, "server", "--config-dir", root)
+	// A developer's configured production palace must never override the fixture.
+	for _, entry := range os.Environ() {
+		if !strings.HasPrefix(strings.ToUpper(entry), "MEMPALACE_") {
+			cmd.Env = append(cmd.Env, entry)
+		}
+	}
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -289,4 +295,17 @@ func TestMCPInvalidJSON(t *testing.T) {
 	client.mu.Unlock()
 
 	time.Sleep(50 * time.Millisecond)
+}
+
+func TestMCPIgnoresInheritedPalaceOverrides(t *testing.T) {
+	foreign := filepath.Join(t.TempDir(), "foreign-palace")
+	t.Setenv("MEMPALACE_PALACE_PATH", foreign)
+	client := NewMCPClient(t)
+	defer client.close()
+	if !client.initialize() {
+		t.Fatal("server initialize failed")
+	}
+	if _, err := os.Stat(foreign); !os.IsNotExist(err) {
+		t.Fatalf("inherited foreign palace was touched: %v", err)
+	}
 }
