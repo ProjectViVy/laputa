@@ -264,7 +264,11 @@ func (s *Store) FoldSession(sessionKey string) ([]CapsuleSummary, error) {
 				remaining = append(remaining, e)
 			}
 		}
-		for _, chunk := range chunkFoldSources(sessionKey, remaining) {
+		chunks, err := chunkFoldSources(sessionKey, remaining)
+		if err != nil {
+			return nil, err
+		}
+		for _, chunk := range chunks {
 			name := foldCapsuleName(entriesOf(chunk))
 			path := filepath.Join(s.CapsulesDir(), name)
 			raw, readErr := os.ReadFile(path)
@@ -427,7 +431,12 @@ func foldCreatedAt(sources []evolution.ActmemEntry) (latest time.Time) {
 
 // chunkFoldSources greedily packs ordered sources into capsules under the
 // capsule cap, so a retry reproduces exactly the same chunking.
-func chunkFoldSources(sessionKey string, sources []evolution.ActmemEntry) [][]evolution.ActmemEntry {
+func chunkFoldSources(sessionKey string, sources []evolution.ActmemEntry) ([][]evolution.ActmemEntry, error) {
+	for _, source := range sources {
+		if len([]rune(renderFoldCapsule(sessionKey, []evolution.ActmemEntry{source}))) > ACTMEMCapsuleCap {
+			return nil, newError("actmem_cap_exceeded", "original entry metadata/body exceeds capsule capacity", nil)
+		}
+	}
 	var chunks [][]evolution.ActmemEntry
 	var current []evolution.ActmemEntry
 	for _, source := range sources {
@@ -442,7 +451,7 @@ func chunkFoldSources(sessionKey string, sources []evolution.ActmemEntry) [][]ev
 	if len(current) > 0 {
 		chunks = append(chunks, current)
 	}
-	return chunks
+	return chunks, nil
 }
 
 // renderFoldCapsule emits the capsule as strict YAML front matter (session,
@@ -456,7 +465,7 @@ func renderFoldCapsule(sessionKey string, sources []evolution.ActmemEntry) strin
 	fmt.Fprintf(&b, "fold_digest: %s\n", strconvQuote(foldDigest(sessionKey, sources)))
 	b.WriteString("entries:\n")
 	for _, e := range sources {
-		meta, _ := yaml.Marshal(map[string]evolution.ActmemEntryMeta{e.Meta.ID: e.Meta})
+		meta := marshalFoldMetadata(e.Meta)
 		for _, line := range strings.Split(strings.TrimRight(string(meta), "\n"), "\n") {
 			b.WriteString("  " + line + "\n")
 		}
@@ -466,6 +475,44 @@ func renderFoldCapsule(sessionKey string, sources []evolution.ActmemEntry) strin
 		fmt.Fprintf(&b, "<!-- actmem-entry:%s -->\n%s\n<!-- /actmem-entry:%s -->\n", e.Meta.ID, e.Body, e.Meta.ID)
 	}
 	return b.String()
+}
+
+// YAML flow values preserve the existing per-entry schema while avoiding
+// indentation overhead in bounded capsules. The outer entries mapping and
+// exact body/source fields remain unchanged; existing YAML readers suffice.
+func marshalFoldMetadata(meta evolution.ActmemEntryMeta) []byte {
+	var root yaml.Node
+	_ = root.Encode(map[string]evolution.ActmemEntryMeta{meta.ID: meta})
+	var compact func(*yaml.Node)
+	compact = func(node *yaml.Node) {
+		if node.Kind == yaml.MappingNode {
+			kept := node.Content[:0]
+			for i := 0; i < len(node.Content); i += 2 {
+				key, value := node.Content[i], node.Content[i+1]
+				// These values are optional zero fields in the existing schema. Omit
+				// only their zero encoding; decoding retains the identical metadata.
+				if (key.Value == "field" || key.Value == "workspace_id") && value.Kind == yaml.ScalarNode && value.Value == "" {
+					continue
+				}
+				if key.Value == "revision" && value.Kind == yaml.ScalarNode && value.Value == "0" {
+					continue
+				}
+				kept = append(kept, key, value)
+			}
+			node.Content = kept
+		}
+		if node.Kind == yaml.MappingNode || node.Kind == yaml.SequenceNode {
+			node.Style = yaml.FlowStyle
+		}
+		for _, child := range node.Content {
+			compact(child)
+		}
+	}
+	for i := 1; i < len(root.Content); i += 2 {
+		compact(root.Content[i])
+	}
+	raw, _ := yaml.Marshal(&root)
+	return raw
 }
 
 type foldCapsuleHeader struct {

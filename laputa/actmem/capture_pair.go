@@ -61,6 +61,19 @@ func prepareCaptured(entries []evolution.Entry) ([]evolution.Entry, error) {
 		if e.Section == evolution.SectionRecap {
 			cap = RecapItemCapChars
 		}
+		// Captured entries must remain archivable with their complete provenance.
+		// IDs and UTC timestamps have fixed native widths; digest width is fixed.
+		sizing := *e
+		sizing.ID = "e_" + strings.Repeat("0", 32)
+		sizing.OccurredAt = "2000-01-01T00:00:00.000Z"
+		sizing.Body = ""
+		overhead := len([]rune(renderFoldCapsule(e.SessionID, []evolution.ActmemEntry{storedFromEntry(sizing)})))
+		if available := ACTMEMCapsuleCap - overhead; available < cap {
+			cap = available
+		}
+		if cap <= 0 {
+			return nil, newError("actmem_cap_exceeded", "captured provenance leaves no capsule body capacity", nil)
+		}
 		e.Body = truncateChars(e.Body, cap)
 		if strings.TrimSpace(e.Body) == "" {
 			return nil, newError("actmem_invalid_edit", "capture body required", nil)
