@@ -215,6 +215,14 @@ func (s *Strategy) reconcile(ctx context.Context, raw json.RawMessage, operation
 		return marshal(doc)
 	}
 	doc.ReconcileReceipt = &receipt
+	switch receipt.Status {
+	case evolution.StatusUnknown:
+		doc.Stopped = true
+		doc.StopReason = "unknown_outcome"
+	case evolution.StatusRejected:
+		doc.Stopped = true
+		doc.StopReason = "rejected"
+	}
 	return marshal(doc)
 }
 
