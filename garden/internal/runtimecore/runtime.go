@@ -60,8 +60,11 @@ type Garden struct {
 	// Mentle adapters, keyed by scope/v1 encoding.
 	Backends map[string]memory.Backend
 
-	mu     sync.Mutex
-	closed bool
+	// Keep cache admission separate from Close's lifecycle lock: ingestion
+	// drains during Close and may still need its scope-bound adapter.
+	backendMu sync.Mutex
+	mu        sync.Mutex
+	closed    bool
 }
 
 func validate(cfg Config) error {
@@ -243,6 +246,8 @@ func (g *Garden) BackendFor(scope evolution.Scope) (memory.Backend, error) {
 		return nil, err
 	}
 	key := memory.EncodeScope(scope)
+	g.backendMu.Lock()
+	defer g.backendMu.Unlock()
 	if g.Backends == nil {
 		g.Backends = map[string]memory.Backend{}
 	}
