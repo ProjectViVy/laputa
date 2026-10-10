@@ -121,6 +121,7 @@ type Error struct {
 	Retryable   bool           `json:"retryable"`
 	RequestID   string         `json:"request_id"`
 	Details     map[string]any `json:"details"`
+	cause       error
 }
 
 func (e *Error) Error() string {
@@ -128,6 +129,13 @@ func (e *Error) Error() string {
 		return ""
 	}
 	return e.Message
+}
+
+func (e *Error) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.cause
 }
 
 // FrozenCore is the shared v2 envelope: schema_version, mission first of
