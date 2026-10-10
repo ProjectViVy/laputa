@@ -1,6 +1,8 @@
 package actmem
 
 import (
+	"unicode/utf8"
+
 	"github.com/dashimaki/laputa/evolution"
 )
 
@@ -43,6 +45,10 @@ func (s *Store) ReadScoped(caller evolution.Scope, req evolution.ReadRequest) (e
 	if !h.classified() {
 		return result, nil
 	}
+	budget := int(req.MaxChars)
+	if budget == 0 {
+		budget = evolution.ActmemReadCapChars
+	}
 	wanted := func(section evolution.EntrySection) bool {
 		if len(req.Sections) == 0 {
 			return true
@@ -57,6 +63,12 @@ func (s *Store) ReadScoped(caller evolution.Scope, req evolution.ReadRequest) (e
 	for _, entry := range h.entries() {
 		if !wanted(entry.Section) || !visibleTo(entry.Scope, caller) {
 			continue
+		}
+		budget -= utf8.RuneCountInString(entry.Body)
+		if budget < 0 {
+			// This DTO has no truncation flag. Preserve complete entry bodies
+			// or fail the bounded read; never present a prefix as old Work.
+			return evolution.ActivityResult{}, newError(string(evolution.ErrActmemCapExceeded), "scoped activity exceeds explicit read budget", nil)
 		}
 		result.Entries = append(result.Entries, entry)
 	}
