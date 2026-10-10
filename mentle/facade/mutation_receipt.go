@@ -276,12 +276,25 @@ func (s *Service) mutateUpdate(ctx context.Context, req MutationRequest) (Mutati
 		// not learn whether it exists elsewhere.
 		return MutationReceipt{}, ErrMutationNotFound
 	}
+	// A corrected body and its supplied provenance are one canonical
+	// revision. Omitted fields preserve prior metadata/source; provided
+	// metadata keys replace their old values without dropping other keys.
+	m.Metadata = nonNilMap(m.Metadata)
+	for key, value := range req.Metadata {
+		m.Metadata[key] = value
+	}
+	if len(req.Sources) > 0 {
+		m.Source = req.Sources[0]
+		if m.Source.Type == "" {
+			m.Source.Type = "agent"
+		}
+	}
 	now := time.Now().UTC()
 	tx, err := s.Catalog.db.BeginTx(ctx, nil)
 	if err != nil {
 		return MutationReceipt{}, err
 	}
-	result, err := tx.ExecContext(ctx, `UPDATE memories SET content=?,version=version+1,updated_at=? WHERE id=? AND version=? AND status='active'`, body, now.Format(time.RFC3339Nano), req.RecordID, req.ExpectedRevision)
+	result, err := tx.ExecContext(ctx, `UPDATE memories SET content=?,source_json=?,metadata_json=?,version=version+1,updated_at=? WHERE id=? AND version=? AND status='active'`, body, encode(m.Source), encode(m.Metadata), now.Format(time.RFC3339Nano), req.RecordID, req.ExpectedRevision)
 	if err != nil {
 		tx.Rollback()
 		return MutationReceipt{}, err

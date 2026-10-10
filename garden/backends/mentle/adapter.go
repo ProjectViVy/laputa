@@ -10,6 +10,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"net/url"
+	"strconv"
 
 	"github.com/dashimaki/garden/memory"
 	"github.com/dashimaki/laputa/evolution"
@@ -218,11 +220,26 @@ func (a *Adapter) Mutate(ctx context.Context, req memory.AuthorizedMutation) (me
 	if err := req.MatchesWriter(a.scope, a.destination); err != nil {
 		return memory.MutationReceipt{}, err
 	}
+	sources := make([]facade.MemorySource, 0, len(req.Sources))
+	for _, source := range req.Sources {
+		if !a.admit(source.Scope) {
+			return memory.MutationReceipt{}, &evolution.ContractError{Code: evolution.ErrAuthorityDenied, Message: "mutation source outside the admitted read union"}
+		}
+		locator := url.URL{Scheme: "garden-source", Host: "evidence", RawQuery: url.Values{
+			"source_id": {source.SourceID}, "record_id": {source.RecordID},
+			"scope": {memory.EncodeScope(source.Scope)},
+		}.Encode()}
+		sources = append(sources, facade.MemorySource{Type: source.SourceID, URI: locator.String(), Revision: strconv.FormatUint(source.Revision, 10)})
+	}
 	op := map[evolution.MutationOperation]string{
 		evolution.MutationCreate:    "create",
 		evolution.MutationUpdate:    "update",
 		evolution.MutationTombstone: "tombstone",
 	}[req.Operation]
+	metadata := map[string]any{"inference": string(req.Inference)}
+	if len(req.Sources) > 0 {
+		metadata["evolution_sources"] = append([]evolution.SourceRef(nil), req.Sources...)
+	}
 	receipt, err := a.svc.Mutate(ctx, facade.MutationRequest{
 		Scope:            memory.EncodeScope(req.Scope),
 		DestinationID:    req.DestinationID,
@@ -233,9 +250,12 @@ func (a *Adapter) Mutate(ctx context.Context, req memory.AuthorizedMutation) (me
 		ExpectedRevision: int(req.ExpectedRevision),
 		ExpectedAbsent:   req.ExpectedAbsent,
 		Body:             req.Body,
-		Metadata:         map[string]any{"inference": string(req.Inference)},
-		Actor:            "garden",
-		RequestID:        req.OperationID,
+		Sources:          sources,
+		// The native Source is the primary locator; retain the complete
+		// typed reference set in the same canonical row's metadata.
+		Metadata:  metadata,
+		Actor:     "garden",
+		RequestID: req.OperationID,
 	})
 	if err != nil {
 		return memory.MutationReceipt{}, mapFacadeError(err)
