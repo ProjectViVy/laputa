@@ -195,6 +195,29 @@ func TestMutationStatusBoundToScopeAndDestination(t *testing.T) {
 	}
 }
 
+func TestMutationStatusReportsReadyAfterOutboxCompletion(t *testing.T) {
+	ctx := context.Background()
+	svc := mutationService(t)
+	created, err := svc.Mutate(ctx, createReq("op-index-ready", receiptScopePersonal, "d1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := svc.Catalog.GetIndexJob(ctx, created.RecordID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job != nil {
+		t.Fatalf("successful mutation left index job pending: %+v", job)
+	}
+	receipt, err := svc.MutationStatus(ctx, "op-index-ready", receiptScopePersonal, receiptDest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.IndexStatus != "ready" {
+		t.Fatalf("completed outbox status = %q, want ready", receipt.IndexStatus)
+	}
+}
+
 func TestMutateValidatesRequest(t *testing.T) {
 	ctx := context.Background()
 	svc := mutationService(t)

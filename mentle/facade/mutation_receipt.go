@@ -179,15 +179,20 @@ func (s *Service) MutationStatus(ctx context.Context, operationID, scope, destin
 	receipt := r.receipt()
 	// Index readiness is observational, never part of canonical commit.
 	var state string
-	if err := s.Catalog.db.QueryRowContext(ctx, `SELECT state FROM index_jobs WHERE memory_id=?`, r.RecordID).Scan(&state); err == nil {
-		switch state {
-		case "done", "ready":
-			receipt.IndexStatus = "ready"
-		case "poisoned", "failed":
-			receipt.IndexStatus = "failed"
-		default:
-			receipt.IndexStatus = "pending"
-		}
+	err = s.Catalog.db.QueryRowContext(ctx, `SELECT state FROM index_jobs WHERE memory_id=?`, r.RecordID).Scan(&state)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		// Successful jobs are deleted from the outbox, so absence means the
+		// derived index has caught up with this canonical revision.
+		receipt.IndexStatus = "ready"
+	case err != nil:
+		return MutationReceipt{}, err
+	case state == "done" || state == "ready":
+		receipt.IndexStatus = "ready"
+	case state == "poisoned" || state == "failed":
+		receipt.IndexStatus = "failed"
+	default:
+		receipt.IndexStatus = "pending"
 	}
 	return receipt, nil
 }
