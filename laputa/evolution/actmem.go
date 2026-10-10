@@ -372,7 +372,6 @@ func (d ActmemDocument) Render() string {
 	b.WriteString("schema: " + ActmemSchemaV2 + "\n")
 	fmt.Fprintf(&b, "revision: %d\n", d.Revision)
 	b.WriteString("updated: " + strconv.Quote(d.Updated) + "\n")
-	b.WriteString("entries:\n")
 	ids := make([]string, 0)
 	index := map[string]ActmemEntryMeta{}
 	for _, entries := range d.Sections {
@@ -380,6 +379,11 @@ func (d ActmemDocument) Render() string {
 			ids = append(ids, e.Meta.ID)
 			index[e.Meta.ID] = e.Meta
 		}
+	}
+	if len(ids) == 0 {
+		b.WriteString("entries: {}\n")
+	} else {
+		b.WriteString("entries:\n")
 	}
 	sort.Strings(ids)
 	for _, id := range ids {

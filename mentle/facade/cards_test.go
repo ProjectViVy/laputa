@@ -2,6 +2,7 @@ package facade
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -160,6 +161,32 @@ func TestSearchCardsLimitAndDedup(t *testing.T) {
 			t.Fatalf("duplicate card ID: %s", card.ID)
 		}
 		seen[card.ID] = true
+	}
+}
+
+func TestSearchCardsPaginatesWithBoundedOffsetCursor(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+	for i, color := range []string{"red", "green", "blue"} {
+		_, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "cursorpaginationprobe " + color, Kind: "note"}, fmt.Sprintf("cursor-key-%d", i), fmt.Sprintf("cursor-hash-%d", i))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	first, err := svc.SearchCards(ctx, CardQuery{Text: "cursorpaginationprobe", Limit: 1})
+	if err != nil || len(first.Cards) != 1 || first.NextCursor == nil || *first.NextCursor == "" {
+		t.Fatalf("first page: %+v %v", first, err)
+	}
+	second, err := svc.SearchCards(ctx, CardQuery{Text: "cursorpaginationprobe", Limit: 1, Cursor: *first.NextCursor})
+	if err != nil || len(second.Cards) != 1 || second.Cards[0].ID == first.Cards[0].ID || second.NextCursor == nil || *second.NextCursor == "" {
+		t.Fatalf("second page: %+v %v", second, err)
+	}
+	third, err := svc.SearchCards(ctx, CardQuery{Text: "cursorpaginationprobe", Limit: 1, Cursor: *second.NextCursor})
+	if err != nil || len(third.Cards) != 1 || third.Cards[0].ID == first.Cards[0].ID || third.Cards[0].ID == second.Cards[0].ID || third.NextCursor != nil {
+		t.Fatalf("third page: %+v %v", third, err)
+	}
+	if _, err := svc.SearchCards(ctx, CardQuery{Text: "cursorpaginationprobe", Limit: 1, Cursor: "malformed"}); err == nil {
+		t.Fatal("malformed cursor was accepted")
 	}
 }
 

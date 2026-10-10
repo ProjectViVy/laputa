@@ -28,8 +28,12 @@ import (
 
 func runServer(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
+	configDir, err := cmd.Flags().GetString("config-dir")
+	if err != nil {
+		return err
+	}
 	svc := &facade.Service{}
-	if err := svc.Init(ctx, facade.Options{}); err != nil {
+	if err := svc.Init(ctx, facade.Options{ConfigDir: configDir}); err != nil {
 		return err
 	}
 	defer svc.Close()
@@ -52,6 +56,7 @@ func NewCommand() *cobra.Command {
 		Short: "Run the mempalace MCP server",
 		RunE:  runServer,
 	}
+	cmd.Flags().String("config-dir", "", "Directory containing config.json (palace and model paths)")
 	return cmd
 }
 

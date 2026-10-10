@@ -308,7 +308,14 @@ func (s *Searcher) RebuildBM25Index(ctx context.Context) error {
 func (s *Searcher) BM25Search(query string, limit int) []bm25.ScoredDoc {
 	s.bm25Mu.RLock()
 	defer s.bm25Mu.RUnlock()
-	return s.bm25.Search(query, limit)
+	docs := s.bm25.Search(query, limit)
+	sort.Slice(docs, func(i, j int) bool {
+		if docs[i].Score != docs[j].Score {
+			return docs[i].Score > docs[j].Score
+		}
+		return docs[i].ID < docs[j].ID
+	})
+	return docs
 }
 
 // BM25Count returns the number of documents in the disposable lexical index.
@@ -553,8 +560,17 @@ func (s *Searcher) fuseScores(
 	// Track all unique docs.
 	entries := make(map[string]*entry)
 
+	// Equal vector scores need a stable ID tie-break before their RRF ranks
+	// are assigned; otherwise a paged caller can see duplicates or gaps.
+	vectorRanked := append([]govector.SearchResult(nil), vectorResults...)
+	sort.Slice(vectorRanked, func(i, j int) bool {
+		if vectorRanked[i].Score != vectorRanked[j].Score {
+			return vectorRanked[i].Score > vectorRanked[j].Score
+		}
+		return vectorRanked[i].ID < vectorRanked[j].ID
+	})
 	// Add vector results.
-	for i, r := range vectorResults {
+	for i, r := range vectorRanked {
 		e := &entry{payload: r.Payload, vectorRank: i + 1, bm25Rank: 0}
 		entries[r.ID] = e
 	}
@@ -600,7 +616,10 @@ func (s *Searcher) fuseScores(
 
 	// Sort by final score.
 	sort.Slice(docs, func(i, j int) bool {
-		return docs[i].Score > docs[j].Score
+		if docs[i].Score != docs[j].Score {
+			return docs[i].Score > docs[j].Score
+		}
+		return docs[i].ID < docs[j].ID
 	})
 
 	if limit > 0 && len(docs) > limit {

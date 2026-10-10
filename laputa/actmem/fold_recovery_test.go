@@ -129,3 +129,62 @@ func TestFoldMismatchedCapsuleConflicts(t *testing.T) {
 		t.Fatal("conflict deleted head entries")
 	}
 }
+
+func TestFoldCapturedProvenanceRemainsReadable(t *testing.T) {
+	store := New(t.TempDir())
+	session := "sess_actual_synthetic_12345678"
+	scope := evolution.Scope{SubjectID: "profile", Kind: evolution.ScopePersonal}
+	sources := []evolution.SourceRef{{SourceID: "garden.ingest", RecordID: "1", Scope: scope}}
+	pair := []evolution.Entry{
+		{Section: evolution.SectionPulse, Scope: scope, SessionID: session, EventID: "agent/" + strings.Repeat("a", 90) + "/run_1234567890:7", Body: "Primary run completed", Sources: sources},
+		{Section: evolution.SectionRecap, Scope: scope, SessionID: session, EventID: "agent/" + strings.Repeat("a", 90) + "/run_1234567890:7", Body: strings.Repeat("x", RecapItemCapChars), Sources: sources},
+	}
+	before, err := store.AppendSnapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	captured, err := store.AppendCaptured(pair, before)
+	if err != nil {
+		t.Fatal(err)
+	}
+	summaries, err := store.FoldSession(session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, summary := range summaries {
+		if _, err := store.ReadCapsule(summary.Name); err != nil {
+			t.Fatalf("native writer produced unreadable capsule chars=%d: %v", summary.Chars, err)
+		}
+	}
+	recovered, found, err := store.LookupCaptured(pair)
+	if err != nil || !found {
+		t.Fatalf("fold lost original receipt: %v %v", found, err)
+	}
+	for i, entry := range recovered.Entries {
+		if entry.ID != captured.Entries[i].ID {
+			t.Fatal("archive replaced original ID")
+		}
+	}
+}
+
+func TestFoldOversizeMetadataRefusesBeforeRemovingSources(t *testing.T) {
+	store := New(t.TempDir())
+	_, err := store.AppendEntry(evolution.Entry{Section: evolution.SectionPulse, Scope: evolution.Scope{SubjectID: "profile", Kind: evolution.ScopePersonal}, SessionID: "oversize", EventID: strings.Repeat("x", 2000), Body: "keep this source"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.FoldSession("oversize"); err == nil {
+		t.Fatal("unreadable oversized capsule was accepted")
+	}
+	head, err := store.Read()
+	if err != nil || len(head.Entries()) != 1 {
+		t.Fatalf("failed fold removed original source: %v %v", head, err)
+	}
+	files, err := os.ReadDir(store.CapsulesDir())
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	if len(files) != 0 {
+		t.Fatal("failed fold wrote an invalid capsule")
+	}
+}

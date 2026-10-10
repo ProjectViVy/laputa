@@ -179,15 +179,20 @@ func (s *Service) MutationStatus(ctx context.Context, operationID, scope, destin
 	receipt := r.receipt()
 	// Index readiness is observational, never part of canonical commit.
 	var state string
-	if err := s.Catalog.db.QueryRowContext(ctx, `SELECT state FROM index_jobs WHERE memory_id=?`, r.RecordID).Scan(&state); err == nil {
-		switch state {
-		case "done", "ready":
-			receipt.IndexStatus = "ready"
-		case "poisoned", "failed":
-			receipt.IndexStatus = "failed"
-		default:
-			receipt.IndexStatus = "pending"
-		}
+	err = s.Catalog.db.QueryRowContext(ctx, `SELECT state FROM index_jobs WHERE memory_id=?`, r.RecordID).Scan(&state)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		// Successful jobs are deleted from the outbox, so absence means the
+		// derived index has caught up with this canonical revision.
+		receipt.IndexStatus = "ready"
+	case err != nil:
+		return MutationReceipt{}, err
+	case state == "done" || state == "ready":
+		receipt.IndexStatus = "ready"
+	case state == "poisoned" || state == "failed":
+		receipt.IndexStatus = "failed"
+	default:
+		receipt.IndexStatus = "pending"
 	}
 	return receipt, nil
 }
@@ -276,12 +281,25 @@ func (s *Service) mutateUpdate(ctx context.Context, req MutationRequest) (Mutati
 		// not learn whether it exists elsewhere.
 		return MutationReceipt{}, ErrMutationNotFound
 	}
+	// A corrected body and its supplied provenance are one canonical
+	// revision. Omitted fields preserve prior metadata/source; provided
+	// metadata keys replace their old values without dropping other keys.
+	m.Metadata = nonNilMap(m.Metadata)
+	for key, value := range req.Metadata {
+		m.Metadata[key] = value
+	}
+	if len(req.Sources) > 0 {
+		m.Source = req.Sources[0]
+		if m.Source.Type == "" {
+			m.Source.Type = "agent"
+		}
+	}
 	now := time.Now().UTC()
 	tx, err := s.Catalog.db.BeginTx(ctx, nil)
 	if err != nil {
 		return MutationReceipt{}, err
 	}
-	result, err := tx.ExecContext(ctx, `UPDATE memories SET content=?,version=version+1,updated_at=? WHERE id=? AND version=? AND status='active'`, body, now.Format(time.RFC3339Nano), req.RecordID, req.ExpectedRevision)
+	result, err := tx.ExecContext(ctx, `UPDATE memories SET content=?,source_json=?,metadata_json=?,version=version+1,updated_at=? WHERE id=? AND version=? AND status='active'`, body, encode(m.Source), encode(m.Metadata), now.Format(time.RFC3339Nano), req.RecordID, req.ExpectedRevision)
 	if err != nil {
 		tx.Rollback()
 		return MutationReceipt{}, err

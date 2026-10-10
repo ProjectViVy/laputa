@@ -2,8 +2,10 @@ package facade
 
 import (
 	"context"
+	"errors"
 	"math"
 	"sort"
+	"strconv"
 	"time"
 )
 
@@ -41,6 +43,9 @@ type CardPage struct {
 }
 
 const summaryBudget = 200
+const maxCardSearchResults = 1000
+
+var errInvalidCardCursor = errors.New("invalid memory card cursor")
 
 func (s *Service) SearchCards(ctx context.Context, q CardQuery) (CardPage, error) {
 	if s.Hybrid == nil {
@@ -55,6 +60,10 @@ func (s *Service) SearchCards(ctx context.Context, q CardQuery) (CardPage, error
 	if q.Limit > 100 {
 		q.Limit = 100
 	}
+	offset, err := parseCardSearchCursor(q.Cursor)
+	if err != nil {
+		return CardPage{}, err
+	}
 	allowed := map[string]bool{}
 	if len(q.Status) == 0 {
 		allowed["active"] = true
@@ -64,13 +73,17 @@ func (s *Service) SearchCards(ctx context.Context, q CardQuery) (CardPage, error
 		}
 	}
 
-	results, err := s.Hybrid.SearchScored(ctx, q.Text, "", "", q.Limit*4)
+	windowEnd := offset + q.Limit + 1
+	if windowEnd > maxCardSearchResults+1 {
+		windowEnd = maxCardSearchResults + 1
+	}
+	results, err := s.Hybrid.SearchScored(ctx, q.Text, "", "", windowEnd*4)
 	if err != nil {
 		return CardPage{}, err
 	}
 
 	now := time.Now()
-	cards := make([]MemoryCard, 0, q.Limit)
+	cards := make([]MemoryCard, 0, windowEnd)
 	seen := map[string]bool{}
 	for _, result := range results {
 		d := result.Drawer
@@ -97,12 +110,7 @@ func (s *Service) SearchCards(ctx context.Context, q CardQuery) (CardPage, error
 		if q.Scope != "" && memory.Scope != q.Scope {
 			continue
 		}
-		collection := ""
-		if v, ok := memory.Metadata["collection"].(string); ok {
-			collection = v
-		} else {
-			collection = d.Wing
-		}
+		collection := memory.Collection
 		if q.Collection != "" && collection != q.Collection {
 			continue
 		}
@@ -124,11 +132,30 @@ func (s *Service) SearchCards(ctx context.Context, q CardQuery) (CardPage, error
 			HeatScore:      heatScore(memory.UpdatedAt, now),
 			CandidateScore: math.Min(1, result.Score*60),
 		})
-		if len(cards) >= q.Limit {
+		if len(cards) >= windowEnd {
 			break
 		}
 	}
-	return CardPage{Cards: cards}, nil
+	start := min(offset, len(cards))
+	end := min(start+q.Limit, len(cards))
+	end = min(end, maxCardSearchResults)
+	page := CardPage{Cards: cards[start:end]}
+	if len(cards) > end && end < maxCardSearchResults {
+		next := strconv.Itoa(end)
+		page.NextCursor = &next
+	}
+	return page, nil
+}
+
+func parseCardSearchCursor(raw string) (int, error) {
+	if raw == "" {
+		return 0, nil
+	}
+	offset, err := strconv.Atoi(raw)
+	if err != nil || offset <= 0 || offset > maxCardSearchResults {
+		return 0, errInvalidCardCursor
+	}
+	return offset, nil
 }
 
 func cardTitle(m Memory) string {

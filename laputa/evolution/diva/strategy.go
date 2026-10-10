@@ -215,6 +215,14 @@ func (s *Strategy) reconcile(ctx context.Context, raw json.RawMessage, operation
 		return marshal(doc)
 	}
 	doc.ReconcileReceipt = &receipt
+	switch receipt.Status {
+	case evolution.StatusUnknown:
+		doc.Stopped = true
+		doc.StopReason = "unknown_outcome"
+	case evolution.StatusRejected:
+		doc.Stopped = true
+		doc.StopReason = "rejected"
+	}
 	return marshal(doc)
 }
 
@@ -251,6 +259,11 @@ func (s *Strategy) reflect(ctx context.Context, raw json.RawMessage) (json.RawMe
 	}
 	doc.Candidates = out.Candidates
 	doc.NoChangeReason = out.NoChangeReason
+	// Only the model consumes the evidence batch. Effects and finish use
+	// the admitted input, typed candidates and receipts; carrying the raw
+	// evidence beside a full memory candidate can exceed the packet bound.
+	// Candidate bodies and source references remain complete.
+	doc.Batch = nil
 	return marshal(doc)
 }
 

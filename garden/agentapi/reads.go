@@ -234,20 +234,26 @@ func (s *Service) ListCollections(ctx context.Context, principal Principal, bind
 }
 
 func materialError(err error) error {
+	var normalized *Error
 	if errors.Is(err, facade.ErrUnavailable) {
-		return failure("unavailable", "Mentle unavailable")
+		normalized = failure("unavailable", "Mentle unavailable")
+	} else {
+		switch evolution.CodeOf(err) {
+		case evolution.ErrEffectNotFound:
+			normalized = failure("not_found", "record or receipt not found")
+		case evolution.ErrRevisionConflict, evolution.ErrIdempotencyConflict:
+			normalized = failure("conflict", "record revision or payload conflict")
+		case evolution.ErrAuthorityDenied:
+			normalized = failure("principal_forbidden", "record outside the admitted scope union")
+		case evolution.ErrInvalidScope, evolution.ErrInvalidSchema:
+			normalized = failure("invalid_request", "invalid read request")
+		case evolution.ErrBackendUnavailable, evolution.ErrCapabilityUnavailable:
+			normalized = failure("unavailable", "memory backend unavailable")
+		}
 	}
-	switch evolution.CodeOf(err) {
-	case evolution.ErrEffectNotFound:
-		return failure("not_found", "record or receipt not found")
-	case evolution.ErrRevisionConflict, evolution.ErrIdempotencyConflict:
-		return failure("conflict", "record revision or payload conflict")
-	case evolution.ErrAuthorityDenied:
-		return failure("principal_forbidden", "record outside the admitted scope union")
-	case evolution.ErrInvalidScope, evolution.ErrInvalidSchema:
-		return failure("invalid_request", "invalid read request")
-	case evolution.ErrBackendUnavailable, evolution.ErrCapabilityUnavailable:
-		return failure("unavailable", "memory backend unavailable")
+	if normalized == nil {
+		normalized = failure("unavailable", "material read failed")
 	}
-	return failure("unavailable", "material read failed")
+	normalized.cause = err
+	return normalized
 }

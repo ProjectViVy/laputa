@@ -114,11 +114,20 @@ func (d *Domain) Collect(ctx context.Context, w laputaevolution.Window) (laputae
 		}
 	}
 	if d.deps.Actmem != nil {
-		doc, err := d.deps.Actmem.Read()
+		activity, err := d.deps.Actmem.ReadScoped(d.deps.Scope, laputaevolution.ReadRequest{
+			Sections: []laputaevolution.EntrySection{laputaevolution.SectionWork},
+			MaxChars: laputaevolution.ActmemReadCapChars,
+		})
 		if err != nil {
+			if actmem.CodeOf(err) == string(laputaevolution.ErrActmemCapExceeded) {
+				return laputaevolution.EvidenceBatch{}, &laputaevolution.ContractError{Code: laputaevolution.ErrActmemCapExceeded, Message: "existing scoped Work exceeds reconciliation read budget"}
+			}
 			return laputaevolution.EvidenceBatch{}, err
 		}
-		batch.ActivityRevision = doc.Revision
+		batch.ActivityRevision = activity.Revision
+		// Existing Work is explicit reconciliation context, not a new
+		// activity source or an automatically injected foreground prompt.
+		batch.Entries = append(batch.Entries, activity.Entries...)
 	}
 	if d.deps.Persona != nil {
 		views, err := d.authorityViews()

@@ -119,7 +119,11 @@ func (s *Service) Capture(ctx context.Context, principal Principal, req CaptureR
 	event := eventPrefix(req.Binding) + req.Provenance.RunID + ":" + fmt.Sprint(req.Provenance.EventSeq)
 	// The host phase is terminal provenance; ingest's session_end phase is its
 	// own ingestion lifecycle and must not be confused with the host phase.
-	accepted, err := s.runtime.Ingest.Submit(ctx, ingest.SubmitRequest{SessionID: req.Binding.SessionID, EventID: event, Phase: "session_end", Content: req.Content, ContentHash: req.ContentHash, Workspace: req.Binding.WorkspaceID, OccurredAt: req.OccurredAt})
+	var activity *ingest.CaptureActivity
+	if req.Activity != nil {
+		activity = &ingest.CaptureActivity{Phase: string(req.Phase), UserText: req.Activity.UserText}
+	}
+	accepted, err := s.runtime.Ingest.Submit(ctx, ingest.SubmitRequest{SessionID: req.Binding.SessionID, EventID: event, Phase: "session_end", Content: req.Content, ContentHash: req.ContentHash, Workspace: req.Binding.WorkspaceID, OccurredAt: req.OccurredAt, Activity: activity})
 	if errors.Is(err, ingest.ErrEventConflict) {
 		return CaptureReceipt{}, failure("event_conflict", err.Error())
 	}
@@ -152,4 +156,27 @@ func (s *Service) CaptureStatus(ctx context.Context, principal Principal, bindin
 		return CaptureStatus{}, failure("unavailable", "capture status unavailable")
 	}
 	return CaptureStatus(status), nil
+}
+
+// LookupCapture returns the original durable acceptance for one trusted host
+// event. It cannot mutate content or transfer a receipt to another binding.
+func (s *Service) LookupCapture(ctx context.Context, principal Principal, binding Binding, provenance CaptureProvenance) (CaptureReceipt, bool, error) {
+	if err := s.check(binding, principal, OpCapture); err != nil {
+		return CaptureReceipt{}, false, err
+	}
+	if strings.TrimSpace(provenance.RunID) == "" || provenance.EventSeq == 0 {
+		return CaptureReceipt{}, false, failure("invalid_request", "run_id and event_seq are required")
+	}
+	if s.runtime.Ingest == nil {
+		return CaptureReceipt{}, false, failure("unavailable", "ingest unavailable")
+	}
+	event := eventPrefix(binding) + provenance.RunID + ":" + fmt.Sprint(provenance.EventSeq)
+	accepted, err := s.runtime.Ingest.AcceptedByEvent(ctx, binding.SessionID, event)
+	if errors.Is(err, ingest.ErrNotFound) {
+		return CaptureReceipt{}, false, nil
+	}
+	if err != nil {
+		return CaptureReceipt{}, false, failure("unavailable", "capture receipt unavailable")
+	}
+	return CaptureReceipt{IngestionID: accepted.IngestionID, SessionID: accepted.SessionID, EventID: accepted.EventID, Status: accepted.Status, Seq: accepted.Seq}, true, nil
 }

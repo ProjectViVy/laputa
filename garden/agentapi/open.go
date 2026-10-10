@@ -40,7 +40,10 @@ type Config struct {
 
 // Client owns a domain runtime without opening a listener or exporting storage handles.
 type Client struct {
-	mu            sync.RWMutex
+	mu sync.RWMutex
+	// Serializes host authority writes with pinned effect checks/commits.
+	// Model inference never holds this bounded mutation gate.
+	authorityMu   sync.Mutex
 	runtime       *runtimecore.Garden
 	principal     Principal
 	identity      Binding
@@ -210,4 +213,32 @@ func (b *BoundClient) CaptureStatus(ctx context.Context, ingestionID, eventID st
 	bound := b.binding
 	bound.EventID = eventID
 	return s.CaptureStatus(ctx, b.caller(), bound, ingestionID)
+}
+
+// LookupCapture derives authorization from this bound session, never payload
+// content or an externally supplied ingestion identifier.
+func (b *BoundClient) LookupCapture(ctx context.Context, provenance CaptureProvenance) (CaptureReceipt, bool, error) {
+	s, unlock, err := b.service()
+	if err != nil {
+		return CaptureReceipt{}, false, err
+	}
+	defer unlock()
+	return s.LookupCapture(ctx, b.caller(), b.binding, provenance)
+}
+
+// ArchiveCapturedSession is an in-process host lifecycle boundary. The host
+// seals session producers and drains terminal delivery before calling it.
+func (b *BoundClient) ArchiveCapturedSession(ctx context.Context) error {
+	s, unlock, err := b.service()
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if err := s.check(b.binding, b.caller(), OpCapture); err != nil {
+		return err
+	}
+	if s.runtime.Ingest == nil {
+		return failure("unavailable", "ingest unavailable")
+	}
+	return s.runtime.Ingest.ArchiveSession(ctx, b.binding.SessionID)
 }

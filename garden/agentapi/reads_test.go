@@ -2,6 +2,8 @@ package agentapi
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,6 +14,23 @@ import (
 	"github.com/ProjectViVy/laputa/laputa/persona"
 	"github.com/ProjectViVy/laputa/mentle/facade"
 )
+
+func TestMaterialErrorPreservesCancellationCauseWithoutChangingWireMessage(t *testing.T) {
+	err := materialError(context.DeadlineExceeded)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("normalized material error lost its cause: %T %v", err, err)
+	}
+	if err.Error() != "material read failed" {
+		t.Fatalf("normalized error message changed: %v", err)
+	}
+	wire, marshalErr := json.Marshal(err)
+	if marshalErr != nil {
+		t.Fatal(marshalErr)
+	}
+	if strings.Contains(string(wire), "deadline exceeded") || !strings.Contains(string(wire), `"message":"material read failed"`) {
+		t.Fatalf("cause leaked to wire or normalized message changed: %s", wire)
+	}
+}
 
 func TestReadPersonaExplicitWorldAndBinding(t *testing.T) {
 	p, err := persona.Open(t.TempDir())

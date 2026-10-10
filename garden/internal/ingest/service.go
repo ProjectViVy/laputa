@@ -14,6 +14,7 @@ import (
 	"github.com/ProjectViVy/laputa/garden/internal/activity"
 	"github.com/ProjectViVy/laputa/garden/internal/sqliteconn"
 	"github.com/ProjectViVy/laputa/garden/memory"
+	"github.com/ProjectViVy/laputa/laputa/actmem"
 	"github.com/ProjectViVy/laputa/laputa/evolution"
 	"github.com/ProjectViVy/laputa/mentle/facade"
 	"github.com/google/uuid"
@@ -25,13 +26,14 @@ var (
 )
 
 type SubmitRequest struct {
-	SessionID   string    `json:"session_id"`
-	EventID     string    `json:"event_id"`
-	Phase       string    `json:"phase"`
-	Content     string    `json:"content"`
-	ContentHash string    `json:"content_hash"`
-	Workspace   string    `json:"workspace,omitempty"`
-	OccurredAt  time.Time `json:"occurred_at,omitempty"`
+	Activity    *CaptureActivity `json:"-"`
+	SessionID   string           `json:"session_id"`
+	EventID     string           `json:"event_id"`
+	Phase       string           `json:"phase"`
+	Content     string           `json:"content"`
+	ContentHash string           `json:"content_hash"`
+	Workspace   string           `json:"workspace,omitempty"`
+	OccurredAt  time.Time        `json:"occurred_at,omitempty"`
 }
 
 type Accepted struct {
@@ -57,18 +59,20 @@ type Service struct {
 	db       *sql.DB
 	memory   MemoryWriter
 	Activity *activity.Store
+	Actmem   *actmem.Store
 	Spool    *activity.TransientSpool
 	// ProfileID binds ingestions to the host profile's subject scope; set
 	// by composition before Start.
-	ProfileID string
-	queue     chan string
-	mu        sync.Mutex
-	started   bool
-	closed    bool
-	ctx       context.Context
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
-	workerID  string
+	ProfileID  string
+	queue      chan string
+	mu         sync.Mutex
+	started    bool
+	closed     bool
+	ctx        context.Context
+	cancel     context.CancelFunc
+	wg         sync.WaitGroup
+	activityMu sync.Mutex // serializes projection and session archive
+	workerID   string
 }
 
 type MemoryWriter interface {
@@ -113,6 +117,10 @@ CREATE INDEX IF NOT EXISTS ingestion_status ON ingestions(status,created_at);`
 		db.Close()
 		return nil, err
 	}
+	if err := initializeActivityColumn(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Service{db: db, memory: memory, queue: make(chan string, 128), ctx: ctx, cancel: cancel, workerID: "ingest-" + strings.ReplaceAll(uuid.NewString(), "-", "")}, nil
 }
@@ -127,7 +135,7 @@ func (s *Service) Start() error {
 	if s.started {
 		return nil
 	}
-	rows, err := s.db.Query(`SELECT ingestion_id FROM ingestions WHERE status IN ('accepted','running','spooled') ORDER BY created_at`)
+	rows, err := s.db.Query(`SELECT ingestion_id FROM ingestions WHERE status IN ('accepted','running','spooled') OR (activity_json<>'' AND json_extract(activity_json,'$.status')<>'applied') ORDER BY rowid`)
 	if err != nil {
 		return err
 	}
@@ -201,6 +209,13 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, erro
 	if !errors.Is(err, sql.ErrNoRows) {
 		return Accepted{}, err
 	}
+	activityJSON, err := initialActivity(req.Activity)
+	if err != nil {
+		return Accepted{}, err
+	}
+	if req.Activity != nil && (s.Actmem == nil || strings.TrimSpace(s.ProfileID) == "") {
+		return Accepted{}, errors.New("native ACTMEM capture binding unavailable")
+	}
 	now := time.Now().UTC()
 	if req.OccurredAt.IsZero() {
 		req.OccurredAt = now
@@ -208,7 +223,7 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, erro
 	id := "ing_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err = s.db.ExecContext(ctx, `INSERT INTO ingestions(ingestion_id,session_id,event_id,phase,content,content_hash,workspace,occurred_at,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, id, req.SessionID, req.EventID, req.Phase, req.Content, req.ContentHash, req.Workspace, req.OccurredAt.UTC().Format(time.RFC3339Nano), "accepted", now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
+	_, err = s.db.ExecContext(ctx, `INSERT INTO ingestions(ingestion_id,session_id,event_id,phase,content,content_hash,workspace,occurred_at,status,created_at,updated_at,activity_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, id, req.SessionID, req.EventID, req.Phase, req.Content, req.ContentHash, req.Workspace, req.OccurredAt.UTC().Format(time.RFC3339Nano), "accepted", now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), activityJSON)
 	if err != nil {
 		return Accepted{}, err
 	}
@@ -270,7 +285,7 @@ func (s *Service) Window(ctx context.Context, workspace string, after, through u
 // workspace; zero means nothing captured yet.
 func (s *Service) HighWatermark(ctx context.Context, workspace string) (uint64, error) {
 	var seq sql.NullInt64
-	if err := s.db.QueryRowContext(ctx, `SELECT MAX(rowid) FROM ingestions WHERE workspace=?`, workspace).Scan(&seq); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT MAX(rowid) FROM ingestions WHERE workspace=? AND rowid<COALESCE((SELECT MIN(rowid) FROM ingestions WHERE workspace=? AND activity_json<>'' AND COALESCE(json_extract(activity_json,'$.status'),'unknown')<>'applied'),9223372036854775807)`, workspace, workspace).Scan(&seq); err != nil {
 		return 0, err
 	}
 	if !seq.Valid {
@@ -318,12 +333,42 @@ func (s *Service) get(ctx context.Context, query string, args ...any) (Status, e
 
 func (s *Service) worker(ctx context.Context) {
 	defer s.wg.Done()
+	// The timer exists only while a durable projection needs recovery. It is
+	// owned by this service and stops on Close; no new delivery is required.
+	var timer *time.Timer
+	var retry <-chan time.Time
+	defer func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
+	drain := func() {
+		if err := s.drainActivity(ctx); err != nil && ctx.Err() == nil {
+			if timer == nil {
+				timer = time.NewTimer(time.Second)
+			} else {
+				timer.Reset(time.Second)
+			}
+			retry = timer.C
+		} else {
+			if timer != nil {
+				timer.Stop()
+			}
+			retry = nil
+		}
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-retry:
+			drain()
 		case id := <-s.queue:
-			s.process(ctx, id)
+			status, err := s.Get(ctx, id)
+			if err == nil && status.Status != "completed" && status.Status != "failed" {
+				s.process(ctx, id)
+			}
+			drain()
 		}
 	}
 }
@@ -393,4 +438,15 @@ func (s *Service) spool(ctx context.Context, id, session, event, content, hash s
 
 func (s *Service) fail(ctx context.Context, id string, err error) {
 	_, _ = s.db.ExecContext(ctx, `UPDATE ingestions SET status='failed',error=?,updated_at=? WHERE ingestion_id=?`, fmt.Sprint(err), time.Now().UTC().Format(time.RFC3339Nano), id)
+}
+
+// AcceptedByEvent rejoins an already committed acceptance without resubmitting
+// changed content. Callers must supply their trusted session/event identity.
+func (s *Service) AcceptedByEvent(ctx context.Context, sessionID, eventID string) (Accepted, error) {
+	var accepted Accepted
+	err := s.db.QueryRowContext(ctx, `SELECT rowid,ingestion_id,session_id,event_id,status FROM ingestions WHERE session_id=? AND event_id=?`, sessionID, eventID).Scan(&accepted.Seq, &accepted.IngestionID, &accepted.SessionID, &accepted.EventID, &accepted.Status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Accepted{}, ErrNotFound
+	}
+	return accepted, err
 }
