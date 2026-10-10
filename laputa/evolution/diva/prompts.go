@@ -41,7 +41,7 @@ const SchemaReflectionOutput = `{"type":"object","properties":{"candidates":{"ty
 
 // ImplementationRevision identifies this strategy build; it participates
 // in the strategy digest alongside the definition and prompts.
-const ImplementationRevision = "diva-cognitive/v1-review-1"
+const ImplementationRevision = "diva-cognitive/v1-review-2"
 
 // PromptBundle returns the canonical identity bytes the strategy digest
 // covers: every prompt and schema in declaration order.
