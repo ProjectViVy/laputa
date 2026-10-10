@@ -89,6 +89,16 @@ type EvolutionPorts struct {
 	MissionRevision func(context.Context) (uint64, error)
 }
 
+// WithMissionRevision binds one persisted run pin without opening another
+// domain/ledger. Zero is the actual unassigned revision, never a wildcard.
+func (p EvolutionPorts) WithMissionRevision(revision uint64) (evolution.Domain, error) {
+	g, ok := p.Domain.(*guardedDomain)
+	if !ok || g == nil {
+		return nil, failure("unavailable", "owned evolution domain unavailable")
+	}
+	return &guardedDomain{client: g.client, domain: g.domain, missionRevision: &revision}, nil
+}
+
 // handle is private per-capability state: the trusted binding, the reduced
 // principal and the admitted read union. None of it can arrive over a request.
 type handle struct {
@@ -237,8 +247,9 @@ func (h *HumanClient) resultsDomain() (*gardenevol.Domain, error) {
 // guardedDomain fails every derived call once the owner is closed; it never
 // closes shared authority itself.
 type guardedDomain struct {
-	client *Client
-	domain evolution.Domain
+	client          *Client
+	domain          evolution.Domain
+	missionRevision *uint64
 }
 
 func (g *guardedDomain) live() error {
@@ -250,22 +261,66 @@ func (g *guardedDomain) live() error {
 	return nil
 }
 
+func (g *guardedDomain) enter() (func(), error) {
+	g.client.mu.RLock()
+	if g.client.runtime == nil {
+		g.client.mu.RUnlock()
+		return nil, failure("unavailable", "Garden runtime unavailable")
+	}
+	return g.client.mu.RUnlock, nil
+}
+
+func (g *guardedDomain) checkMission(ctx context.Context) error {
+	if g.missionRevision == nil {
+		return nil
+	}
+	current, err := g.domain.(interface {
+		MissionRevision(context.Context) (uint64, error)
+	}).MissionRevision(ctx)
+	if err != nil {
+		return err
+	}
+	return (evolution.RunBinding{MissionRevision: *g.missionRevision}).CheckMissionRevision(current)
+}
+
 func (g *guardedDomain) Collect(ctx context.Context, w evolution.Window) (evolution.EvidenceBatch, error) {
-	if err := g.live(); err != nil {
+	unlock, err := g.enter()
+	if err != nil {
 		return evolution.EvidenceBatch{}, err
 	}
+	defer unlock()
 	return g.domain.Collect(ctx, w)
 }
 
 func (g *guardedDomain) Apply(ctx context.Context, e evolution.Effect) (evolution.EffectReceipt, error) {
-	if err := g.live(); err != nil {
+	unlock, err := g.enter()
+	if err != nil {
+		return evolution.EffectReceipt{}, err
+	}
+	defer unlock()
+	g.client.authorityMu.Lock()
+	defer g.client.authorityMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return evolution.EffectReceipt{}, err
+	}
+	if err := g.checkMission(ctx); err != nil {
 		return evolution.EffectReceipt{}, err
 	}
 	return g.domain.Apply(ctx, e)
 }
 
 func (g *guardedDomain) Lookup(ctx context.Context, operationID string) (evolution.EffectReceipt, error) {
-	if err := g.live(); err != nil {
+	unlock, err := g.enter()
+	if err != nil {
+		return evolution.EffectReceipt{}, err
+	}
+	defer unlock()
+	g.client.authorityMu.Lock()
+	defer g.client.authorityMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return evolution.EffectReceipt{}, err
+	}
+	if err := g.checkMission(ctx); err != nil {
 		return evolution.EffectReceipt{}, err
 	}
 	return g.domain.Lookup(ctx, operationID)
@@ -498,6 +553,11 @@ func (h *HumanClient) SavePersona(ctx context.Context, kind persona.Kind, conten
 	if s.runtime.Persona == nil {
 		return nil, failure("unavailable", "persona unavailable")
 	}
+	h.client.authorityMu.Lock()
+	defer h.client.authorityMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	out, err := s.runtime.Persona.SaveUserDocument(kind, content, baseRevision, "user", persona.SourceUserDirect, reason)
 	if err != nil {
 		return nil, failure(persona.CodeOf(err), "persona write failed")
@@ -562,6 +622,11 @@ func (h *HumanClient) DecidePersonaReview(ctx context.Context, id string, decisi
 	}
 	if s.runtime.Persona == nil {
 		return nil, failure("unavailable", "persona unavailable")
+	}
+	h.client.authorityMu.Lock()
+	defer h.client.authorityMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	switch decision {
 	case ReviewAccept:

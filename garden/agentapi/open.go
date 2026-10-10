@@ -40,7 +40,10 @@ type Config struct {
 
 // Client owns a domain runtime without opening a listener or exporting storage handles.
 type Client struct {
-	mu            sync.RWMutex
+	mu sync.RWMutex
+	// Serializes host authority writes with pinned effect checks/commits.
+	// Model inference never holds this bounded mutation gate.
+	authorityMu   sync.Mutex
 	runtime       *runtimecore.Garden
 	principal     Principal
 	identity      Binding
