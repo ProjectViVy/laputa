@@ -6,7 +6,9 @@ package mentle
 
 import (
 	"context"
-	"crypto/sha256"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -26,6 +28,7 @@ type Adapter struct {
 	scope       evolution.Scope // bound write scope
 	destination string
 	admitted    []evolution.Scope // read union: personal ∪ bound scope
+	cursorKey   [32]byte          // ephemeral to this host-bound adapter instance
 }
 
 // New binds the adapter. admitted is the read union the caller is allowed
@@ -49,7 +52,11 @@ func New(svc *facade.Service, bound evolution.Scope, destination string, admitte
 			return nil, errors.New("admitted read scope has a foreign subject")
 		}
 	}
-	return &Adapter{svc: svc, scope: bound, destination: destination, admitted: admitted}, nil
+	adapter := &Adapter{svc: svc, scope: bound, destination: destination, admitted: admitted}
+	if _, err := rand.Read(adapter.cursorKey[:]); err != nil {
+		return nil, errors.New("mentle adapter could not initialize cursor binding")
+	}
+	return adapter, nil
 }
 
 // BoundScope is the writer's bound scope.
@@ -109,33 +116,43 @@ func (a *Adapter) Search(ctx context.Context, req memory.AuthorizedSearch) (memo
 	if limit <= 0 {
 		limit = 20
 	}
-	inner, err := a.openCursor(req.Cursor, req)
+	if limit > 100 {
+		return memory.CardPage{}, &evolution.ContractError{Code: evolution.ErrInvalidSchema, Message: "memory search limit exceeds 100"}
+	}
+	inner, offset, err := a.openCursor(req.Cursor, req)
 	if err != nil {
 		return memory.CardPage{}, err
 	}
-	// Over-fetch: scope filtering happens after retrieval, so the page may
-	// short-fill; callers paginate via the bound cursor.
-	page, err := a.svc.SearchCards(ctx, facade.CardQuery{Text: req.Query, Collection: req.Collection, Limit: limit * 4, Cursor: inner})
-	if err != nil {
-		return memory.CardPage{}, err
-	}
-	visible := make([]facade.MemoryCard, 0, limit)
-	for _, card := range page.Cards {
-		if memory.ScopeVisible(card.Scope, req.Scopes) {
-			visible = append(visible, card)
+	out := memory.CardPage{Items: make([]memory.MemoryCard, 0, limit)}
+	for pageNumber := 0; pageNumber < 11; pageNumber++ {
+		page, err := a.svc.SearchCards(ctx, facade.CardQuery{Text: req.Query, Collection: req.Collection, Limit: 100, Cursor: inner})
+		if err != nil {
+			return memory.CardPage{}, err
 		}
-		if len(visible) >= limit {
-			break
+		visible := make([]facade.MemoryCard, 0, len(page.Cards))
+		for _, card := range page.Cards {
+			if memory.ScopeVisible(card.Scope, req.Scopes) {
+				visible = append(visible, card)
+			}
 		}
+		start := min(offset, len(visible))
+		for i := start; i < len(visible); i++ {
+			if len(out.Items) == limit {
+				next, err := a.sealCursor(inner, i, req)
+				if err != nil {
+					return memory.CardPage{}, err
+				}
+				out.NextCursor = next
+				return out, nil
+			}
+			out.Items = append(out.Items, mapCard(visible[i]))
+		}
+		if page.NextCursor == nil {
+			return out, nil
+		}
+		inner, offset = *page.NextCursor, 0
 	}
-	out := memory.CardPage{Items: make([]memory.MemoryCard, 0, len(visible))}
-	for _, card := range visible {
-		out.Items = append(out.Items, mapCard(card))
-	}
-	if page.NextCursor != nil {
-		out.NextCursor = a.sealCursor(*page.NextCursor, req)
-	}
-	return out, nil
+	return memory.CardPage{}, &evolution.ContractError{Code: evolution.ErrCapabilityUnavailable, Message: "memory search exceeded its bounded page walk"}
 }
 
 func scopeInUnion(scopes []evolution.Scope, s evolution.Scope) bool {
@@ -342,36 +359,80 @@ func mapFacadeError(err error) error {
 }
 
 type cursorBody struct {
-	Seal  string `json:"seal"`
-	Inner string `json:"inner"`
+	Inner  string `json:"inner"`
+	Offset int    `json:"offset"`
 }
 
-func (a *Adapter) cursorSeal(req memory.AuthorizedSearch) string {
-	h := sha256.New()
-	for _, scope := range req.Scopes {
-		h.Write([]byte(memory.EncodeScope(scope)))
-		h.Write([]byte{0})
+func (a *Adapter) cursorContext(req memory.AuthorizedSearch) []byte {
+	context := make([]byte, 0, 128)
+	appendField := func(value string) {
+		context = append(context, value...)
+		context = append(context, 0)
 	}
-	h.Write([]byte(req.Query))
-	return base64.RawURLEncoding.EncodeToString(h.Sum(nil)[:16])
+	appendField("garden-memory-search-cursor/v1")
+	appendField(memory.EncodeScope(a.scope))
+	appendField(a.destination)
+	for _, scope := range req.Scopes {
+		appendField(memory.EncodeScope(scope))
+	}
+	appendField(req.Collection)
+	appendField(req.Query)
+	return context
 }
 
-func (a *Adapter) sealCursor(inner string, req memory.AuthorizedSearch) string {
-	raw, _ := json.Marshal(cursorBody{Seal: a.cursorSeal(req), Inner: inner})
-	return base64.RawURLEncoding.EncodeToString(raw)
+func (a *Adapter) cursorAEAD() (cipher.AEAD, error) {
+	block, err := aes.NewCipher(a.cursorKey[:])
+	if err != nil {
+		return nil, err
+	}
+	return cipher.NewGCM(block)
 }
 
-func (a *Adapter) openCursor(cursor string, req memory.AuthorizedSearch) (string, error) {
+func (a *Adapter) sealCursor(inner string, offset int, req memory.AuthorizedSearch) (string, error) {
+	plain, err := json.Marshal(cursorBody{Inner: inner, Offset: offset})
+	if err != nil {
+		return "", err
+	}
+	aead, err := a.cursorAEAD()
+	if err != nil {
+		return "", err
+	}
+	nonce := make([]byte, aead.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return "", errors.New("mentle adapter could not mint a search cursor")
+	}
+	sealed := aead.Seal(nil, nonce, plain, a.cursorContext(req))
+	return base64.RawURLEncoding.EncodeToString(append(nonce, sealed...)), nil
+}
+
+func (a *Adapter) openCursor(cursor string, req memory.AuthorizedSearch) (string, int, error) {
 	if cursor == "" {
-		return "", nil
+		return "", 0, nil
+	}
+	if len(cursor) > 512 {
+		return "", 0, &evolution.ContractError{Code: evolution.ErrInvalidSchema, Message: "cursor exceeds size limit"}
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(cursor)
 	if err != nil {
-		return "", &evolution.ContractError{Code: evolution.ErrInvalidSchema, Message: "cursor is not a bound cursor"}
+		return "", 0, &evolution.ContractError{Code: evolution.ErrInvalidSchema, Message: "cursor is not a bound cursor"}
+	}
+	aead, err := a.cursorAEAD()
+	if err != nil {
+		return "", 0, err
+	}
+	if len(raw) < aead.NonceSize()+aead.Overhead() {
+		return "", 0, &evolution.ContractError{Code: evolution.ErrInvalidSchema, Message: "cursor is not a bound cursor"}
+	}
+	plain, err := aead.Open(nil, raw[:aead.NonceSize()], raw[aead.NonceSize():], a.cursorContext(req))
+	if err != nil {
+		return "", 0, &evolution.ContractError{Code: evolution.ErrInvalidScope, Message: "cursor is bound to a different host, scope, or query"}
 	}
 	var body cursorBody
-	if err := json.Unmarshal(raw, &body); err != nil || body.Seal != a.cursorSeal(req) {
-		return "", &evolution.ContractError{Code: evolution.ErrInvalidScope, Message: "cursor is bound to a different scope or query"}
+	if err := json.Unmarshal(plain, &body); err != nil {
+		return "", 0, &evolution.ContractError{Code: evolution.ErrInvalidSchema, Message: "cursor body is invalid"}
 	}
-	return body.Inner, nil
+	if body.Offset < 0 || body.Offset >= 100 {
+		return "", 0, &evolution.ContractError{Code: evolution.ErrInvalidSchema, Message: "cursor page offset is invalid"}
+	}
+	return body.Inner, body.Offset, nil
 }

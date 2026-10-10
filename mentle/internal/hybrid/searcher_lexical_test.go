@@ -20,6 +20,15 @@ func (p *vectorSearchProbe) Search(vector []float32, limit int, filter map[strin
 	return []govector.SearchResult{{ID: "vector", Payload: map[string]any{"content": "vector document"}}}, nil
 }
 
+type vectorTieSearchProbe struct {
+	search.Store
+	results []govector.SearchResult
+}
+
+func (p *vectorTieSearchProbe) Search([]float32, int, map[string]any) ([]govector.SearchResult, error) {
+	return append([]govector.SearchResult(nil), p.results...), nil
+}
+
 type embeddingProbe struct{ search.Embedder }
 
 func TestLexicalOnlyRejectsBothVectorWritePaths(t *testing.T) {
@@ -67,6 +76,30 @@ func TestSearchScoredWithoutEmbedderUsesOnlyBM25(t *testing.T) {
 	}
 }
 
+func TestSearchScoredWithoutEmbedderBreaksScoreTiesByID(t *testing.T) {
+	s := NewSearcher(nil, nil, 1)
+	s.RebuildBM25FromDrawers([]search.Drawer{
+		{ID: "id-c", Content: "orchid tie"},
+		{ID: "id-a", Content: "orchid tie"},
+		{ID: "id-d", Content: "orchid tie"},
+		{ID: "id-b", Content: "orchid tie"},
+	})
+	for attempt := 0; attempt < 20; attempt++ {
+		got, err := s.SearchScored(context.Background(), "orchid", "", "", 4)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 4 {
+			t.Fatalf("attempt %d returned %d results, want 4", attempt, len(got))
+		}
+		for i, want := range []string{"id-a", "id-b", "id-c", "id-d"} {
+			if got[i].Drawer.ID != want {
+				t.Fatalf("attempt %d result %d = %q, want deterministic score tie order %q", attempt, i, got[i].Drawer.ID, want)
+			}
+		}
+	}
+}
+
 func TestSearchScoredWithEmbedderStillUsesVectorFusion(t *testing.T) {
 	store := &vectorSearchProbe{}
 	s := NewSearcher(store, embeddingProbe{}, 0.7)
@@ -77,6 +110,29 @@ func TestSearchScoredWithEmbedderStillUsesVectorFusion(t *testing.T) {
 	}
 	if !store.called || len(got) != 2 || got[0].Drawer.ID != "vector" || !reflect.DeepEqual(got[0].Channels, []string{"vector"}) || got[1].Drawer.ID != "lexical" || !reflect.DeepEqual(got[1].Channels, []string{"bm25"}) {
 		t.Fatalf("hybrid results = %+v, vector called = %v", got, store.called)
+	}
+}
+
+func TestSearchScoredWithEmbedderBreaksVectorScoreTiesByID(t *testing.T) {
+	store := &vectorTieSearchProbe{results: []govector.SearchResult{
+		{ID: "id-c", Score: 0.8, Payload: map[string]any{"content": "orchid tie"}},
+		{ID: "id-a", Score: 0.8, Payload: map[string]any{"content": "orchid tie"}},
+		{ID: "id-b", Score: 0.8, Payload: map[string]any{"content": "orchid tie"}},
+	}}
+	s := NewSearcher(store, embeddingProbe{}, 0.7)
+	s.RebuildBM25FromDrawers([]search.Drawer{
+		{ID: "id-c", Content: "orchid tie"},
+		{ID: "id-a", Content: "orchid tie"},
+		{ID: "id-b", Content: "orchid tie"},
+	})
+	got, err := s.SearchScored(context.Background(), "orchid", "", "", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []string{"id-a", "id-b", "id-c"} {
+		if got[i].Drawer.ID != want {
+			t.Fatalf("result %d = %q, want deterministic vector tie order %q; all=%+v", i, got[i].Drawer.ID, want, got)
+		}
 	}
 }
 
