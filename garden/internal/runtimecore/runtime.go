@@ -176,6 +176,7 @@ func Open(ctx context.Context, cfg Config) (_ *Garden, err error) {
 		return nil, fmt.Errorf("ingest: %w", err)
 	}
 	g.Ingest.Activity = g.Activity
+	g.Ingest.Actmem = g.Actmem
 	g.Ingest.Spool = g.TransientSpool
 	g.Ingest.ProfileID = cfg.ProfileID
 	if !lexicalOnly && g.Mentle != nil {

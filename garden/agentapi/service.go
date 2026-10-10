@@ -119,7 +119,11 @@ func (s *Service) Capture(ctx context.Context, principal Principal, req CaptureR
 	event := eventPrefix(req.Binding) + req.Provenance.RunID + ":" + fmt.Sprint(req.Provenance.EventSeq)
 	// The host phase is terminal provenance; ingest's session_end phase is its
 	// own ingestion lifecycle and must not be confused with the host phase.
-	accepted, err := s.runtime.Ingest.Submit(ctx, ingest.SubmitRequest{SessionID: req.Binding.SessionID, EventID: event, Phase: "session_end", Content: req.Content, ContentHash: req.ContentHash, Workspace: req.Binding.WorkspaceID, OccurredAt: req.OccurredAt})
+	var activity *ingest.CaptureActivity
+	if req.Activity != nil {
+		activity = &ingest.CaptureActivity{Phase: string(req.Phase), UserText: req.Activity.UserText}
+	}
+	accepted, err := s.runtime.Ingest.Submit(ctx, ingest.SubmitRequest{SessionID: req.Binding.SessionID, EventID: event, Phase: "session_end", Content: req.Content, ContentHash: req.ContentHash, Workspace: req.Binding.WorkspaceID, OccurredAt: req.OccurredAt, Activity: activity})
 	if errors.Is(err, ingest.ErrEventConflict) {
 		return CaptureReceipt{}, failure("event_conflict", err.Error())
 	}

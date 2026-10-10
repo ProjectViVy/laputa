@@ -225,3 +225,20 @@ func (b *BoundClient) LookupCapture(ctx context.Context, provenance CaptureProve
 	defer unlock()
 	return s.LookupCapture(ctx, b.caller(), b.binding, provenance)
 }
+
+// ArchiveCapturedSession is an in-process host lifecycle boundary. The host
+// seals session producers and drains terminal delivery before calling it.
+func (b *BoundClient) ArchiveCapturedSession(ctx context.Context) error {
+	s, unlock, err := b.service()
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if err := s.check(b.binding, b.caller(), OpCapture); err != nil {
+		return err
+	}
+	if s.runtime.Ingest == nil {
+		return failure("unavailable", "ingest unavailable")
+	}
+	return s.runtime.Ingest.ArchiveSession(ctx, b.binding.SessionID)
+}

@@ -87,7 +87,12 @@ type CaptureProvenance struct {
 	EventSeq uint64 `json:"event_seq,omitempty"`
 }
 
+// CaptureActivity is supplied only by the in-process admitted-user capture host.
+// It cannot be decoded from the HTTP capture request.
+type CaptureActivity struct{ UserText string }
+
 type CaptureRequest struct {
+	Activity    *CaptureActivity  `json:"-"`
 	Binding     Binding           `json:"binding"`
 	Phase       CapturePhase      `json:"phase"`
 	Content     string            `json:"content"`
