@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dashimaki/garden/internal/evolution/hubtest"
+	"github.com/ProjectViVy/laputa/garden/internal/evolution/hubtest"
 )
 
 func newTestProvider(t *testing.T, hub *hubtest.MockHub, publish bool) (*EvoMapProvider, *Store) {

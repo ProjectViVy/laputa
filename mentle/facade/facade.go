@@ -9,16 +9,16 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dashimaki/mentle/internal/config"
-	"github.com/dashimaki/mentle/internal/diary"
-	"github.com/dashimaki/mentle/internal/embedder"
-	"github.com/dashimaki/mentle/internal/hybrid"
-	"github.com/dashimaki/mentle/internal/kg"
-	"github.com/dashimaki/mentle/internal/layers"
-	"github.com/dashimaki/mentle/internal/palace"
-	"github.com/dashimaki/mentle/internal/search"
-	govector "github.com/dashimaki/mentle/storage/govector"
-	"github.com/dashimaki/mentle/storage/sqlite"
+	"github.com/ProjectViVy/laputa/mentle/internal/config"
+	"github.com/ProjectViVy/laputa/mentle/internal/diary"
+	"github.com/ProjectViVy/laputa/mentle/internal/embedder"
+	"github.com/ProjectViVy/laputa/mentle/internal/hybrid"
+	"github.com/ProjectViVy/laputa/mentle/internal/kg"
+	"github.com/ProjectViVy/laputa/mentle/internal/layers"
+	"github.com/ProjectViVy/laputa/mentle/internal/palace"
+	"github.com/ProjectViVy/laputa/mentle/internal/search"
+	govector "github.com/ProjectViVy/laputa/mentle/storage/govector"
+	"github.com/ProjectViVy/laputa/mentle/storage/sqlite"
 )
 
 // Options configures facade initialization.

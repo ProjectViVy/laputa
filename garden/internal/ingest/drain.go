@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/dashimaki/garden/memory"
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/garden/memory"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 func (s *Service) DrainSpool(ctx context.Context) (int, error) {

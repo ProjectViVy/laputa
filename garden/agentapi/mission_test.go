@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 // TestFrozenCoreWireIsV2: the bootstrap/context wire carries the v2 envelope —

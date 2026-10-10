@@ -1,4 +1,4 @@
-module github.com/dashimaki/mentle
+module github.com/ProjectViVy/laputa/mentle
 
 go 1.26.4
 

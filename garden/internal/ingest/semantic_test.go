@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 type fakeMemoryWriter struct {

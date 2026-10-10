@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ProjectViVy/laputa/mentle/internal/palace"
 	"github.com/redis/go-redis/v9"
-	"github.com/dashimaki/mentle/internal/palace"
 )
 
 type Store struct {

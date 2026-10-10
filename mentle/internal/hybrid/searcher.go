@@ -10,10 +10,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dashimaki/mentle/internal/bm25"
-	"github.com/dashimaki/mentle/internal/palace"
-	"github.com/dashimaki/mentle/internal/search"
-	govector "github.com/dashimaki/mentle/storage/govector"
+	"github.com/ProjectViVy/laputa/mentle/internal/bm25"
+	"github.com/ProjectViVy/laputa/mentle/internal/palace"
+	"github.com/ProjectViVy/laputa/mentle/internal/search"
+	govector "github.com/ProjectViVy/laputa/mentle/storage/govector"
 )
 
 // Store defines the interface for hybrid search combining

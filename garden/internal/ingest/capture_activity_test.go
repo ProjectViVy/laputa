@@ -4,15 +4,15 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/dashimaki/laputa/actmem"
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/laputa/actmem"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 func openActivityIngest(t *testing.T, dir string) *Service {

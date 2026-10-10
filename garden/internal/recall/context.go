@@ -3,8 +3,8 @@ package recall
 import (
 	"strings"
 
-	"github.com/dashimaki/garden/internal/personactx"
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/garden/internal/personactx"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 func assembleContext(core personactx.FrozenCore, evidence []facade.EvidenceFragment, budget int) string {

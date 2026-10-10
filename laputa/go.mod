@@ -1,9 +1,9 @@
-module github.com/dashimaki/laputa
+module github.com/ProjectViVy/laputa/laputa
 
 go 1.26.4
 
 require (
-	github.com/ProjectViVy/inofy v0.0.0-00010101000000-000000000000
+	github.com/ProjectViVy/inofy v0.0.0-20260930141905-71e2c9bbe47d
 	github.com/cloudwego/eino v0.9.13
 	github.com/rivo/uniseg v0.4.7
 	golang.org/x/text v0.37.0
@@ -43,5 +43,3 @@ require (
 	golang.org/x/sys v0.37.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
-
-replace github.com/ProjectViVy/inofy => ../../INOFY

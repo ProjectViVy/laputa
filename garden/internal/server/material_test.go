@@ -7,11 +7,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/dashimaki/garden/agentapi"
-	"github.com/dashimaki/garden/internal/runtimecore"
-	"github.com/dashimaki/garden/memory"
-	"github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/garden/agentapi"
+	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
+	"github.com/ProjectViVy/laputa/garden/memory"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 func materialsTestServer(t *testing.T) *Server {

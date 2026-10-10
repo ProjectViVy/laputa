@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dashimaki/garden/internal/evolution"
+	"github.com/ProjectViVy/laputa/garden/internal/evolution"
 )
 
 func TestEvolutionListRunsEmpty(t *testing.T) {

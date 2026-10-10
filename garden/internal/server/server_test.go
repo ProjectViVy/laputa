@@ -11,13 +11,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dashimaki/garden/agentapi"
-	"github.com/dashimaki/garden/internal/activity"
-	"github.com/dashimaki/garden/internal/evolution"
-	"github.com/dashimaki/garden/internal/recall"
-	"github.com/dashimaki/garden/internal/runtimecore"
-	"github.com/dashimaki/laputa/actmem"
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/garden/agentapi"
+	"github.com/ProjectViVy/laputa/garden/internal/activity"
+	"github.com/ProjectViVy/laputa/garden/internal/evolution"
+	"github.com/ProjectViVy/laputa/garden/internal/recall"
+	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
+	"github.com/ProjectViVy/laputa/laputa/actmem"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 func testServer() *Server { return &Server{Addr: ":0", ProfileID: "profile_1"} }

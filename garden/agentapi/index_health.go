@@ -3,7 +3,7 @@ package agentapi
 import (
 	"context"
 
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 // IndexHealth reports live Mentle canonical and derived-index health. A

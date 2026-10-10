@@ -19,13 +19,13 @@ func TestScanFindsRuntimeViolationsAndSkipsHistoricalDocumentsAndTests(t *testin
 		}
 	}
 	write("garden/main.go", `package main
-import "github.com/dashimaki/laputa/governance"
+import "github.com/ProjectViVy/laputa/laputa/governance"
 const route = "/v2/cognitive/world"
 `)
 	write("garden/main_test.go", `package main
 const old = "/v2/governance/projection"
 `)
-	write("docs/archive/old.md", "github.com/dashimaki/laputa/governance /v2/cognitive/world")
+	write("docs/archive/old.md", "github.com/ProjectViVy/laputa/laputa/governance /v2/cognitive/world")
 
 	findings, err := Scan(root)
 	if err != nil {

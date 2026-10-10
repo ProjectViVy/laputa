@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dashimaki/garden/internal/runtimecore"
-	"github.com/dashimaki/garden/memory"
-	"github.com/dashimaki/garden/memory/memorytest"
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
+	"github.com/ProjectViVy/laputa/garden/memory"
+	"github.com/ProjectViVy/laputa/garden/memory/memorytest"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 // A clean consumer composes Garden with an injected backend and no Mentle

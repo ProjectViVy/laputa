@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dashimaki/mentle/benchmarks"
-	"github.com/dashimaki/mentle/internal/dialect"
-	"github.com/dashimaki/mentle/internal/embedder"
-	"github.com/dashimaki/mentle/internal/search"
-	govector "github.com/dashimaki/mentle/storage/govector"
+	"github.com/ProjectViVy/laputa/mentle/benchmarks"
+	"github.com/ProjectViVy/laputa/mentle/internal/dialect"
+	"github.com/ProjectViVy/laputa/mentle/internal/embedder"
+	"github.com/ProjectViVy/laputa/mentle/internal/search"
+	govector "github.com/ProjectViVy/laputa/mentle/storage/govector"
 )
 
 type Sample struct {

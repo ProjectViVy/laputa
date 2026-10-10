@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 func TestReadScopedEnforcesAggregateBodyBudget(t *testing.T) {

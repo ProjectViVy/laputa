@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dashimaki/garden/internal/ingest"
-	"github.com/dashimaki/garden/internal/personactx"
-	"github.com/dashimaki/garden/internal/recall"
-	"github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/laputa/persona"
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/garden/internal/ingest"
+	"github.com/ProjectViVy/laputa/garden/internal/personactx"
+	"github.com/ProjectViVy/laputa/garden/internal/recall"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/persona"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 	_ "modernc.org/sqlite"
 )
 

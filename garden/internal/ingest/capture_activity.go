@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dashimaki/laputa/actmem"
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/actmem"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 // CaptureActivity is trusted host-only source metadata. It never represents

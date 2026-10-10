@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dashimaki/garden/internal/server"
+	"github.com/ProjectViVy/laputa/garden/internal/server"
 )
 
 func TestSetupLoggingCreatesFile(t *testing.T) {

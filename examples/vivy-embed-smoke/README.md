@@ -1,6 +1,6 @@
 # Vivy-style embedded Go consumer smoke
 
-This is an **independent Go module**, not a Garden package or Vivy integration. It imports the public `github.com/dashimaki/garden/agentapi` API and uses Laputa's public `persona` package only for operator fixture initialization. Local `replace` directives point to sibling source modules; this proves **local importability**, not remote module publication or Vivy product integration.
+This is an **independent Go module**, not a Garden package or Vivy integration. It imports the public `github.com/ProjectViVy/laputa/garden/agentapi` API and uses Laputa's public `persona` package only for operator fixture initialization. Local `replace` directives point to sibling source modules; this proves **local importability**, not remote module publication or Vivy product integration.
 
 From this directory:
 

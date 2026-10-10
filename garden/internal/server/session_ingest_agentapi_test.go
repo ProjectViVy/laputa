@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dashimaki/garden/agentapi"
-	"github.com/dashimaki/garden/internal/ingest"
-	"github.com/dashimaki/garden/internal/runtimecore"
+	"github.com/ProjectViVy/laputa/garden/agentapi"
+	"github.com/ProjectViVy/laputa/garden/internal/ingest"
+	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
 )
 
 func TestSessionIngestHTTPUsesSharedServiceAndLegacyPayload(t *testing.T) {

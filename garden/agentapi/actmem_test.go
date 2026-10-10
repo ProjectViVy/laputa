@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dashimaki/garden/internal/runtimecore"
-	"github.com/dashimaki/laputa/actmem"
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
+	"github.com/ProjectViVy/laputa/laputa/actmem"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 func seedEntry(t *testing.T, a *actmem.Store, section evolution.EntrySection, scope evolution.Scope, sessionID, body string) {

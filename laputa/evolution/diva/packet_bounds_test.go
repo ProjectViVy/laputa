@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 func TestReflectionPacketKeepsEffectsWithinPacketBound(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 // Real canonical/BM25 facade for cache/lifetime unit proof, not a model or

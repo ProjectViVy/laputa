@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"testing"
 
-	mentlebackend "github.com/dashimaki/garden/backends/mentle"
-	"github.com/dashimaki/garden/memory"
-	"github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/mentle/facade"
+	mentlebackend "github.com/ProjectViVy/laputa/garden/backends/mentle"
+	"github.com/ProjectViVy/laputa/garden/memory"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 func sourceMutation(scope evolution.Scope) memory.AuthorizedMutation {

@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/ProjectViVy/inofy"
-	"github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/laputa/evolution/diva"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/evolution/diva"
 )
 
 type fakeDomain struct{}

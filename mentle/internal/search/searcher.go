@@ -6,8 +6,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dashimaki/mentle/internal/palace"
-	"github.com/dashimaki/mentle/storage/govector"
+	"github.com/ProjectViVy/laputa/mentle/internal/palace"
+	"github.com/ProjectViVy/laputa/mentle/storage/govector"
 )
 
 type Store interface {

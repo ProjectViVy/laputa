@@ -15,9 +15,9 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/dashimaki/garden/memory"
-	"github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/garden/memory"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 // Adapter is a scope-bound Backend over the Mentle canonical facade. The

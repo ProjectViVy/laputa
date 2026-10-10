@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 // SemanticUnit is a provenance-preserving index unit derived from a source

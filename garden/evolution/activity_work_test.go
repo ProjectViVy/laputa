@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dashimaki/laputa/actmem"
-	laputaevolution "github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/actmem"
+	laputaevolution "github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 func TestCollectReadsExistingScopedWork(t *testing.T) {

@@ -9,8 +9,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/laputa/persona"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/persona"
 )
 
 func openHuman(t *testing.T) (context.Context, *Client, *HumanClient) {

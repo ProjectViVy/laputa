@@ -3,8 +3,8 @@ package agentapi
 import (
 	"time"
 
-	"github.com/dashimaki/garden/memory"
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/garden/memory"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 // ACTMEM scoped-operation DTOs alias the shared contract; the agentapi

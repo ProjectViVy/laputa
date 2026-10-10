@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	mentlebackend "github.com/dashimaki/garden/backends/mentle"
-	"github.com/dashimaki/garden/memory"
-	memory_test "github.com/dashimaki/garden/memory/memorytest"
-	"github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/mentle/facade"
+	mentlebackend "github.com/ProjectViVy/laputa/garden/backends/mentle"
+	"github.com/ProjectViVy/laputa/garden/memory"
+	memory_test "github.com/ProjectViVy/laputa/garden/memory/memorytest"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 func mentleService(t *testing.T) *facade.Service {

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dashimaki/mentle/internal/dialect"
-	"github.com/dashimaki/mentle/internal/embedder"
+	"github.com/ProjectViVy/laputa/mentle/internal/dialect"
+	"github.com/ProjectViVy/laputa/mentle/internal/embedder"
 )
 
 // collectUniqueSessionTexts scans all entries and returns the deduplicated set

@@ -7,9 +7,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dashimaki/mentle/internal/hybrid"
-	"github.com/dashimaki/mentle/internal/search"
-	"github.com/dashimaki/mentle/storage/govector"
+	"github.com/ProjectViVy/laputa/mentle/internal/hybrid"
+	"github.com/ProjectViVy/laputa/mentle/internal/search"
+	"github.com/ProjectViVy/laputa/mentle/storage/govector"
 )
 
 type fakeStore struct {

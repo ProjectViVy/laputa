@@ -2,7 +2,7 @@ package recall
 
 import "sort"
 
-import "github.com/dashimaki/mentle/facade"
+import "github.com/ProjectViVy/laputa/mentle/facade"
 
 func FilterCards(cards []facade.MemoryCard) []facade.MemoryCard {
 	out := make([]facade.MemoryCard, len(cards))

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dashimaki/mentle/internal/extractor"
-	"github.com/dashimaki/mentle/internal/palace"
+	"github.com/ProjectViVy/laputa/mentle/internal/extractor"
+	"github.com/ProjectViVy/laputa/mentle/internal/palace"
 )
 
 type ConversationMiner struct {

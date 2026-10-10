@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/dashimaki/mentle/benchmarks/convomem"
-	"github.com/dashimaki/mentle/benchmarks/locomo"
-	"github.com/dashimaki/mentle/benchmarks/longmemeval"
-	"github.com/dashimaki/mentle/benchmarks/membench"
+	"github.com/ProjectViVy/laputa/mentle/benchmarks/convomem"
+	"github.com/ProjectViVy/laputa/mentle/benchmarks/locomo"
+	"github.com/ProjectViVy/laputa/mentle/benchmarks/longmemeval"
+	"github.com/ProjectViVy/laputa/mentle/benchmarks/membench"
 	"github.com/spf13/cobra"
 )
 

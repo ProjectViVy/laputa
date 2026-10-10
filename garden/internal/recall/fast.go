@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dashimaki/garden/internal/activity"
-	"github.com/dashimaki/garden/internal/personactx"
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/garden/internal/activity"
+	"github.com/ProjectViVy/laputa/garden/internal/personactx"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 type CardSearcher interface {

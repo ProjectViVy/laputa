@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dashimaki/garden/agentapi"
+	"github.com/ProjectViVy/laputa/garden/agentapi"
 )
 
 func (s *Server) materialsRead(w http.ResponseWriter, r *http.Request) (agentapi.Principal, agentapi.Binding, bool) {

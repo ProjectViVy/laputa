@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/dashimaki/mentle/internal/instructions"
+	"github.com/ProjectViVy/laputa/mentle/internal/instructions"
 	"github.com/spf13/cobra"
 )
 

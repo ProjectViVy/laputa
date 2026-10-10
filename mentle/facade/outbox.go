@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dashimaki/mentle/internal/embedder"
-	"github.com/dashimaki/mentle/internal/palace"
-	"github.com/dashimaki/mentle/internal/search"
+	"github.com/ProjectViVy/laputa/mentle/internal/embedder"
+	"github.com/ProjectViVy/laputa/mentle/internal/palace"
+	"github.com/ProjectViVy/laputa/mentle/internal/search"
 	"github.com/google/uuid"
 )
 

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dashimaki/laputa/persona"
+	"github.com/ProjectViVy/laputa/laputa/persona"
 )
 
 // personaStatusPayload is deliberately metadata-only. A document body is

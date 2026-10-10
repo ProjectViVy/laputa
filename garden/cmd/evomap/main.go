@@ -25,7 +25,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dashimaki/garden/internal/evolution"
+	"github.com/ProjectViVy/laputa/garden/internal/evolution"
 )
 
 func main() {

@@ -3,7 +3,7 @@ package recall
 import (
 	"testing"
 
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 func TestFilterCardsCopiesCandidatesWithoutAuthorityProjection(t *testing.T) {

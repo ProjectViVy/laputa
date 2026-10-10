@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 func readFixture(t *testing.T, name string) string {

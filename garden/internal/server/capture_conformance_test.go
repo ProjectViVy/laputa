@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dashimaki/garden/agentapi"
-	"github.com/dashimaki/garden/internal/ingest"
-	"github.com/dashimaki/garden/internal/runtimecore"
-	"github.com/dashimaki/garden/internal/sqliteconn"
+	"github.com/ProjectViVy/laputa/garden/agentapi"
+	"github.com/ProjectViVy/laputa/garden/internal/ingest"
+	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
+	"github.com/ProjectViVy/laputa/garden/internal/sqliteconn"
 )
 
 // Both entrypoints must land on the same durable ingestion, not merely return

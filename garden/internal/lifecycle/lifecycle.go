@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dashimaki/garden/internal/server"
-	"github.com/dashimaki/garden/internal/supervision"
+	"github.com/ProjectViVy/laputa/garden/internal/server"
+	"github.com/ProjectViVy/laputa/garden/internal/supervision"
 )
 
 const defaultShutdownTimeout = 30 * time.Second

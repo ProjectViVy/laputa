@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/dashimaki/garden/internal/sqliteconn"
+	"github.com/ProjectViVy/laputa/garden/internal/sqliteconn"
 )
 
 type Event struct {

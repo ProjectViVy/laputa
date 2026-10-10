@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 func appendRing(t *testing.T, store *Store, section evolution.EntrySection, session, body string) evolution.Entry {

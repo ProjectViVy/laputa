@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/dashimaki/mentle/internal/palace"
-	"github.com/dashimaki/mentle/internal/search"
-	"github.com/dashimaki/mentle/storage/govector"
+	"github.com/ProjectViVy/laputa/mentle/internal/palace"
+	"github.com/ProjectViVy/laputa/mentle/internal/search"
+	"github.com/ProjectViVy/laputa/mentle/storage/govector"
 )
 
 type vectorSearchProbe struct {

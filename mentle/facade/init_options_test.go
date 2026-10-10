@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/dashimaki/mentle/internal/config"
-	"github.com/dashimaki/mentle/internal/embedder"
+	"github.com/ProjectViVy/laputa/mentle/internal/config"
+	"github.com/ProjectViVy/laputa/mentle/internal/embedder"
 )
 
 func TestInitRequireLocalModelRejectsMissingDespiteBundledCWD(t *testing.T) {

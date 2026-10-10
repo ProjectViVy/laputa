@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dashimaki/garden/internal/runtimecore"
-	"github.com/dashimaki/garden/memory"
+	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
+	"github.com/ProjectViVy/laputa/garden/memory"
 )
 
 // Config contains explicit host-owned paths and trusted identity. Callers can

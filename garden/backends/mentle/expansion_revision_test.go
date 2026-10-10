@@ -6,9 +6,9 @@ import (
 	"sync"
 	"testing"
 
-	mentlebackend "github.com/dashimaki/garden/backends/mentle"
-	"github.com/dashimaki/garden/memory"
-	"github.com/dashimaki/laputa/evolution"
+	mentlebackend "github.com/ProjectViVy/laputa/garden/backends/mentle"
+	"github.com/ProjectViVy/laputa/garden/memory"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 func TestConcurrentExpansionKeepsOneCanonicalRevision(t *testing.T) {

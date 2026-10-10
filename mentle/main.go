@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/dashimaki/mentle/cmd/cli"
-	"github.com/dashimaki/mentle/cmd/server"
+	"github.com/ProjectViVy/laputa/mentle/cmd/cli"
+	"github.com/ProjectViVy/laputa/mentle/cmd/server"
 )
 
 func main() {

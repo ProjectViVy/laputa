@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dashimaki/garden/memory"
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/garden/memory"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 // These tests open the production Garden/Mentle composition. No backend is

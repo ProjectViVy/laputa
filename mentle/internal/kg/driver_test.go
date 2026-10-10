@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dashimaki/mentle/storage/sqlite"
+	"github.com/ProjectViVy/laputa/mentle/storage/sqlite"
 )
 
 func TestLegacyKGFileReopensAndPreservesRows(t *testing.T) {

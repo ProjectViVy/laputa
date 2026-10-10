@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 func TestMissingHeadIsEmptyWithoutCreatingDirectories(t *testing.T) {

@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/dashimaki/garden/internal/runtimecore"
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 func TestIndexHealthRequiresTrustedPrincipalAndFixedBinding(t *testing.T) {

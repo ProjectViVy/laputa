@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dashimaki/mentle/internal/config"
-	"github.com/dashimaki/mentle/internal/search"
+	"github.com/ProjectViVy/laputa/mentle/internal/config"
+	"github.com/ProjectViVy/laputa/mentle/internal/search"
 
-	govector "github.com/dashimaki/mentle/storage/govector"
+	govector "github.com/ProjectViVy/laputa/mentle/storage/govector"
 )
 
 type mockStore struct {

@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/dashimaki/laputa/persona"
+	"github.com/ProjectViVy/laputa/laputa/persona"
 )
 
 func personaCapabilityServer(t *testing.T) (*Server, string) {

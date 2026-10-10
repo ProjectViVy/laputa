@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 
 	"github.com/ProjectViVy/inofy"
-	"github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/laputa/evolution/diva"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/evolution/diva"
 )
 
 // stageByTypeID maps the fixed node types to stage identities.

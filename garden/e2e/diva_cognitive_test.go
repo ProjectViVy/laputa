@@ -19,14 +19,14 @@ import (
 	"testing"
 	"time"
 
-	gardenevolution "github.com/dashimaki/garden/evolution"
-	"github.com/dashimaki/garden/internal/ingest"
-	"github.com/dashimaki/garden/memory"
-	"github.com/dashimaki/laputa/actmem"
-	laputaevolution "github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/laputa/evolution/diva"
-	"github.com/dashimaki/laputa/persona"
-	"github.com/dashimaki/mentle/facade"
+	gardenevolution "github.com/ProjectViVy/laputa/garden/evolution"
+	"github.com/ProjectViVy/laputa/garden/internal/ingest"
+	"github.com/ProjectViVy/laputa/garden/memory"
+	"github.com/ProjectViVy/laputa/laputa/actmem"
+	laputaevolution "github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/evolution/diva"
+	"github.com/ProjectViVy/laputa/laputa/persona"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 // --- fixtures (e2e-local; the authority side is real services) ---

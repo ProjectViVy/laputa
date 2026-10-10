@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dashimaki/garden/agentapi"
+	"github.com/ProjectViVy/laputa/garden/agentapi"
 )
 
 // A package outside agentapi can compile against the public request/receipt

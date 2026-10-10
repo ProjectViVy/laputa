@@ -16,11 +16,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dashimaki/garden/internal/ingest"
-	"github.com/dashimaki/garden/memory"
-	"github.com/dashimaki/laputa/actmem"
-	laputaevolution "github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/laputa/persona"
+	"github.com/ProjectViVy/laputa/garden/internal/ingest"
+	"github.com/ProjectViVy/laputa/garden/memory"
+	"github.com/ProjectViVy/laputa/laputa/actmem"
+	laputaevolution "github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/persona"
 )
 
 // ActivityReader supplies the committed-activity window the strategy's

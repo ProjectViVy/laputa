@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dashimaki/garden/memory"
-	"github.com/dashimaki/laputa/evolution"
+	"github.com/ProjectViVy/laputa/garden/memory"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
 // BackendFactory returns a backend bound to the given scope and

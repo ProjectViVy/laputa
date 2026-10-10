@@ -13,17 +13,17 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dashimaki/mentle/facade"
-	"github.com/dashimaki/mentle/internal/config"
-	"github.com/dashimaki/mentle/internal/dialect"
-	"github.com/dashimaki/mentle/internal/diary"
-	"github.com/dashimaki/mentle/internal/kg"
-	"github.com/dashimaki/mentle/internal/layers"
-	"github.com/dashimaki/mentle/internal/miner"
-	"github.com/dashimaki/mentle/internal/palace"
-	"github.com/dashimaki/mentle/internal/sanitizer"
-	"github.com/dashimaki/mentle/internal/search"
-	"github.com/dashimaki/mentle/pkg/mcp"
+	"github.com/ProjectViVy/laputa/mentle/facade"
+	"github.com/ProjectViVy/laputa/mentle/internal/config"
+	"github.com/ProjectViVy/laputa/mentle/internal/dialect"
+	"github.com/ProjectViVy/laputa/mentle/internal/diary"
+	"github.com/ProjectViVy/laputa/mentle/internal/kg"
+	"github.com/ProjectViVy/laputa/mentle/internal/layers"
+	"github.com/ProjectViVy/laputa/mentle/internal/miner"
+	"github.com/ProjectViVy/laputa/mentle/internal/palace"
+	"github.com/ProjectViVy/laputa/mentle/internal/sanitizer"
+	"github.com/ProjectViVy/laputa/mentle/internal/search"
+	"github.com/ProjectViVy/laputa/mentle/pkg/mcp"
 )
 
 func runServer(cmd *cobra.Command, args []string) error {

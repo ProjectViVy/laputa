@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dashimaki/garden/internal/report"
-	"github.com/dashimaki/mentle/facade"
+	"github.com/ProjectViVy/laputa/garden/internal/report"
+	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 type srvReportLister struct {

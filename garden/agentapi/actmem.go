@@ -3,7 +3,7 @@ package agentapi
 import (
 	"context"
 
-	"github.com/dashimaki/laputa/actmem"
+	"github.com/ProjectViVy/laputa/laputa/actmem"
 )
 
 // Typed ACTMEM surface (contracts.md section 3): every agent call carries

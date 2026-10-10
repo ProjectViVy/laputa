@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/dashimaki/garden/agentapi"
+	"github.com/ProjectViVy/laputa/garden/agentapi"
 )
 
 // Exercise the real HTTP mux and capability-token lookup, rather than calling

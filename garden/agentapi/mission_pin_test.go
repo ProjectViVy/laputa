@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dashimaki/garden/memory"
-	"github.com/dashimaki/garden/memory/memorytest"
-	"github.com/dashimaki/laputa/evolution"
-	"github.com/dashimaki/laputa/persona"
+	"github.com/ProjectViVy/laputa/garden/memory"
+	"github.com/ProjectViVy/laputa/garden/memory/memorytest"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/ProjectViVy/laputa/laputa/persona"
 )
 
 func TestOwnedMissionPinRejectsZeroAndAssignedDrift(t *testing.T) {
