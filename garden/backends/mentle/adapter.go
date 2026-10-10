@@ -185,10 +185,7 @@ func (a *Adapter) Expand(ctx context.Context, req memory.AuthorizedExpansion) (m
 	if perItem <= 0 {
 		perItem = 800
 	}
-	fragments, err := a.svc.ReadEvidence(ctx, facade.EvidenceQuery{CardIDs: []string{req.CardID}, PerItemBudget: perItem, TotalBudget: perItem})
-	if err != nil {
-		return memory.EvidencePage{}, err
-	}
+	fragments := []facade.EvidenceFragment{facade.RenderMemoryEvidence(record, perItem)}
 	out := memory.EvidencePage{Items: make([]memory.EvidenceFragment, 0, len(fragments))}
 	enc := memory.EncodeScope(decoded)
 	for _, f := range fragments {

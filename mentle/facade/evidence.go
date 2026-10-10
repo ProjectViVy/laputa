@@ -48,7 +48,6 @@ func (s *Service) ReadEvidence(ctx context.Context, q EvidenceQuery) ([]Evidence
 		total = defaultTotalBudget
 	}
 
-	now := time.Now()
 	fragments := make([]EvidenceFragment, 0, len(q.CardIDs))
 	used := 0
 	for _, id := range q.CardIDs {
@@ -63,45 +62,56 @@ func (s *Service) ReadEvidence(ctx context.Context, q EvidenceQuery) ([]Evidence
 		if remaining := total - used; remaining < budget {
 			budget = remaining
 		}
-		var excerpt string
-		startOffset, endOffset := 0, 0
-		var hash [sha256.Size]byte
-		if start, end, ok := provenanceOffsets(memory.Metadata); ok && start >= 0 && end > start && end <= len(memory.Content) {
-			segment := memory.Content[start:end]
-			excerpt = truncateRunes(segment, budget)
-			startOffset = start
-			endOffset = start + len([]byte(excerpt))
-			hash = sha256.Sum256([]byte(excerpt))
-		} else {
-			excerpt = truncateRunes(memory.Content, budget)
-			endOffset = len([]rune(excerpt))
-			hash = sha256.Sum256([]byte(memory.Content))
-		}
-		sourceURI := memory.Source.URI
-		if sourceURI == "" {
-			if v, ok := memory.Metadata["source_uri"].(string); ok {
-				sourceURI = v
-			}
-		}
-		sourceRev := memory.Source.Revision
-		if sourceRev == "" {
-			sourceRev = fmt.Sprintf("%d", memory.Version)
-		}
-		fragments = append(fragments, EvidenceFragment{
-			CardID:       memory.ID,
-			MaterialRef:  fmt.Sprintf("mem://%s@v%d", memory.ID, memory.Version),
-			SourceURI:    sourceURI,
-			SourceRev:    sourceRev,
-			Excerpt:      excerpt,
-			StartOffset:  startOffset,
-			EndOffset:    endOffset,
-			ContentHash:  hex.EncodeToString(hash[:]),
-			Validity:     evidenceValidity(memory, now),
-			EvidenceRefs: nonNil(memory.Supersedes),
-		})
-		used += len([]rune(excerpt))
+		fragment := RenderMemoryEvidence(memory, budget)
+		fragments = append(fragments, fragment)
+		used += len([]rune(fragment.Excerpt))
 	}
 	return fragments, nil
+}
+
+// RenderMemoryEvidence derives bounded evidence from one already-read record.
+// The caller must admit its scope, status and revision before projection. This
+// pure renderer performs no second authority read and grants no read access.
+func RenderMemoryEvidence(memory Memory, budget int) EvidenceFragment {
+	if budget <= 0 {
+		budget = defaultPerItemBudget
+	}
+	var excerpt string
+	startOffset, endOffset := 0, 0
+	var hash [sha256.Size]byte
+	if start, end, ok := provenanceOffsets(memory.Metadata); ok && start >= 0 && end > start && end <= len(memory.Content) {
+		segment := memory.Content[start:end]
+		excerpt = truncateRunes(segment, budget)
+		startOffset = start
+		endOffset = start + len([]byte(excerpt))
+		hash = sha256.Sum256([]byte(excerpt))
+	} else {
+		excerpt = truncateRunes(memory.Content, budget)
+		endOffset = len([]rune(excerpt))
+		hash = sha256.Sum256([]byte(memory.Content))
+	}
+	sourceURI := memory.Source.URI
+	if sourceURI == "" {
+		if v, ok := memory.Metadata["source_uri"].(string); ok {
+			sourceURI = v
+		}
+	}
+	sourceRev := memory.Source.Revision
+	if sourceRev == "" {
+		sourceRev = fmt.Sprintf("%d", memory.Version)
+	}
+	return EvidenceFragment{
+		CardID:       memory.ID,
+		MaterialRef:  fmt.Sprintf("mem://%s@v%d", memory.ID, memory.Version),
+		SourceURI:    sourceURI,
+		SourceRev:    sourceRev,
+		Excerpt:      excerpt,
+		StartOffset:  startOffset,
+		EndOffset:    endOffset,
+		ContentHash:  hex.EncodeToString(hash[:]),
+		Validity:     evidenceValidity(memory, time.Now()),
+		EvidenceRefs: nonNil(memory.Supersedes),
+	}
 }
 
 func provenanceOffsets(md map[string]any) (int, int, bool) {

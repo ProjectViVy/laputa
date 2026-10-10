@@ -97,12 +97,7 @@ func (s *Service) SearchCards(ctx context.Context, q CardQuery) (CardPage, error
 		if q.Scope != "" && memory.Scope != q.Scope {
 			continue
 		}
-		collection := ""
-		if v, ok := memory.Metadata["collection"].(string); ok {
-			collection = v
-		} else {
-			collection = d.Wing
-		}
+		collection := memory.Collection
 		if q.Collection != "" && collection != q.Collection {
 			continue
 		}
