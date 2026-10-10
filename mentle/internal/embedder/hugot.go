@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/gomlx/go-huggingface/tokenizers/api"
@@ -23,6 +24,8 @@ const maxTokens = 512
 
 // Embedder generates text embeddings using hugot (Hugging Face ONNX runtime).
 type Embedder struct {
+	// Native execution must finish before its session can be destroyed.
+	mu          sync.Mutex
 	pipeline    *pipelines.FeatureExtractionPipeline
 	session     *hugot.Session
 	modelPath   string
@@ -52,6 +55,8 @@ func (e *Embedder) Dimension() int {
 
 // ErrLocalModelMissing means no model.onnx exists under the explicit directory.
 var ErrLocalModelMissing = errors.New("local embedding model missing")
+
+var ErrClosed = errors.New("embedder is closed")
 
 // NewLocal loads only from modelsDir/model.onnx or modelsDir/onnx/model.onnx.
 // It never probes the process working directory or downloads a model.
@@ -248,7 +253,21 @@ func truncateByRunes(text string) string {
 
 // CreateEmbedding generates a float32 vector for given text.
 func (e *Embedder) CreateEmbedding(ctx context.Context, text string) ([]float32, error) {
-	output, err := e.pipeline.RunPipeline(ctx, []string{e.truncateText(text)})
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if e.pipeline == nil {
+		return nil, ErrClosed
+	}
+	// Hugot's GoMLX backend returns on cancellation while native execution
+	// continues. Join that work under the lifetime lock; callers still receive
+	// their cancellation and ContextHost retains its own deadline boundary.
+	output, err := e.pipeline.RunPipeline(context.WithoutCancel(ctx), []string{e.truncateText(text)})
+	if cancelErr := ctx.Err(); cancelErr != nil {
+		return nil, cancelErr
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -264,6 +283,14 @@ func (e *Embedder) CreateEmbedding(ctx context.Context, text string) ([]float32,
 // It processes texts in chunks of 64 (recommended by hugot) and handles
 // shape mismatches by falling back to single embeddings when needed.
 func (e *Embedder) CreateEmbeddings(ctx context.Context, texts []string) ([][]float32, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if e.pipeline == nil {
+		return nil, ErrClosed
+	}
 	if len(texts) == 0 {
 		return nil, nil
 	}
@@ -280,10 +307,22 @@ func (e *Embedder) CreateEmbeddings(ctx context.Context, texts []string) ([][]fl
 		end := min(i+chunkSize, len(truncated))
 		chunk := truncated[i:end]
 
-		output, err := e.pipeline.RunPipeline(ctx, chunk)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		output, err := e.pipeline.RunPipeline(context.WithoutCancel(ctx), chunk)
+		if cancelErr := ctx.Err(); cancelErr != nil {
+			return nil, cancelErr
+		}
 		if err != nil {
 			for _, text := range chunk {
-				single, err2 := e.pipeline.RunPipeline(ctx, []string{text})
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				single, err2 := e.pipeline.RunPipeline(context.WithoutCancel(ctx), []string{text})
+				if cancelErr := ctx.Err(); cancelErr != nil {
+					return nil, cancelErr
+				}
 				if err2 != nil {
 					return nil, fmt.Errorf("batch+fallback embed: %w (single: %v)", err, err2)
 				}
@@ -341,7 +380,11 @@ func findOrtDylibDir() (string, error) {
 
 // Close releases hugot session resources.
 func (e *Embedder) Close() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	if e.session != nil {
 		e.session.Destroy()
+		e.session = nil
 	}
+	e.pipeline = nil
 }
