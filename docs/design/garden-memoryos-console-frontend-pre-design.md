@@ -1,5 +1,7 @@
 # Garden MemoryOS Console 前端预设计
 
+> **2026-10-11 policy supersession:** This integration/design baseline does not establish the new Recap UI or context policy. The selected policy requires one subject-level free-form Recap, revision-aware human control and deferred tools; inventory capture/Work/evolution consumers before changing them. Current merged integration evidence is indexed separately. See [ADR-0018](../architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 **状态：** 预设计，未实现  
 **日期：** 2026-08-14  
 **依据：** ADR-0012、ADR-0013、`oil-frontend` 规则  

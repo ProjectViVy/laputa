@@ -1,5 +1,7 @@
 # Garden clean-break API 契约（Story 0.3）
 
+> **2026-10-11 policy supersession:** This frozen execution/API/acceptance baseline retains its original scope. Its ACTMEM tool-only, structured-head and fixed-budget assumptions must be replanned for the selected VIVY policy; existing interfaces remain until reviewed implementation changes. See [ADR-0018](../../architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 **状态：** Frozen / 后续 REST、MCP、Console 实现的共同契约
 **冻结日期：** 2026-09-03
 **契约版本：** `garden-clean-break/1`

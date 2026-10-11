@@ -1,5 +1,7 @@
 # Epic 3 — MCP Conformance and Explicit Tool Surface
 
+> **2026-10-11 policy supersession:** This frozen execution/API/acceptance baseline retains its original scope. Its ACTMEM tool-only, structured-head and fixed-budget assumptions must be replanned for the selected VIVY policy; existing interfaces remain until reviewed implementation changes. See [ADR-0018](../../../architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 **Outcome:** `garden-mcp` becomes a truthful thin adapter for the same external-Agent contract; explicit resources remain outside automatic context.
 
 **Requirements:** FR-MCP-01..02, FR-REC-05, FR-AUTH-01  

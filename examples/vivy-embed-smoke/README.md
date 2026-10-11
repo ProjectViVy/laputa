@@ -1,5 +1,7 @@
 # Vivy-style embedded Go consumer smoke
 
+> **2026-10-11 policy supersession:** This remains an independent importability fixture. Its baseline context assertions neither implement the selected Recap policy nor certify installed-product Windows/real-model acceptance. See [ADR-0018](../../docs/architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 This is an **independent Go module**, not a Garden package or Vivy integration. It imports the public `github.com/ProjectViVy/laputa/garden/agentapi` API and uses Laputa's public `persona` package only for operator fixture initialization. Local `replace` directives point to sibling source modules; this proves **local importability**, not remote module publication or Vivy product integration.
 
 From this directory:

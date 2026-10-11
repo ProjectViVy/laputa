@@ -22,35 +22,37 @@ console's `dist/` output.
 
 ## Current Architecture
 
-[ADR-0012: Laputa Markdown Clean Break](docs/architecture/0012-laputa-markdown-clean-break.md) is the current contract.
+[ADR-0012: Laputa Markdown Clean Break](docs/architecture/0012-laputa-markdown-clean-break.md) is the preserved authority contract. [ADR-0018](docs/architecture/0018-vivy-unified-context-and-recap-policy.md) records the current selected VIVY context direction; implementation is pending.
 
 [ADR-0013](docs/architecture/0013-laputa-clean-break-implementation-architecture.md) defines the clean-break implementation order. [ADR-0014](docs/architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md) makes canonical SQLite the sole Mentle memory authority and treats vector/BM25 indexes as rebuildable projections.
 
 ```text
-Laputa  = seven Markdown personality authorities + Persona review/history + ACTMEM semantics
+Laputa  = governed Markdown personality authorities + Persona review/history + ACTMEM semantics
 Mentle  = raw material, evidence, retrieval, index, provenance
 Garden  = activity/runtime orchestration, bounded ContextView, host integration, console
 EvoMap  = capability candidates, proposal review, artifact lifecycle, mailbox, Hub policy
 ```
 
-Laputa authority is one profile, one directory, and exactly these seven uppercase Markdown files:
+Laputa authority is one profile, one directory, and the original seven uppercase Markdown files:
 
 ```text
 IDENTITY.MD      RELATIONSHIP.MD  REDLINE.MD  USER.MD
 DREAM.MD         DARK.MD          WORLD.MD
 ```
 
-`ACTMEM.MD` is the profile-wide cross-session activity memory. It is not a personality authority and is never default prompt context.
+The existing cognitive implementation additionally supports human-only `MISSION.MD` and its versioned Mission slot (ADR-0017). This policy adds no new Persona kind or Frozen Core slot.
+
+`ACTMEM.MD` remains separate from personality authority and backend evidence. The selected VIVY policy uses one persistent, free-form AI-organized Recap per subject, shared across its sessions. LIFE is the first default-enabled pilot; coding is excluded from phase 1.
 
 ## Context Discipline
 
 | Lane | Content |
 | --- | --- |
-| Frozen Core | Bounded session-frozen projections of `IDENTITY`, `RELATIONSHIP`, `REDLINE`, `USER`, `DREAM`, and `DARK` |
-| Dynamic loading | Empty in v1 |
+| Frozen Core | Existing Mission v2 slot and bounded session-frozen projections of `IDENTITY`, `RELATIONSHIP`, `REDLINE`, `USER`, `DREAM`, and `DARK` |
+| Dynamic loading | Baseline empty; selected VIVY policy may admit a bounded Recap through authorized scope/budget policy |
 | Tool access | Full `WORLD.MD`, full `ACTMEM.MD`, full authority documents, Mentle evidence, reports, and history |
 
-Neither `WORLD.MD` nor `ACTMEM.MD` may enter Fast Recall, Deep Recall, bootstrap, or automatic ContextView assembly.
+`WORLD.MD` remains tool-only. ACTMEM stays outside Frozen Core and is admitted only by the selected policy. Commit revision-aware Recap consolidation before retiring raw CONTEXT; retained raw evidence is preserved. A dedicated UI must allow full human inspection/edit/delete; clearing active Recap invalidates projections without cascade deletion. Agent inspect/update/delete tools require deferred discovery and explicit activation; the exact mechanism remains unresolved.
 
 ## EvoMap
 
@@ -58,7 +60,7 @@ EvoMap is retained and owns all capability-artifact lifecycle: evolution candida
 
 ## Clean Break
 
-The following are retired and must not appear in new runtime design: JSON Persona descriptors, `.laputa/sections/*.json` authority state, `Commitment`, `Preferences`, `MemoryMD`, `MEMORY.MD`, `memory_md`, JSON Patch, generic Persona governance mutation, automatic WORLD projection, and automatic ACTMEM projection.
+The following are retired and must not appear in new runtime design: JSON Persona descriptors, `.laputa/sections/*.json` authority state, `Commitment`, `Preferences`, `MemoryMD`, `MEMORY.MD`, `memory_md`, JSON Patch, generic Persona governance mutation, automatic WORLD projection, and ACTMEM projection outside the selected policy.
 
 There is no migration, dual read/write, descriptor mapping, or fallback to retired JSON authority data.
 
@@ -73,7 +75,9 @@ GOSUMDB=off go test -tags=e2e ./e2e/...
 
 ## Documentation
 
-- [Current Architecture: ADR-0012](docs/architecture/0012-laputa-markdown-clean-break.md)
+- [Selected VIVY Context Policy: ADR-0018](docs/architecture/0018-vivy-unified-context-and-recap-policy.md)
+- [Alignment and Evidence Inventory](docs/dev/memory-policy-alignment-2026-10-11.md)
+- [Preserved Authority Architecture: ADR-0012](docs/architecture/0012-laputa-markdown-clean-break.md)
 - [Implementation Architecture: ADR-0013](docs/architecture/0013-laputa-clean-break-implementation-architecture.md)
 - [Mentle Recovery Authority: ADR-0014](docs/architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md)
 - [Authority & Recovery GOAL Runbook](docs/bmad/garden-authority-recovery-2026-09/GOAL-EXECUTION-RUNBOOK.md)

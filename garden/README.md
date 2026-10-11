@@ -1,5 +1,7 @@
 # Garden
 
+> **2026-10-11 policy supersession:** The embedded consumer description below is a historical smoke boundary, not the latest DIVA integration status. Baseline API semantics are unchanged by this documentation update; selected Recap policy and merged evidence are indexed in docs/dev/memory-policy-alignment-2026-10-11.md. See [ADR-0018](../docs/architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 Unified CLI / HTTP application and importable Garden domain entry for Laputa governance and Mentle memory.
 
 ## Module
@@ -97,4 +99,4 @@ built-in configuration used when the file does not exist.
 - **Phase 4**: complete — opt-in, full-process HTTP e2e tests (`go test -tags=e2e ./e2e/...`)
 - **Phase 5**: governed Pipeline Runtime + Agentic RAG context resolution
 
-See `../GARDEN-PLAN.md` and `../docs/architecture/0001-garden-merge.md`.
+Use the [current documentation index](../docs/README.md); phase labels above describe the historical application baseline.

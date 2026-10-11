@@ -1,5 +1,7 @@
 # ADR-0016: Embeddable Laputa Libraries and Modular Monolith
 
+> **2026-10-11 policy supersession:** The absolute ACTMEM exclusion, prior tool baseline and active schema are superseded only under the selected VIVY policy. WORLD exclusion, Persona governance, existing Mission/Frozen Core semantics and storage ownership remain. See [ADR-0018](0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 **Status:** accepted direction; M1–M3 implemented in part, M4–M5 gated
 **Date:** 2026-09-27
 **Decision owner:** project owner

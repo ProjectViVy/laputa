@@ -19,7 +19,7 @@ The replacement must provide:
 
 - No JSON personality descriptors or `.laputa/sections/*.json` authority store.
 - No JSON Patch, dot-path patch, JSON schema, compatibility map, migration, dual read/write, or fallback path.
-- No automatic `WORLD.MD` or `ACTMEM.MD` context projection.
+- No automatic `WORLD.MD` projection or ACTMEM admission outside the selected [ADR-0018](../../docs/architecture/0018-vivy-unified-context-and-recap-policy.md) policy. Legacy event providers gain no consolidation authority.
 - No EvoMap proposal/mailbox or Skill lifecycle storage.
 
 Do not expand the legacy engine. New implementation work must be introduced through the deletion-first clean-break plan, with tests that prove retired contracts cannot be reached.
