@@ -2,7 +2,7 @@
 
 One package supplies the opt-in native Persona hook. Native memory remains S09; no second plugin or memory-slot replacement is registered here.
 
-Target: OpenClaw **2026.10.2**, source **b8952d477f0c932d8ddc6da5c89cab5a169b6ff1**, Linux x86_64 embedded runner. Build/unit checks alone do not qualify the native runner. Exact runtime evidence is recorded in the authoritative Garden plan index.
+Target: OpenClaw **2026.10.2**, source **b8952d477f0c932d8ddc6da5c89cab5a169b6ff1**, Linux x86_64 embedded runner. Build/unit checks alone do not qualify the native runner. Actual model-request qualification is recorded in [the experiment](../../../docs/research/garden-openclaw-native-qualification-2026-10-12.md); [the authoritative index](../../../docs/superpowers/plans/garden-standalone-v1/index.md) owns status.
 
 ```sh
 npm ci --ignore-scripts
@@ -10,7 +10,7 @@ npm test
 openclaw plugins install --link --no-enable /absolute/path/to/this/package
 ```
 
-Native install is inert with `--no-enable`. Merely discovering the package registers no handlers. Activation requires the owner's existing native configuration, explicit `plugins enable garden`, `plugins.entries.garden.hooks.allowConversationAccess=true`, prompt injection allowed, and a separately enabled Garden PersonaSync binding. Installer confirmation options are host-native; never overwrite an existing package without owner authorization.
+`--no-enable` leaves a new registration inactive and preserves existing enablement, allowlists and denylists. Inspect the existing entry before an update; this flag does not disable an already-enabled plugin. Passive package discovery, disabled entries, CLI metadata, setup and tool scans perform no request or credential read. The pinned runtime uses both full and scoped discovery registries for explicitly enabled plugins; these capture a lazy callback, and native permissions still govern its registration. Activation requires the owner's existing native configuration, explicit `plugins enable garden`, `plugins.entries.garden.hooks.allowConversationAccess=true`, prompt injection allowed, and a separately enabled Garden PersonaSync binding. Installer confirmation options are host-native; never overwrite an existing package without owner authorization.
 
 Configure `plugins.entries.garden.config` with `endpoint` (loopback HTTP Garden origin), `bindingID`, `credentialFile`, `hostInstance`, `agentID`, and the existing `workspaceDir`. Keep the credential in an owner-only directory/file (0700/0600 on the qualified platform), never in instructions or plugin JSON. The owner configures the matching native scope in Garden as SHA-256 hex of agent ID, newline, canonical workspace; previews while off, enables PersonaSync explicitly, then confirms that preview. Recall/Capture remain independent.
 

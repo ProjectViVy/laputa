@@ -3,7 +3,19 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createPromptHandler, type GardenPromptConfig, type NativeContext } from "./index.js";
+import plugin, { createPromptHandler, type GardenPromptConfig, type NativeContext } from "./index.js";
+
+test("enabled scoped runtime discovery registers a lazy hook; metadata/setup/tool scans stay inert",()=>{
+ const f=fixture();try{
+  for(const mode of ["full","discovery","cli-metadata","setup-only","setup-runtime","tool-discovery"]){
+   const hooks:string[]=[];
+   // Native loader admits enabled entries and applies permission policy to api.on.
+   // Registration must not read this absent secret or call any runtime/session API.
+   plugin.register!({registrationMode:mode,pluginConfig:{...f.config,credentialFile:join(f.dir,"not-created")},runtime:{version:"2026.10.2"},logger:{warn:()=>{}},on:(name:string)=>hooks.push(name)} as any);
+   assert.deepEqual(hooks,mode==="full"||mode==="discovery"?["before_prompt_build"]:[]);
+  }
+ }finally{rmSync(f.dir,{recursive:true,force:true})}
+});
 
 function fixture() {
  const dir = mkdtempSync(join(tmpdir(), "garden-openclaw-"));

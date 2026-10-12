@@ -53,7 +53,10 @@ function embeddedContext(api:OpenClawPluginApi,ctx:NativeContext):boolean{
  return !!api.runtime.agent.resolveSessionCatalogCreateTarget({config:api.runtime.config.current() as OpenClawPluginApi["config"],requestedAgentId:ctx.agentId,provider:ctx.modelProviderId,modelIds:[ctx.modelId],agentRuntime:"openclaw"});
 }
 export default definePluginEntry({id:"garden",name:"Garden",description:"Opt-in native Garden Persona",configSchema:buildJsonPluginConfigSchema(manifest.configSchema),register(api){
- if(api.registrationMode!=="full")return;
+ // The pinned CLI replaces its full registry with enabled, scoped discovery
+ // registries before a turn. Capture a lazy callback there too; metadata/setup
+ // scans stay inert, and native permission policy still governs api.on.
+ if(api.registrationMode!=="full"&&api.registrationMode!=="discovery")return;
  const cfg=api.pluginConfig??{};const names=["endpoint","bindingID","credentialFile","hostInstance","agentID","workspaceDir"] as const;
  if(names.some(name=>typeof cfg[name]!=="string"||!String(cfg[name]).trim())){api.logger.warn("Garden Persona inactive: incomplete configuration");return}
  const config={...Object.fromEntries(names.map(name=>[name,cfg[name]])),hostVersion:api.runtime.version,isEmbeddedContext:(ctx:NativeContext)=>embeddedContext(api,ctx),diagnose:(code:string)=>api.logger.warn(`Garden Persona omitted: ${code}`)} as GardenPromptConfig;
