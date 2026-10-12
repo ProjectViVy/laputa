@@ -1,6 +1,6 @@
 # Standalone Garden v1 — authoritative Epic/Story plan index
 
-**Date:** 2026-10-12 · **Status:** CONTROLLED-EDITING / NATIVE-PERSONA INCREMENT PLANNED AND SELF-REVIEWED; S14 READY FOR ORIGINAL EXECUTOR; RUNTIME DELIVERY PENDING
+**Date:** 2026-10-12 · **Status:** S14 IMPLEMENTED AND INDEPENDENTLY RECHECKED; S15 IN PROGRESS; NATIVE HOST DELIVERY PENDING
 
 Authoritative design: [specification](../../specs/2026-10-12-garden-standalone-v1-design.md). Decision record: [ADR-0019](../../../architecture/0019-garden-standalone-v1.md). Increment evidence: [controlled-editing research](../../../research/garden-standalone-v1-controlled-editing-research-2026-10-12.md), [exact host pins](../../../research/garden-host-pins-2026-10-12.md), [spec/plan review and handoff](controlled-editing-review.md). Runtime baseline is `3c4cfffe33d92ad1105ad31dec259c901cc24a4e` on `feat/garden-standalone-v1`.
 
@@ -115,8 +115,8 @@ These are logical orderings, not authorization for parallel agents or an estimat
 | S11 | Blocked | Q5 target OS/package/private-permission implementation and S06 attachment support; candidate DeepSeek model needs release/account validation, no new provider chooser. |
 | S12 | Blocked | Q3/S04 Recap contract and all required predecessor evidence; history/UI tasks independent in design but full Story cannot claim ready. |
 | S13 | Blocked | Integrated predecessor/host/package/Recap evidence; Q2 needed only for final release timing/completion claim. S05 qualification still required for full R3. |
-| S14 | Ready for original native executor | Spec/plan self-review complete; S03 contract is implemented. No routine parameter or product blocker. Refresh supported no-base API callers before removal. |
-| S15 | Waiting for S14 | S08 exists; S14 coherent committed snapshot/edit gate must land first. No new product decision or platform dependency. |
+| S14 | Implemented; independent code review/recheck PASS | `eb67480`, `2e81381`, `23e745f`: lease/all-writer/snapshot contracts, owner API and live UI. Persona suite/race, embedded Human/DIVA, HTTP and nine real-browser cases PASS. No production no-base caller found. One bounded Acquire-response recovery Minor deferred; see evidence below. |
+| S15 | In progress in original executor | S08 and reviewed S14 contracts now exist. Implement coordinator → transport → minimal host UI, then independent slice review/recheck. No host delivery claim until S16 acceptance. |
 | S16 | Waiting for S15; runtime qualification required | Source-pinned callback/package contract ready; exact isolated embedded runner and actual prompt capture required for acceptance. |
 | S17 | Waiting for S15; runtime qualification required | Source-pinned persistent-turn hook ready; real same-profile CLI/gateway evidence required. Additive user-context priority is explicit; no unapproved SOUL replacement. |
 
@@ -272,3 +272,19 @@ Deliberately unqualified: non-native/unsupported hard-link filesystems and OS/pa
 
 14. Parent-authorized R4 resolution removes generic destructive existing-file Apply/Revoke. Common core offers missing-target no-clobber creation and explicit manual apply/cleanup with durable truthful status; real native CAS belongs to S09/S10. Cost: less automation for existing files, with no lost external-editor writes or false atomicity/retroactive-unload claim. The material change was surfaced before coding.
 15. Parent explicitly requested the existing reviewer re-check R4 and changed contracts, overriding the earlier one-review-only limit. Scope is this conservative delta and its evidence; no second broad review or new implementer agents. Cost: one bounded additional review cycle, not wider product work; narrowed S08 automation still needs parent acceptance.
+
+### Controlled editing execution evidence — S14
+
+Implementation: `eb674807e130937ec1cbd85d8bfbefffd81e0347` lease lifecycle; `2e813815707ed2f98f4be7ee7e9d0e0412dc1c82` all retained writer gates/coherent committed snapshots; `23e745f65c76badc83203677b17f34dbc37edff5` owner HTTP/editor UI. Independent specification review and code review/recheck passed; three Important UI defects were reproduced/fixed: actual history envelope after lost Save, retained-proof reconciliation after a heartbeat interruption, and same-resource metadata Retry unmounting a draft.
+
+Observed verification: Laputa full suite; focused Persona race; actual embedded HumanClient lease denial; existing tagged DIVA cognitive composition; Garden server/agentapi suites; console build; final Persona/HTTP checks PASS. Real Chromium against a local test-only server passed two-tab exclusion, dirty profile/navigation cancellation, 121-second expiry with draft retention, explicit reconciliation/live viewer, metadata Retry retention, committed Save response loss with history inspection/no duplicate revision, cap validation retaining proof, transient heartbeat recovery before TTL, and late A renewal while B edits. No page errors. No user homes, credentials or host configuration were modified.
+
+Supporting artifact directory: `/workspace/garden-standalone-v1-evidence-20261012/S14/` (review, progress, browser script/results/screenshot and focused logs). The server fixture is build-tagged and uses temporary homes; its clock advance is test-only.
+
+Ruling: use the existing React Router data API for actual navigation/back blocking, plus a pre-selection profile guard; no new dependency. Cost if wrong: navigation could otherwise discard in-memory private drafts.
+Ruling: preserve same-resource `useApi` data on reload, and fence poll responses; collection Retry must not unmount an editor. Cost if wrong: stale read metadata remains visible during an outage, accompanied by its explicit error.
+Ruling: preserve existing wrong/missing owner-origin 401 denial rather than changing the authentication contract; no mutation is admitted. Cost if wrong: an HTTP client expecting 403 must still handle the existing authenticated denial.
+Ruling: keep the actual history API envelope across the helper, viewer and lost-response check. Cost if wrong: a successful interrupted Save cannot be truthfully confirmed.
+Deferred Minor: a lost Acquire response can require waiting for the bounded 120-second lease expiry instead of reusing the same client request ID; no draft has been acquired or lost, and the server's acquire idempotency remains implemented.
+
+S14 closes U1/U2 authority/editor acceptance only. S15/S16/S17/S10 remain necessary for automatic host delivery; independent memory qualification and Q2/Q3 are unchanged.
