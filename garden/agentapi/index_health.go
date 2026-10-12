@@ -13,6 +13,9 @@ func (s *Service) IndexHealth(ctx context.Context, principal Principal, binding 
 	if err := s.check(binding, principal, OpIndexHealth); err != nil {
 		return facade.IndexHealth{}, err
 	}
+	if s.installation != nil && principal != PrincipalUser {
+		return facade.IndexHealth{}, failure("unavailable", "installation-wide index probes require owner access")
+	}
 	if s.runtime.Mentle == nil {
 		return unavailableIndexHealth([]string{"canonical_probe_failed"})
 	}

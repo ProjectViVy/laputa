@@ -169,7 +169,7 @@ func (s *Service) ReadEvidence(ctx context.Context, principal Principal, binding
 	if err := s.check(binding, principal, OpExpand); err != nil {
 		return nil, err
 	}
-	if len(q.Items) == 0 || q.PerItemBudget < 0 || q.PerItemBudget > 4000 || q.TotalBudget < 0 || q.TotalBudget > 16000 {
+	if len(q.Items) == 0 || len(q.Items) > 20 || q.PerItemBudget < 0 || q.PerItemBudget > 4000 || q.TotalBudget < 0 || q.TotalBudget > 16000 {
 		return nil, failure("invalid_request", "invalid evidence references or budgets")
 	}
 	for _, item := range q.Items {
@@ -177,17 +177,37 @@ func (s *Service) ReadEvidence(ctx context.Context, principal Principal, binding
 			return nil, failure("invalid_request", "card id and expected_revision are required")
 		}
 	}
-	backend, scopes, err := s.memoryBackend(binding)
+	backend, scopes, err := s.memoryBackendFor(binding, OpExpand)
 	if err != nil {
 		return nil, err
 	}
+	remaining := q.TotalBudget
+	if remaining == 0 {
+		remaining = 16000
+	}
+	perItem := q.PerItemBudget
+	if perItem == 0 {
+		perItem = 800
+	}
 	result := make([]EvidenceFragment, 0, len(q.Items))
 	for _, item := range q.Items {
-		page, err := backend.Expand(ctx, memory.AuthorizedExpansion{Scopes: scopes, CardID: item.CardID, ExpectedRevision: item.ExpectedRevision, BudgetChars: q.PerItemBudget})
+		if remaining <= 0 {
+			if len(result) > 0 {
+				result[len(result)-1].Truncated = true
+			}
+			break
+		}
+		page, err := backend.Expand(ctx, memory.AuthorizedExpansion{Scopes: scopes, CardID: item.CardID, ExpectedRevision: item.ExpectedRevision, BudgetChars: min(perItem, remaining)})
 		if err != nil {
 			return nil, materialError(err)
 		}
-		result = append(result, page.Items...)
+		for _, fragment := range page.Items {
+			if page.Truncated {
+				fragment.Truncated = true
+			}
+			remaining -= len([]rune(fragment.Excerpt))
+			result = append(result, fragment)
+		}
 	}
 	return result, nil
 }
@@ -197,8 +217,11 @@ func (s *Service) ReadEvidence(ctx context.Context, principal Principal, binding
 // the trusted scope. Scope is always derived from the host binding, never
 // from request fields.
 func (s *Service) memoryBackend(binding Binding) (memory.Backend, []evolution.Scope, error) {
+	return s.memoryBackendFor(binding, OpSearch)
+}
+func (s *Service) memoryBackendFor(binding Binding, op Operation) (memory.Backend, []evolution.Scope, error) {
 	if s.installation != nil {
-		access, err := s.resolve(context.Background(), binding, OpSearch, "")
+		access, err := s.resolve(context.Background(), binding, op, "")
 		if err != nil {
 			return nil, nil, err
 		}
@@ -252,6 +275,9 @@ func (s *Service) ListCollections(ctx context.Context, principal Principal, bind
 
 func materialError(err error) error {
 	var normalized *Error
+	if errors.As(err, &normalized) {
+		return normalized
+	}
 	if errors.Is(err, facade.ErrUnavailable) {
 		normalized = failure("unavailable", "Mentle unavailable")
 	} else {

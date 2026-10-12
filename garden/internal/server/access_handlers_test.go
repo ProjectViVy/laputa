@@ -10,12 +10,15 @@ import (
 	"testing"
 
 	"github.com/ProjectViVy/laputa/garden/agentapi"
+	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
+	"github.com/ProjectViVy/laputa/laputa/persona"
 )
 
 func installationServer(t *testing.T) (*Server, string) {
 	t.Helper()
 	home := t.TempDir()
-	i, err := agentapi.OpenInstallation(context.Background(), agentapi.InstallationConfig{Home: home, StateDB: filepath.Join(home, "garden.db"), PalacePath: filepath.Join(home, "memory"), ModelsDir: filepath.Join(home, "models")})
+	owner, err := runtimecore.OpenOwner(context.Background(), runtimecore.OwnerConfig{Home: home, Config: runtimecore.Config{StateDB: filepath.Join(home, "garden.db"), PalacePath: filepath.Join(home, "memory"), ModelsDir: filepath.Join(home, "models"), CatalogOnly: true}})
+	i := agentapi.NewInstallation(owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,12 +27,19 @@ func installationServer(t *testing.T) (*Server, string) {
 		if _, err = i.RegisterProfile(context.Background(), agentapi.ProfileRegistration{ProfileID: id, Create: true}); err != nil {
 			t.Fatal(err)
 		}
+		g, e := owner.Subject(context.Background(), id)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, e = g.Persona.Initialize(persona.Initialization{Identity: id, Relationship: "r", Redline: "safe", User: "u", World: "w"}, "user", persona.SourceInit, "init"); e != nil {
+			t.Fatal(e)
+		}
 	}
 	p, code, err := NewPairing()
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &Server{Installation: i, Pairing: p, Capabilities: CapabilityConfig{AgentToken: "old-role-token"}}, code
+	return &Server{Owner: owner, Installation: i, Pairing: p, Capabilities: CapabilityConfig{AgentToken: "old-role-token"}}, code
 }
 
 func pairOwner(t *testing.T, s *Server, code string) *http.Cookie {

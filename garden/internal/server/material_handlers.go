@@ -18,7 +18,7 @@ func (s *Server) materialsRead(w http.ResponseWriter, r *http.Request) (agentapi
 		writeErrorWithCode(w, http.StatusServiceUnavailable, "unavailable", errors.New("mentle unavailable"))
 		return "", agentapi.Binding{}, false
 	}
-	return agentapi.Principal(principal), agentapi.Binding{ProfileID: s.ProfileID, AgentID: "garden-http", Platform: "http", SessionID: "garden-http-read"}, true
+	return agentapi.Principal(principal), s.requestBinding("garden-http-read"), true
 }
 
 func writeMaterialsReadError(w http.ResponseWriter, err error) {
@@ -68,7 +68,7 @@ func (s *Server) handleMaterialsCards(w http.ResponseWriter, r *http.Request) {
 		writeMaterialsReadError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"cards": page.Cards, "next_cursor": page.NextCursor, "source": "live"})
+	writeJSON(w, http.StatusOK, map[string]any{"cards": page.Cards, "next_cursor": page.NextCursor, "source": "live", "truncated": page.Truncated})
 }
 
 func (s *Server) handleMaterialsEvidence(w http.ResponseWriter, r *http.Request) {

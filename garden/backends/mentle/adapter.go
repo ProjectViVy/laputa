@@ -207,7 +207,7 @@ func (a *Adapter) Expand(ctx context.Context, req memory.AuthorizedExpansion) (m
 		perItem = 800
 	}
 	fragments := []facade.EvidenceFragment{facade.RenderMemoryEvidence(record, perItem)}
-	out := memory.EvidencePage{Items: make([]memory.EvidenceFragment, 0, len(fragments))}
+	out := memory.EvidencePage{Items: make([]memory.EvidenceFragment, 0, len(fragments)), Truncated: len([]rune(record.Content)) > perItem}
 	enc := memory.EncodeScope(decoded)
 	for _, f := range fragments {
 		out.Items = append(out.Items, memory.EvidenceFragment{
@@ -255,6 +255,12 @@ func (a *Adapter) Mutate(ctx context.Context, req memory.AuthorizedMutation) (me
 		evolution.MutationTombstone: "tombstone",
 	}[req.Operation]
 	metadata := map[string]any{"inference": string(req.Inference)}
+	if req.Collection != "" {
+		metadata["collection"] = req.Collection
+	}
+	if req.Origin.ProfileID != "" {
+		metadata["origin"] = req.Origin
+	}
 	if len(req.Sources) > 0 {
 		metadata["evolution_sources"] = append([]evolution.SourceRef(nil), req.Sources...)
 	}
@@ -268,7 +274,8 @@ func (a *Adapter) Mutate(ctx context.Context, req memory.AuthorizedMutation) (me
 		ExpectedRevision: int(req.ExpectedRevision),
 		ExpectedAbsent:   req.ExpectedAbsent,
 		Body:             req.Body,
-		Sources:          sources,
+		Kind:             req.Kind, Tags: req.Tags,
+		Sources: sources,
 		// The native Source is the primary locator; retain the complete
 		// typed reference set in the same canonical row's metadata.
 		Metadata:  metadata,

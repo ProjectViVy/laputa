@@ -53,3 +53,31 @@ func (s *Service) SubmitSession(ctx context.Context, principal Principal, req Se
 	}
 	return SessionAccepted{IngestionID: accepted.IngestionID, SessionID: accepted.SessionID, EventID: accepted.EventID, Status: accepted.Status}, nil
 }
+
+// SubmitBoundSession accepts lifecycle content for one admitted host session.
+// The host workspace is fixed; explicit authored sharing uses MutateMemory.
+func (s *Service) SubmitBoundSession(ctx context.Context, p Principal, b Binding, req SessionSubmitRequest) (SessionAccepted, error) {
+	if err := s.check(b, p, OpCapture); err != nil {
+		return SessionAccepted{}, err
+	}
+	if req.Workspace != "" && req.Workspace != b.WorkspaceID {
+		return SessionAccepted{}, failure("invalid_binding", "workspace conflicts with host binding")
+	}
+	event := s.eventPrefix(b) + req.EventID
+	session, identity, err := s.captureIdentity(ctx, b, event)
+	if err != nil {
+		return SessionAccepted{}, err
+	}
+	accepted, err := s.runtime.Ingest.Submit(ctx, ingest.SubmitRequest{Identity: identity, SessionID: session, EventID: event, Phase: req.Phase, Content: req.Content, ContentHash: req.ContentHash, Workspace: b.WorkspaceID, OccurredAt: req.OccurredAt})
+	if errors.Is(err, ingest.ErrEventConflict) {
+		return SessionAccepted{}, failure("event_conflict", err.Error())
+	}
+	if err != nil {
+		return SessionAccepted{}, failure("invalid_request", err.Error())
+	}
+	return SessionAccepted{IngestionID: accepted.IngestionID, SessionID: b.SessionID, EventID: accepted.EventID, Status: accepted.Status}, nil
+}
+func (s *Service) SessionStatus(ctx context.Context, p Principal, b Binding, id, event string) (CaptureStatus, error) {
+	b.EventID = event
+	return s.CaptureStatus(ctx, p, b, id)
+}

@@ -11,6 +11,7 @@ import (
 	"github.com/ProjectViVy/laputa/garden/internal/ingest"
 	"github.com/ProjectViVy/laputa/garden/internal/recall"
 	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
+	"github.com/ProjectViVy/laputa/garden/memory"
 )
 
 // Service is the trusted in-process entrypoint. The caller supplies a principal
@@ -26,6 +27,23 @@ func NewService(runtime *runtimecore.Garden) *Service { return &Service{runtime:
 
 func eventPrefix(b Binding) string {
 	return "agent/" + base64.RawURLEncoding.EncodeToString([]byte(b.ProfileID+"\x00"+b.AgentID+"\x00"+b.Platform+"\x00"+b.SessionID)) + "/"
+}
+
+func (s *Service) eventPrefix(b Binding) string {
+	if s.installation != nil {
+		return "binding/" + s.bindingID + "/" + base64.RawURLEncoding.EncodeToString([]byte(b.SessionID)) + "/"
+	}
+	return eventPrefix(b)
+}
+func (s *Service) captureIdentity(ctx context.Context, b Binding, event string) (string, *ingest.Identity, error) {
+	if s.installation == nil {
+		return b.SessionID, nil, nil
+	}
+	a, err := s.resolve(ctx, b, OpCapture, "")
+	if err != nil {
+		return "", nil, err
+	}
+	return a.SessionKey, &ingest.Identity{ProfileID: a.ProfileID, BindingID: a.BindingID, HostSessionID: b.SessionID, HostEventID: event, Scope: memory.EncodeScope(a.WriteScope)}, nil
 }
 
 // FastRecallRequest carries the same recall inputs as the domain FastService,
@@ -53,6 +71,9 @@ func failure(code, message string) *Error {
 func (s *Service) check(binding Binding, principal Principal, op Operation) error {
 	if s == nil || s.runtime == nil {
 		return failure("unavailable", "Garden runtime unavailable")
+	}
+	if s.installation != nil && s.principal != PrincipalUser && principal != s.principal {
+		return failure("principal_forbidden", "principal exceeds admitted host capability")
 	}
 	if err := Authorize(s.runtime.ProfileID, binding, principal, op); err != nil {
 		return err
@@ -82,7 +103,13 @@ func (s *Service) recall(ctx context.Context, binding Binding, principal Princip
 		return ContextView{}, failure("unavailable", "fast recall unavailable")
 	}
 	fast := *s.runtime.FastRecall
-	fast.Searcher = &authorizedCardSearcher{s: s, b: binding, p: principal}
+	if fast.Searcher != nil || s.runtime.Mentle != nil || len(s.runtime.Backends) > 0 {
+		readBinding := binding
+		if readBinding.SessionID == "" {
+			readBinding.SessionID = "garden-recall-read"
+		}
+		fast.Searcher = &authorizedCardSearcher{s: s, b: readBinding, p: principal}
+	}
 	if s.runtime.InstallationOwned() {
 		key := s.bindingID
 		if key == "" {
@@ -130,20 +157,24 @@ func (s *Service) Capture(ctx context.Context, principal Principal, req CaptureR
 	if strings.TrimSpace(req.Provenance.RunID) == "" || req.Provenance.EventSeq == 0 {
 		return CaptureReceipt{}, failure("invalid_request", "run_id and event_seq are required")
 	}
-	if s.runtime.InstallationOwned() {
-		return CaptureReceipt{}, failure("unavailable", "installation capture requires per-row binding")
+	if s.installation != nil && req.Activity != nil {
+		return CaptureReceipt{}, failure("unavailable", "installed automatic Recap projection awaits continuity policy; capture without Activity remains available")
 	}
 	if s.runtime.Ingest == nil {
 		return CaptureReceipt{}, failure("unavailable", "ingest unavailable")
 	}
-	event := eventPrefix(req.Binding) + req.Provenance.RunID + ":" + fmt.Sprint(req.Provenance.EventSeq)
+	event := s.eventPrefix(req.Binding) + req.Provenance.RunID + ":" + fmt.Sprint(req.Provenance.EventSeq)
 	// The host phase is terminal provenance; ingest's session_end phase is its
 	// own ingestion lifecycle and must not be confused with the host phase.
 	var activity *ingest.CaptureActivity
 	if req.Activity != nil {
 		activity = &ingest.CaptureActivity{Phase: string(req.Phase), UserText: req.Activity.UserText}
 	}
-	accepted, err := s.runtime.Ingest.Submit(ctx, ingest.SubmitRequest{SessionID: req.Binding.SessionID, EventID: event, Phase: "session_end", Content: req.Content, ContentHash: req.ContentHash, Workspace: req.Binding.WorkspaceID, OccurredAt: req.OccurredAt, Activity: activity})
+	session, identity, err := s.captureIdentity(ctx, req.Binding, event)
+	if err != nil {
+		return CaptureReceipt{}, err
+	}
+	accepted, err := s.runtime.Ingest.Submit(ctx, ingest.SubmitRequest{Identity: identity, SessionID: session, EventID: event, Phase: "session_end", Content: req.Content, ContentHash: req.ContentHash, Workspace: req.Binding.WorkspaceID, OccurredAt: req.OccurredAt, Activity: activity})
 	if errors.Is(err, ingest.ErrEventConflict) {
 		return CaptureReceipt{}, failure("event_conflict", err.Error())
 	}
@@ -155,7 +186,7 @@ func (s *Service) Capture(ctx context.Context, principal Principal, req CaptureR
 	if accepted.EventID != event {
 		return CaptureReceipt{}, failure("event_conflict", "content already captured for a different event")
 	}
-	return CaptureReceipt{IngestionID: accepted.IngestionID, SessionID: accepted.SessionID, EventID: accepted.EventID, Status: accepted.Status, Seq: accepted.Seq}, nil
+	return CaptureReceipt{IngestionID: accepted.IngestionID, SessionID: req.Binding.SessionID, EventID: accepted.EventID, Status: accepted.Status, Seq: accepted.Seq}, nil
 }
 func (s *Service) CaptureStatus(ctx context.Context, principal Principal, binding Binding, id string) (CaptureStatus, error) {
 	if err := s.check(binding, principal, OpCapture); err != nil {
@@ -164,11 +195,15 @@ func (s *Service) CaptureStatus(ctx context.Context, principal Principal, bindin
 	if s.runtime.Ingest == nil {
 		return CaptureStatus{}, failure("unavailable", "ingest unavailable")
 	}
-	if binding.EventID == "" || !strings.HasPrefix(binding.EventID, eventPrefix(binding)) {
+	if binding.EventID == "" || !strings.HasPrefix(binding.EventID, s.eventPrefix(binding)) {
 		return CaptureStatus{}, failure("invalid_binding", "capture event_id must belong to binding")
 	}
 	// The durable ingestion row, not process-local receipt state, owns status.
-	status, err := s.runtime.Ingest.GetByIdentity(ctx, id, binding.SessionID, binding.EventID)
+	session, _, err := s.captureIdentity(ctx, binding, binding.EventID)
+	if err != nil {
+		return CaptureStatus{}, err
+	}
+	status, err := s.runtime.Ingest.GetByIdentity(ctx, id, session, binding.EventID)
 	if errors.Is(err, ingest.ErrNotFound) {
 		return CaptureStatus{}, failure("not_found", "capture not found")
 	}
@@ -190,13 +225,17 @@ func (s *Service) LookupCapture(ctx context.Context, principal Principal, bindin
 	if s.runtime.Ingest == nil {
 		return CaptureReceipt{}, false, failure("unavailable", "ingest unavailable")
 	}
-	event := eventPrefix(binding) + provenance.RunID + ":" + fmt.Sprint(provenance.EventSeq)
-	accepted, err := s.runtime.Ingest.AcceptedByEvent(ctx, binding.SessionID, event)
+	event := s.eventPrefix(binding) + provenance.RunID + ":" + fmt.Sprint(provenance.EventSeq)
+	session, _, err := s.captureIdentity(ctx, binding, event)
+	if err != nil {
+		return CaptureReceipt{}, false, err
+	}
+	accepted, err := s.runtime.Ingest.AcceptedByEvent(ctx, session, event)
 	if errors.Is(err, ingest.ErrNotFound) {
 		return CaptureReceipt{}, false, nil
 	}
 	if err != nil {
 		return CaptureReceipt{}, false, failure("unavailable", "capture receipt unavailable")
 	}
-	return CaptureReceipt{IngestionID: accepted.IngestionID, SessionID: accepted.SessionID, EventID: accepted.EventID, Status: accepted.Status, Seq: accepted.Seq}, true, nil
+	return CaptureReceipt{IngestionID: accepted.IngestionID, SessionID: binding.SessionID, EventID: accepted.EventID, Status: accepted.Status, Seq: accepted.Seq}, true, nil
 }

@@ -28,7 +28,6 @@ func healthRequest(t *testing.T, srv *Server, path string, status int) map[strin
 
 func TestAdminIndexHealthRequiresSharedServiceNotLegacyFacade(t *testing.T) {
 	srv := testServer()
-	srv.Facade = &facade.Service{}
 	body := healthRequest(t, srv, "/v2/admin/index-health", http.StatusServiceUnavailable)
 	if body["code"] != "index_health_unavailable" {
 		t.Fatalf("envelope=%v", body)

@@ -2,6 +2,7 @@ package ingest
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/ProjectViVy/laputa/garden/memory"
@@ -18,6 +19,18 @@ func (s *Service) DrainSpool(ctx context.Context) (int, error) {
 	}
 	drained := 0
 	for _, entry := range pending {
+		if s.CheckIdentity != nil {
+			var id string
+			if err := s.db.QueryRowContext(ctx, `SELECT ingestion_id FROM ingestions WHERE event_id=? AND content_hash=?`, entry.EventID, entry.ContentHash).Scan(&id); err != nil {
+				return drained, err
+			}
+			identity, err := s.admitted(ctx, id)
+			if err != nil || identity.Scope != entry.Scope {
+				s.fail(ctx, id, errors.New("capture binding revoked or scope changed"))
+				_ = s.Spool.MarkDrained(ctx, entry.EventID, entry.ContentHash)
+				continue
+			}
+		}
 		if _, decErr := memory.DecodeScope(entry.Scope); decErr != nil {
 			// A spooled entry whose recorded scope cannot be classified
 			// must not be re-routed into another scope: fail it visibly and
@@ -27,12 +40,20 @@ func (s *Service) DrainSpool(ctx context.Context) (int, error) {
 			_ = s.Spool.MarkDrained(ctx, entry.EventID, entry.ContentHash)
 			continue
 		}
+		session, event := entry.SessionID, entry.EventID
+		var identity Identity
+		if s.CheckIdentity != nil {
+			var id string
+			_ = s.db.QueryRowContext(ctx, `SELECT ingestion_id FROM ingestions WHERE event_id=?`, entry.EventID).Scan(&id)
+			identity, _ = s.identity(ctx, id)
+			session, event = identity.HostSessionID, identity.HostEventID
+		}
 		memory, err := s.memory.CreateMemory(ctx, facade.CreateMemoryRequest{
 			Content:  entry.Content,
 			Kind:     entry.Kind,
 			Scope:    entry.Scope,
-			Source:   facade.MemorySource{Type: "session", SessionID: entry.SessionID, EventID: entry.EventID},
-			Metadata: map[string]any{"content_hash": entry.ContentHash, "lifecycle": "stm", "collection": "working"},
+			Source:   facade.MemorySource{Type: "session", SessionID: session, EventID: event},
+			Metadata: map[string]any{"content_hash": entry.ContentHash, "lifecycle": "stm", "collection": "working", "capture_identity": identity},
 		}, "session:"+entry.EventID, entry.ContentHash)
 		if err != nil {
 			return drained, err

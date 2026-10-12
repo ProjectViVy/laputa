@@ -88,8 +88,7 @@ func (fakeCardSearcher) ReadEvidence(context.Context, facade.EvidenceQuery) ([]f
 
 func TestFastRecallAndBootstrapEndpoints(t *testing.T) {
 	srv := testServer()
-	srv.FastRecall = &recall.FastService{Searcher: fakeCardSearcher{}}
-	srv.AgentAPI = agentapi.NewService(&runtimecore.Garden{ProfileID: "profile_1", FastRecall: srv.FastRecall})
+	srv.AgentAPI = agentapi.NewService(&runtimecore.Garden{ProfileID: "profile_1", FastRecall: &recall.FastService{Searcher: fakeCardSearcher{}}})
 	for _, route := range []string{"/v2/recall/fast", "/v2/recall/bootstrap"} {
 		body := `{"query":"test","budget_chars":4000}`
 		if route == "/v2/recall/bootstrap" {
@@ -109,8 +108,7 @@ func TestFastRecallAndBootstrapEndpoints(t *testing.T) {
 
 func TestBootstrapPreservesLegacyBodyWithoutClientIdentity(t *testing.T) {
 	srv := testServer()
-	srv.FastRecall = &recall.FastService{Searcher: fakeCardSearcher{}}
-	srv.AgentAPI = agentapi.NewService(&runtimecore.Garden{ProfileID: "profile_1", FastRecall: srv.FastRecall})
+	srv.AgentAPI = agentapi.NewService(&runtimecore.Garden{ProfileID: "profile_1", FastRecall: &recall.FastService{Searcher: fakeCardSearcher{}}})
 	srv.Capabilities = CapabilityConfig{AgentToken: "agent-secret"}
 	req := localRequest(http.MethodPost, "/v2/recall/bootstrap", bytes.NewBufferString(`{"session_id":"session_1","intent":"test","budget_chars":4000}`))
 	req.Header.Set("Authorization", "Bearer agent-secret")
@@ -147,7 +145,6 @@ func TestBootstrapUsesBoundAgentAPIWithoutLegacyFastRecall(t *testing.T) {
 
 func TestBootstrapRejectsClientIdentityClaims(t *testing.T) {
 	srv := testServer()
-	srv.FastRecall = &recall.FastService{Searcher: fakeCardSearcher{}}
 	for _, field := range []string{
 		`"binding":{"profile_id":"profile_1","agent_id":"agent_1","platform":"local","session_id":"session_1"}`,
 		`"profile_id":"profile_1"`, `"agent_id":"agent_1"`, `"actor":"operator"`,
@@ -165,7 +162,6 @@ func TestBootstrapRejectsClientIdentityClaims(t *testing.T) {
 
 func TestBootstrapRequiresSessionID(t *testing.T) {
 	srv := testServer()
-	srv.FastRecall = &recall.FastService{Searcher: fakeCardSearcher{}}
 	req := localRequest(http.MethodPost, "/v2/recall/bootstrap", bytes.NewBufferString(`{"intent":"test"}`))
 	rec := httptest.NewRecorder()
 	srv.HTTPHandler().ServeHTTP(rec, req)
@@ -192,7 +188,6 @@ func TestBootstrapUnavailableWithoutRecall(t *testing.T) {
 
 func TestBootstrapAuthenticationIgnoresActorHeader(t *testing.T) {
 	srv := testServer()
-	srv.FastRecall = &recall.FastService{Searcher: fakeCardSearcher{}}
 	srv.Capabilities = CapabilityConfig{AgentToken: "agent-secret"}
 	req := localRequest(http.MethodPost, "/v2/recall/bootstrap", bytes.NewBufferString(`{"session_id":"session_1"}`))
 	req.Header.Set("Authorization", "Bearer wrong-token")

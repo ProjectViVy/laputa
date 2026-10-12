@@ -28,6 +28,7 @@ type MemoryCard struct {
 // Garden can verify backend adapter results (contracts.md section 6). The
 // added fields are additive-only on the existing wire.
 type EvidenceFragment struct {
+	Truncated    bool     `json:"truncated,omitempty"`
 	CardID       string   `json:"card_id"`
 	MaterialRef  string   `json:"material_ref"`
 	SourceURI    string   `json:"source_uri,omitempty"`

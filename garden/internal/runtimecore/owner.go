@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	mentlebackend "github.com/ProjectViVy/laputa/garden/backends/mentle"
+	"github.com/ProjectViVy/laputa/garden/internal/ingest"
 	"github.com/ProjectViVy/laputa/garden/internal/personactx"
 	"github.com/ProjectViVy/laputa/garden/internal/recall"
 	"github.com/ProjectViVy/laputa/garden/internal/registry"
@@ -61,6 +62,41 @@ func OpenOwner(ctx context.Context, cfg OwnerConfig) (_ *Owner, err error) {
 		return nil, err
 	}
 	if o.base, err = open(ctx, cfg.Config, false); err != nil {
+		return nil, err
+	}
+	o.base.owner = o
+	// Lock registered authorities before durable jobs can resume. Existing
+	// legacy rows are never classified from current selection.
+	profiles, e := o.Registry.ListProfiles(ctx)
+	if e != nil {
+		return nil, e
+	}
+	for _, p := range profiles {
+		lock, e := acquireOwnership(p.AuthorityDir)
+		if e != nil {
+			return nil, e
+		}
+		o.subjectLocks[p.AuthorityDir] = lock
+	}
+	o.base.Ingest.CheckIdentity = func(ctx context.Context, v ingest.Identity) error {
+		if v.ProfileID == "" || v.BindingID == "" {
+			return errors.New("unclassified legacy capture")
+		}
+		resolved, err := o.Registry.Resolve(ctx, registry.AccessRequest{BindingID: v.BindingID, SessionID: v.HostSessionID, Operation: "capture"})
+		if err != nil {
+			return err
+		}
+		if resolved.ProfileID != v.ProfileID || memory.EncodeScope(resolved.WriteScope) != v.Scope {
+			return errors.New("capture origin mismatch")
+		}
+		return nil
+	}
+	if !o.base.LexicalOnly && o.base.Mentle != nil {
+		if _, err = o.base.Ingest.DrainSpool(ctx); err != nil {
+			return nil, err
+		}
+	}
+	if err = o.base.Ingest.Start(); err != nil {
 		return nil, err
 	}
 	return o, nil

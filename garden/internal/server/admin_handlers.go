@@ -15,9 +15,7 @@ func (s *Server) indexHealth(ctx context.Context, principal Principal) (facade.I
 	if s.AgentAPI == nil || strings.TrimSpace(s.ProfileID) == "" {
 		return facade.IndexHealth{Status: "unavailable", Reasons: []string{"canonical_probe_failed"}}, facade.ErrIndexHealthUnavailable
 	}
-	return s.AgentAPI.IndexHealth(ctx, agentapi.Principal(principal), agentapi.Binding{
-		ProfileID: s.ProfileID, AgentID: "garden-http", Platform: "http",
-	})
+	return s.AgentAPI.IndexHealth(ctx, agentapi.Principal(principal), s.requestBinding("garden-http-read"))
 }
 
 func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +33,7 @@ func (s *Server) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 		"components": components,
 		"source":     "live",
 	}
-	indexHealth, healthErr := s.indexHealth(r.Context(), PrincipalRead)
+	indexHealth, healthErr := s.indexHealth(r.Context(), func() Principal { p, _ := s.principalForReadRequest(r); return p }())
 	resp["index_health"] = indexHealth
 	if healthErr != nil || indexHealth.Status != "ok" {
 		resp["status"] = "degraded"
@@ -79,7 +77,7 @@ func (s *Server) handleAdminComponents(w http.ResponseWriter, r *http.Request) {
 	for name, value := range s.Components {
 		merged[name] = value
 	}
-	indexHealth, healthErr := s.indexHealth(r.Context(), PrincipalRead)
+	indexHealth, healthErr := s.indexHealth(r.Context(), func() Principal { p, _ := s.principalForReadRequest(r); return p }())
 	if healthErr != nil {
 		merged["mentle"] = "unavailable"
 	} else {

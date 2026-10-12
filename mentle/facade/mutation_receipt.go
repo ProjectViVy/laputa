@@ -40,6 +40,7 @@ type MutationRequest struct {
 	ExpectedAbsent   bool
 	Body             string
 	Kind             string
+	Tags             *[]string
 	Sources          []MemorySource
 	Metadata         map[string]any
 	Actor            string
@@ -220,7 +221,11 @@ func (s *Service) mutateCreate(ctx context.Context, req MutationRequest) (Mutati
 	if kind == "" {
 		kind = "note"
 	}
-	m := Memory{ID: canonicalID(), Kind: kind, Content: body, Status: "active", Version: 1, Scope: req.Scope, Tags: []string{}, Source: source, ValidFrom: now, Supersedes: []string{}, CreatedAt: now, UpdatedAt: now, Metadata: nonNilMap(req.Metadata)}
+	tags := []string{}
+	if req.Tags != nil {
+		tags = append(tags, (*req.Tags)...)
+	}
+	m := Memory{ID: canonicalID(), Kind: kind, Content: body, Status: "active", Version: 1, Scope: req.Scope, Tags: tags, Source: source, ValidFrom: now, Supersedes: []string{}, CreatedAt: now, UpdatedAt: now, Metadata: nonNilMap(req.Metadata)}
 	if v, ok := m.Metadata["lifecycle"].(string); ok && v != "" {
 		m.Lifecycle = v
 	} else {
@@ -294,12 +299,15 @@ func (s *Service) mutateUpdate(ctx context.Context, req MutationRequest) (Mutati
 			m.Source.Type = "agent"
 		}
 	}
+	if req.Tags != nil {
+		m.Tags = append([]string{}, (*req.Tags)...)
+	}
 	now := time.Now().UTC()
 	tx, err := s.Catalog.db.BeginTx(ctx, nil)
 	if err != nil {
 		return MutationReceipt{}, err
 	}
-	result, err := tx.ExecContext(ctx, `UPDATE memories SET content=?,source_json=?,metadata_json=?,version=version+1,updated_at=? WHERE id=? AND version=? AND status='active'`, body, encode(m.Source), encode(m.Metadata), now.Format(time.RFC3339Nano), req.RecordID, req.ExpectedRevision)
+	result, err := tx.ExecContext(ctx, `UPDATE memories SET content=?,source_json=?,metadata_json=?,tags_json=?,version=version+1,updated_at=? WHERE id=? AND version=? AND status='active'`, body, encode(m.Source), encode(m.Metadata), encode(m.Tags), now.Format(time.RFC3339Nano), req.RecordID, req.ExpectedRevision)
 	if err != nil {
 		tx.Rollback()
 		return MutationReceipt{}, err

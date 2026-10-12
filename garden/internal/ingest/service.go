@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -26,6 +27,7 @@ var (
 )
 
 type SubmitRequest struct {
+	Identity    *Identity        `json:"-"`
 	Activity    *CaptureActivity `json:"-"`
 	SessionID   string           `json:"session_id"`
 	EventID     string           `json:"event_id"`
@@ -63,16 +65,17 @@ type Service struct {
 	Spool    *activity.TransientSpool
 	// ProfileID binds ingestions to the host profile's subject scope; set
 	// by composition before Start.
-	ProfileID  string
-	queue      chan string
-	mu         sync.Mutex
-	started    bool
-	closed     bool
-	ctx        context.Context
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
-	activityMu sync.Mutex // serializes projection and session archive
-	workerID   string
+	CheckIdentity func(context.Context, Identity) error
+	ProfileID     string
+	queue         chan string
+	mu            sync.Mutex
+	started       bool
+	closed        bool
+	ctx           context.Context
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
+	activityMu    sync.Mutex // serializes projection and session archive
+	workerID      string
 }
 
 type MemoryWriter interface {
@@ -122,7 +125,12 @@ CREATE INDEX IF NOT EXISTS ingestion_status ON ingestions(status,created_at);`
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Service{db: db, memory: memory, queue: make(chan string, 128), ctx: ctx, cancel: cancel, workerID: "ingest-" + strings.ReplaceAll(uuid.NewString(), "-", "")}, nil
+	s := &Service{db: db, memory: memory, queue: make(chan string, 128), ctx: ctx, cancel: cancel, workerID: "ingest-" + strings.ReplaceAll(uuid.NewString(), "-", "")}
+	if err := initializeIdentityColumn(s); err != nil {
+		s.Close()
+		return nil, err
+	}
+	return s, nil
 }
 
 // Start starts the worker and replays durable pending rows exactly once per service.
@@ -176,6 +184,14 @@ func (s *Service) Close() error {
 }
 
 func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, error) {
+	if s.CheckIdentity != nil {
+		if req.Identity == nil {
+			return Accepted{}, errors.New("trusted capture identity required")
+		}
+		if err := s.CheckIdentity(ctx, *req.Identity); err != nil {
+			return Accepted{}, err
+		}
+	}
 	req.SessionID = strings.TrimSpace(req.SessionID)
 	req.EventID = strings.TrimSpace(req.EventID)
 	req.ContentHash = strings.TrimSpace(req.ContentHash)
@@ -216,6 +232,14 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, erro
 	if req.Activity != nil && (s.Actmem == nil || strings.TrimSpace(s.ProfileID) == "") {
 		return Accepted{}, errors.New("native ACTMEM capture binding unavailable")
 	}
+	identityJSON := ""
+	if req.Identity != nil {
+		raw, e := json.Marshal(req.Identity)
+		if e != nil {
+			return Accepted{}, e
+		}
+		identityJSON = string(raw)
+	}
 	now := time.Now().UTC()
 	if req.OccurredAt.IsZero() {
 		req.OccurredAt = now
@@ -223,7 +247,7 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, erro
 	id := "ing_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err = s.db.ExecContext(ctx, `INSERT INTO ingestions(ingestion_id,session_id,event_id,phase,content,content_hash,workspace,occurred_at,status,created_at,updated_at,activity_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, id, req.SessionID, req.EventID, req.Phase, req.Content, req.ContentHash, req.Workspace, req.OccurredAt.UTC().Format(time.RFC3339Nano), "accepted", now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), activityJSON)
+	_, err = s.db.ExecContext(ctx, `INSERT INTO ingestions(ingestion_id,session_id,event_id,phase,content,content_hash,workspace,occurred_at,status,created_at,updated_at,activity_json,identity_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, req.SessionID, req.EventID, req.Phase, req.Content, req.ContentHash, req.Workspace, req.OccurredAt.UTC().Format(time.RFC3339Nano), "accepted", now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), activityJSON, identityJSON)
 	if err != nil {
 		return Accepted{}, err
 	}
@@ -239,7 +263,7 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, erro
 		}
 	}
 	if s.Activity != nil {
-		_ = s.Activity.Append(ctx, activity.Event{ID: req.EventID, SessionID: req.SessionID, Type: "ingest", Timestamp: req.OccurredAt, Data: map[string]any{"phase": req.Phase, "ingestion_id": id}})
+		_ = s.Activity.Append(ctx, activity.Event{ID: req.EventID, SessionID: req.SessionID, Type: "ingest", Timestamp: req.OccurredAt, Data: map[string]any{"phase": req.Phase, "ingestion_id": id, "identity": req.Identity}})
 	}
 	return Accepted{IngestionID: id, SessionID: req.SessionID, EventID: req.EventID, Status: "accepted", Seq: seq}, nil
 }
@@ -380,6 +404,16 @@ func (s *Service) process(ctx context.Context, id string) {
 		s.fail(ctx, id, err)
 		return
 	}
+	scope, err := s.rowScope(ctx, id, workspace)
+	if err != nil {
+		s.fail(ctx, id, err)
+		return
+	}
+	identity, _ := s.identity(ctx, id)
+	hostSession, hostEvent := session, event
+	if identity.ProfileID != "" {
+		hostSession, hostEvent = identity.HostSessionID, identity.HostEventID
+	}
 	if s.memory == nil {
 		s.spool(ctx, id, session, event, content, hash)
 		return
@@ -400,7 +434,12 @@ func (s *Service) process(ctx context.Context, id string) {
 		}
 		defer func() { _ = state.ReleaseSessionLease(context.Background(), session, s.workerID) }()
 	}
-	m, err := s.memory.CreateMemory(ctx, facade.CreateMemoryRequest{Content: content, Kind: "source_artifact", Scope: s.scopeFor(workspace), Source: facade.MemorySource{Type: "session", SessionID: session, EventID: event}, Metadata: map[string]any{"content_hash": hash, "lifecycle": "stm", "collection": "working"}}, "session:"+event, hash)
+	scope, err = s.rowScope(ctx, id, workspace)
+	if err != nil {
+		s.fail(ctx, id, err)
+		return
+	}
+	m, err := s.memory.CreateMemory(ctx, facade.CreateMemoryRequest{Content: content, Kind: "source_artifact", Scope: scope, Source: facade.MemorySource{Type: "session", SessionID: hostSession, EventID: hostEvent}, Metadata: map[string]any{"content_hash": hash, "lifecycle": "stm", "collection": "working", "capture_identity": identity}}, "session:"+event, hash)
 	if err != nil {
 		s.spool(ctx, id, session, event, content, hash)
 		return
@@ -430,8 +469,13 @@ func (s *Service) scopeFor(workspace string) string {
 func (s *Service) spool(ctx context.Context, id, session, event, content, hash string) {
 	var workspace string
 	_ = s.db.QueryRowContext(ctx, `SELECT workspace FROM ingestions WHERE ingestion_id=?`, id).Scan(&workspace)
+	scope, err := s.rowScope(ctx, id, workspace)
+	if err != nil {
+		s.fail(ctx, id, err)
+		return
+	}
 	if s.Spool != nil {
-		_ = s.Spool.Append(ctx, activity.TransientEntry{EventID: event, SessionID: session, ContentHash: hash, Content: content, Kind: "source_artifact", Scope: s.scopeFor(workspace)})
+		_ = s.Spool.Append(ctx, activity.TransientEntry{EventID: event, SessionID: session, ContentHash: hash, Content: content, Kind: "source_artifact", Scope: scope})
 	}
 	_, _ = s.db.ExecContext(ctx, `UPDATE ingestions SET status='spooled',error=?,updated_at=? WHERE ingestion_id=?`, "mentle unavailable; spooled", time.Now().UTC().Format(time.RFC3339Nano), id)
 }

@@ -336,6 +336,9 @@ func (g *guardedDomain) Lookup(ctx context.Context, operationID string) (evoluti
 // effects use the selected scope-bound backend, and no VIVY caller reaches a
 // garden/internal package.
 func (c *Client) BindEvolution(scope evolution.Scope, destinationID string) (EvolutionPorts, error) {
+	if c != nil && c.installation != nil {
+		return EvolutionPorts{}, failure("unavailable", "installation cognition source contract not qualified")
+	}
 	if c == nil {
 		return EvolutionPorts{}, failure("unavailable", "Garden runtime unavailable")
 	}
@@ -403,6 +406,9 @@ type SourcePorts struct {
 // without resolving the selected memory backend. A Mission revision read on
 // an uninitialized authority reports 0 (unassigned), not an error.
 func (c *Client) BindEvolutionSource(scope evolution.Scope, destinationID string) (SourcePorts, error) {
+	if c != nil && c.installation != nil {
+		return SourcePorts{}, failure("unavailable", "installation cognition source contract not qualified")
+	}
 	if c == nil {
 		return SourcePorts{}, failure("unavailable", "Garden runtime unavailable")
 	}
@@ -881,7 +887,8 @@ func randomHex16() string {
 // so a replay with different content is an idempotency conflict.
 func mutationDigest(m memory.AuthorizedMutation) string {
 	raw, err := json.Marshal(map[string]any{
-		"operation":         m.Operation,
+		"operation": m.Operation,
+		"scope":     m.Scope, "destination": m.DestinationID, "kind": m.Kind, "tags": m.Tags, "collection": m.Collection, "origin": m.Origin,
 		"record_id":         m.RecordID,
 		"body":              m.Body,
 		"sources":           m.Sources,

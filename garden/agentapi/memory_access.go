@@ -331,6 +331,12 @@ func (a *memoryAccess) Expand(ctx context.Context, q memory.AuthorizedExpansion)
 			encoded := ""
 			if err == nil {
 				encoded = uri.Query().Get("scope")
+				if id := uri.Query().Get("record_id"); id != "" {
+					target, e := a.rawRecord(ctx, access, id)
+					if e != nil || target.Status != "active" || memory.EncodeScope(target.Scope) != encoded {
+						hidden = true
+					}
+				}
 			}
 			if encoded != "" && !memory.ScopeVisible(encoded, access.ReadScopes) {
 				hidden = true
@@ -525,6 +531,14 @@ func (s *Service) mutateMemory(ctx context.Context, p Principal, binding Binding
 		return memory.MutationReceipt{}, failure("invalid_binding", "write scope does not match selected target")
 	}
 	m.Scope = access.WriteScope
+	if m.Operation == evolution.MutationUpdate && m.Tags != nil && m.Body == "" {
+		r, err := s.accessBackend(binding, p, target).rawRecord(ctx, access, m.RecordID)
+		if err != nil {
+			return memory.MutationReceipt{}, err
+		}
+		m.Body = r.Body
+	}
+	m.Origin = memory.MutationOrigin{ProfileID: binding.ProfileID, AgentID: binding.AgentID, Platform: binding.Platform, SessionID: binding.SessionID}
 	m.PayloadDigest = mutationDigest(m)
 	if err = m.Validate(); err != nil {
 		return memory.MutationReceipt{}, failure("invalid_request", err.Error())

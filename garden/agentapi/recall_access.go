@@ -2,6 +2,9 @@ package agentapi
 
 import (
 	"context"
+	"github.com/ProjectViVy/laputa/garden/internal/arbiter"
+	"github.com/ProjectViVy/laputa/garden/internal/rag"
+	"github.com/ProjectViVy/laputa/garden/internal/recall"
 	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
@@ -42,4 +45,27 @@ func (a *authorizedCardSearcher) ReadEvidence(ctx context.Context, q facade.Evid
 		return nil, err
 	}
 	return convert[[]facade.EvidenceFragment](fragments)
+}
+
+// DeepRecall reuses orchestration over the same governed cards and evidence.
+// Graph/timeline sources without an exact subject contract remain unavailable.
+func (s *Service) DeepRecall(ctx context.Context, p Principal, b Binding, q recall.DeepRequest) (recall.DeepResponse, error) {
+	if err := s.check(b, p, OpSearch); err != nil {
+		return recall.DeepResponse{}, err
+	}
+	if s.runtime.FastRecall == nil {
+		return recall.DeepResponse{}, failure("unavailable", "recall unavailable")
+	}
+	fast := *s.runtime.FastRecall
+	fast.Searcher = &authorizedCardSearcher{s: s, b: b, p: p}
+	if s.installation != nil {
+		fast.Frozen = &boundFrozen{runtime: s.runtime, binding: b, bindingID: s.bindingID}
+	}
+	q.SessionID = b.SessionID
+	deep := recall.DeepService{Fast: &fast, Planner: rag.RulePlanner{}, Arbiter: arbiter.New()}
+	out, err := deep.Recall(ctx, q)
+	if err != nil {
+		return out, failure("invalid_request", err.Error())
+	}
+	return out, nil
 }

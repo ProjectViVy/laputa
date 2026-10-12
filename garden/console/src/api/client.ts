@@ -1,3 +1,6 @@
+let activeProfile = "";
+export function setActiveProfile(id: string) { activeProfile = id; }
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -7,12 +10,14 @@ export class ApiError extends Error {
 }
 
 async function send<T>(path: string, init: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const profile = activeProfile;
+ const res = await fetch(path, {
     ...init,
     credentials: "same-origin",
-    headers: { Accept: "application/json", ...(init.headers ?? {}) },
+    headers: { Accept: "application/json", ...(profile ? { "X-Garden-Profile": profile } : {}), ...(init.headers ?? {}) },
   });
-  if (!res.ok) {
+  if (profile !== activeProfile) throw new ApiError(409, "Profile changed; response discarded");
+ if (!res.ok) {
     let detail = res.statusText;
     try {
       const body = await res.json();
@@ -29,8 +34,8 @@ async function send<T>(path: string, init: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-export function get<T>(path: string): Promise<T> {
-  return send<T>(path, {});
+export function get<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return send<T>(path, { signal });
 }
 
 export function post<T>(path: string, body: unknown): Promise<T> {
@@ -56,3 +61,5 @@ export function put<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
 }
+
+export function remove<T>(path: string): Promise<T> { return send<T>(path, { method: "DELETE" }); }

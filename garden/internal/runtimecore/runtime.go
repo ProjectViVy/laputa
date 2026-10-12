@@ -210,7 +210,7 @@ func open(ctx context.Context, cfg Config, authority bool) (_ *Garden, err error
 	if authority {
 		g.Ingest.ProfileID = cfg.ProfileID
 	}
-	if !lexicalOnly && g.Mentle != nil {
+	if authority && !lexicalOnly && g.Mentle != nil {
 		if drained, drainErr := g.Ingest.DrainSpool(ctx); drainErr != nil {
 			return nil, fmt.Errorf("spool drain: %w", drainErr)
 		} else if drained > 0 {
@@ -220,8 +220,10 @@ func open(ctx context.Context, cfg Config, authority bool) (_ *Garden, err error
 	if g.Trace, err = recall.OpenTraceStore(cfg.StateDB); err != nil {
 		return nil, fmt.Errorf("trace: %w", err)
 	}
-	if err = g.Ingest.Start(); err != nil {
-		return nil, fmt.Errorf("ingest worker: %w", err)
+	if authority {
+		if err = g.Ingest.Start(); err != nil {
+			return nil, fmt.Errorf("ingest worker: %w", err)
+		}
 	}
 	return g, nil
 }
@@ -238,7 +240,7 @@ func (g *Garden) Close() error {
 		return nil
 	}
 	g.closed = true
-	if g.owner != nil {
+	if g.owner != nil && g != g.owner.base {
 		return nil
 	}
 	var errs []error
@@ -332,7 +334,12 @@ func (w *scopedMemoryWriter) CreateMemory(ctx context.Context, req facade.Create
 	if err != nil {
 		return facade.Memory{}, err
 	}
-	backend, err := w.g.BackendFor(scope)
+	var backend memory.Backend
+	if w.g.owner != nil {
+		backend, err = w.g.owner.BackendFor(ctx, scope, "mentle")
+	} else {
+		backend, err = w.g.BackendFor(scope)
+	}
 	if err != nil {
 		return facade.Memory{}, err
 	}

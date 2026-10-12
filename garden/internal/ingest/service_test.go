@@ -3,6 +3,7 @@ package ingest
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -297,5 +298,56 @@ func TestSubmitProcessesOnceAndClearsTranscript(t *testing.T) {
 	}
 	if stored != content {
 		t.Fatalf("raw-first: content should be retained, got %q", stored)
+	}
+}
+
+func TestCaptureOriginRevokedBeforeRestartReplay(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "garden.db")
+	ctx := context.Background()
+	first, err := OpenPaused(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.CheckIdentity = func(context.Context, Identity) error { return nil }
+	content := "queued fact"
+	sum := sha256.Sum256([]byte(content))
+	a, err := first.Submit(ctx, SubmitRequest{Identity: &Identity{ProfileID: "A", BindingID: "binding-a", HostSessionID: "chat", HostEventID: "event", Scope: "scope-a"}, SessionID: "qualified-chat-a", EventID: "qualified-event-a", Phase: "session_end", Content: content, ContentHash: fmt.Sprintf("sha256:%x", sum)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Close()
+	writer := &fakeWriter{}
+	second, err := OpenPaused(path, writer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	second.CheckIdentity = func(_ context.Context, v Identity) error {
+		if v.ProfileID != "A" || v.BindingID != "binding-a" || v.Scope != "scope-a" {
+			t.Errorf("lost original identity %+v", v)
+		}
+		return errors.New("binding revoked")
+	}
+	if err = second.Start(); err != nil {
+		t.Fatal(err)
+	}
+	until := time.Now().Add(time.Second)
+	for {
+		st, err := second.Get(ctx, a.IngestionID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.Status == "failed" {
+			break
+		}
+		if time.Now().After(until) {
+			t.Fatal(st)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	writer.mu.Lock()
+	defer writer.mu.Unlock()
+	if writer.calls != 0 {
+		t.Fatal("revoked queued capture published")
 	}
 }

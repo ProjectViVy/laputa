@@ -2,22 +2,13 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/ProjectViVy/laputa/garden/agentapi"
-	"github.com/ProjectViVy/laputa/garden/internal/activity"
-	"github.com/ProjectViVy/laputa/garden/internal/arbiter"
-	"github.com/ProjectViVy/laputa/garden/internal/evolution"
 	"github.com/ProjectViVy/laputa/garden/internal/lifecycle"
-	"github.com/ProjectViVy/laputa/garden/internal/mailbox"
-	"github.com/ProjectViVy/laputa/garden/internal/pipeline"
-	"github.com/ProjectViVy/laputa/garden/internal/rag"
-	"github.com/ProjectViVy/laputa/garden/internal/recall"
-	"github.com/ProjectViVy/laputa/garden/internal/report"
 	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
 	"github.com/ProjectViVy/laputa/garden/internal/server"
 	"github.com/ProjectViVy/laputa/mentle/facade"
@@ -26,14 +17,15 @@ import (
 func main() {
 	ctx := context.Background()
 	personaDir := expandHome(os.Getenv("GARDEN_PERSONA_DIR"))
-	if personaDir == "" {
-		personaDir = expandHome("~/.laputa")
-	}
 	stateDB := expandHome(os.Getenv("GARDEN_STATE_DB"))
 	if stateDB == "" {
 		stateDB = expandHome("~/.garden/garden.db")
 	}
-	palacePath, modelsDir, err := facade.ResolveLegacyPaths(expandHome(os.Getenv("GARDEN_MENTLE_CONFIG_DIR")))
+	palacePath, modelsDir := filepath.Join(filepath.Dir(legacyAbsolutePath(stateDB)), "memory"), filepath.Join(filepath.Dir(legacyAbsolutePath(stateDB)), "models")
+	var err error
+	if configDir := expandHome(os.Getenv("GARDEN_MENTLE_CONFIG_DIR")); configDir != "" {
+		palacePath, modelsDir, err = facade.ResolveLegacyPaths(configDir)
+	}
 	if err != nil {
 		log.Fatalf("mentle configuration: %v", err)
 	}
@@ -77,135 +69,68 @@ func legacyAbsolutePath(path string) string {
 }
 
 type gardenApp struct {
-	runtime    *runtimecore.Garden
-	server     *server.Server
-	closeExtra []func() error
+	owner        *runtimecore.Owner
+	installation *agentapi.Installation
+	server       *server.Server
 }
 
 func (a *gardenApp) Close() error {
-	if a == nil {
+	if a == nil || a.installation == nil {
 		return nil
 	}
-	var first error
-	for i := len(a.closeExtra) - 1; i >= 0; i-- {
-		if err := a.closeExtra[i](); err != nil && first == nil {
-			first = err
-		}
-	}
-	a.closeExtra = nil
-	if a.runtime != nil {
-		if err := a.runtime.Close(); err != nil && first == nil {
-			first = err
-		}
-		a.runtime = nil
-	}
-	return first
+	return a.installation.Close()
 }
 
-// openApp opens the domain once; the HTTP and agent adapters share its owned services.
-// Pipeline, report, checkpoint, EvoMap and mailbox remain app-level management.
-func openApp(ctx context.Context, cfg runtimecore.Config) (_ *gardenApp, err error) {
-	core, err := runtimecore.Open(ctx, cfg)
+// The standalone process owns one installation. Legacy embedding remains in
+// agentapi.Open; no app-level raw Mentle/report/autonomy source runs beside it.
+func openApp(ctx context.Context, cfg runtimecore.Config) (a *gardenApp, err error) {
+	home := filepath.Dir(cfg.StateDB)
+	owner, err := runtimecore.OpenOwner(ctx, runtimecore.OwnerConfig{Home: home, Config: cfg})
 	if err != nil {
 		return nil, err
 	}
-	a := &gardenApp{runtime: core}
+	i := agentapi.NewInstallation(owner)
+	a = &gardenApp{owner: owner, installation: i}
 	defer func() {
 		if err != nil {
-			_ = a.Close()
+			a.Close()
 		}
 	}()
-	components := map[string]string{"persona": "ok"}
-	if core.Mentle == nil || core.LexicalOnly {
-		components["mentle"] = "degraded"
-	} else {
-		components["mentle"] = "ok"
+	// Attaching an existing authority requires an explicitly configured root.
+	// No default ~/.laputa discovery or captured-data migration accompanies boot.
+	if cfg.PersonaDir != "" {
+		if _, err = i.RegisterProfile(ctx, agentapi.ProfileRegistration{ProfileID: cfg.ProfileID, AuthorityDir: cfg.PersonaDir}); err != nil {
+			return nil, err
+		}
 	}
-	pipelinePath := expandHome(os.Getenv("GARDEN_PIPELINE_CONFIG"))
-	if pipelinePath == "" {
-		pipelinePath = expandHome("~/.garden/pipelines.yaml")
-	}
-	var manager *pipeline.Manager
-	if pipelineCfg, revision, cfgErr := pipeline.LoadConfig(pipelinePath); cfgErr != nil {
-		log.Printf("pipeline unavailable: %v", cfgErr)
-		components["pipeline"] = "degraded"
-	} else if manager, err = pipeline.NewManager(pipelineCfg.Pipelines, revision); err != nil {
-		log.Printf("pipeline unavailable: %v", err)
-		components["pipeline"] = "degraded"
-		err = nil
-	} else {
-		components["pipeline"] = "ok"
-	}
-	if os.Getenv("GARDEN_RAG_API_KEY") == "" {
-		components["planner"] = "degraded"
-	} else {
-		components["planner"] = "ok"
-	}
-	checkpointStore, err := activity.OpenCheckpointStore(cfg.StateDB)
+	pairing, code, err := server.NewPairing()
 	if err != nil {
-		return nil, fmt.Errorf("checkpoint store: %w", err)
+		return nil, err
 	}
-	a.closeExtra = append(a.closeExtra, checkpointStore.Close)
-	ws := activity.NewWorkingSet()
-	checkpointer := &activity.Checkpointer{Store: checkpointStore, WS: ws}
-	if err := checkpointer.Load(ctx, ""); err != nil {
-		log.Printf("checkpoint load: %v", err)
+	if err = writePairingCode(home, code); err != nil {
+		return nil, err
 	}
-	core.FastRecall.WS = ws
-	var memoryLister report.MemoryLister
-	if core.Mentle != nil {
-		memoryLister = core.Mentle
-	}
-	reports, err := report.Open(cfg.StateDB, memoryLister, nil, nil)
-	if err != nil {
-		return nil, fmt.Errorf("report store: %w", err)
-	}
-	a.closeExtra = append(a.closeExtra, reports.Close)
-	var graphSource recall.GraphSource
-	if core.Mentle != nil && !core.LexicalOnly {
-		graphSource = core.Mentle
-	}
-	deepRecall := &recall.DeepService{Fast: core.FastRecall, Graph: graphSource, Planner: configuredPlanner(), Arbiter: arbiter.New(), Traces: core.Trace}
-	evoStore, err := evolution.OpenStore(cfg.StateDB)
-	if err != nil {
-		return nil, fmt.Errorf("evolution store: %w", err)
-	}
-	a.closeExtra = append(a.closeExtra, evoStore.Close)
-	evoEvents, err := evolution.OpenEventStore(cfg.StateDB)
-	if err != nil {
-		return nil, fmt.Errorf("evolution events: %w", err)
-	}
-	a.closeExtra = append(a.closeExtra, evoEvents.Close)
-	var evoProvider evolution.EvolverProvider
-	components["evolution"] = "degraded"
-	if hub, hubErr := evolution.OpenHubClient(evolution.HubClientOptions{BaseURL: os.Getenv("GARDEN_EVOMAP_HUB_URL"), CredsPath: expandHome(os.Getenv("GARDEN_EVOMAP_CREDS"))}); hubErr != nil {
-		log.Printf("evomap unavailable: %v", hubErr)
-	} else if hub.HasCredentials() {
-		evoProvider = evolution.NewEvoMapProvider(hub, evoStore, evolution.DefaultProviderLimits(), os.Getenv("GARDEN_EVOMAP_HUB_PUBLISH") == "1")
-		components["evolution"] = "ok"
-	}
-	evoService := &evolution.Service{Provider: evoProvider, Store: evoStore, Events: evoEvents, Hub: evolution.DefaultHubPolicy()}
-	mailboxStore, err := mailbox.OpenStore(cfg.StateDB)
-	if err != nil {
-		return nil, fmt.Errorf("mailbox store: %w", err)
-	}
-	a.closeExtra = append(a.closeExtra, mailboxStore.Close)
-	addr := listenAddr()
-	if !strings.HasPrefix(addr, "127.0.0.1:") && !strings.HasPrefix(addr, "localhost:") && !strings.HasPrefix(addr, "[::1]:") {
-		log.Printf("HIGH RISK: Garden API is configured on non-loopback address %q; capability authentication is mandatory and loopback read exemptions do not apply", addr)
-	}
-	a.server = &server.Server{ProfileID: core.ProfileID, AgentAPI: agentapi.NewService(core), Facade: core.Mentle, FastRecall: core.FastRecall, DeepRecall: deepRecall, TraceStore: core.Trace, Evolution: evoService, Activity: core.Activity, Checkpointer: checkpointer, Pipelines: manager, Ingestions: core.Ingest, Reports: reports, Mailbox: mailboxStore, Persona: core.Persona, Actmem: core.Actmem, Components: components, Addr: addr}
+	a.server = &server.Server{Owner: owner, Installation: i, Pairing: pairing, Components: map[string]string{"garden": "ok", "persona": "ok"}, Addr: listenAddr()}
 	return a, nil
 }
-
-func configuredPlanner() rag.Planner {
-	baseURL := os.Getenv("GARDEN_RAG_BASE_URL")
-	apiKey := os.Getenv("GARDEN_RAG_API_KEY")
-	model := os.Getenv("GARDEN_RAG_MODEL")
-	if baseURL == "" || apiKey == "" || model == "" {
-		return rag.RulePlanner{}
+func writePairingCode(home, code string) error {
+	f, err := os.CreateTemp(home, ".pairing-*")
+	if err != nil {
+		return err
 	}
-	return rag.FallbackPlanner{Primary: &rag.OpenAIPlanner{BaseURL: baseURL, APIKey: apiKey, Model: model}, Fallback: rag.RulePlanner{}}
+	name := f.Name()
+	defer os.Remove(name)
+	if err = f.Chmod(0600); err == nil {
+		_, err = f.WriteString(code + "\n")
+	}
+	closeErr := f.Close()
+	if err != nil {
+		return err
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	return os.Rename(name, filepath.Join(home, "pairing-code"))
 }
 
 func listenAddr() string {

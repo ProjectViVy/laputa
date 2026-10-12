@@ -215,3 +215,41 @@ func TestScopedManagementMetadata(t *testing.T) {
 		}
 	}
 }
+
+func TestBoundEvidenceTotalBudgetAndSelectedWorker(t *testing.T) {
+	f := sharingInstallation(t)
+	ctx := context.Background()
+	refs := []EvidenceRef{}
+	for j := 0; j < 3; j++ {
+		r := createBoundMemory(t, f.a, "", fmt.Sprint("budget-", j), strings.Repeat("中", 500))
+		refs = append(refs, EvidenceRef{CardID: r.TargetRef, ExpectedRevision: 1})
+	}
+	fragments, err := f.a.ReadEvidence(ctx, EvidenceRead{Items: refs, PerItemBudget: 400, TotalBudget: 450})
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, r := range fragments {
+		count += len([]rune(r.Excerpt))
+	}
+	if count > 450 {
+		t.Fatal("total evidence budget exceeded", count)
+	}
+	host, _, err := f.i.CreateHostBinding(ctx, HostBinding{ProfileID: "A", AgentID: "worker", Platform: "test", Worker: true, Operations: []Operation{OpExpand}, SelectedCards: []string{refs[0].CardID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.i.SetHostControls(ctx, host.BindingID, HostControls{Recall: true}); err != nil {
+		t.Fatal(err)
+	}
+	worker, err := f.i.BindHostSession(host.BindingID, "worker-session")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = worker.ReadEvidence(ctx, EvidenceRead{Items: refs[:1]}); err != nil {
+		t.Fatal("selected worker source unavailable", err)
+	}
+	if _, err = worker.ReadEvidence(ctx, EvidenceRead{Items: refs[1:2]}); err == nil {
+		t.Fatal("worker read unselected source")
+	}
+}

@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -43,9 +44,11 @@ const (
 
 // Client is a thin HTTP client over the Garden /v2 API.
 type Client struct {
-	baseURL string
-	token   string
-	http    *http.Client
+	baseURL         string
+	token           string
+	sessionID       string
+	credentialError error
+	http            *http.Client
 }
 
 type HTTPError struct {
@@ -71,11 +74,21 @@ func (e *HTTPError) Error() string {
 }
 
 func NewClient(baseURL string) *Client {
-	return &Client{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		token:   strings.TrimSpace(os.Getenv("GARDEN_CAPABILITY_AGENT_TOKEN")),
-		http:    &http.Client{Timeout: 15 * time.Second},
+	c := &Client{baseURL: strings.TrimRight(baseURL, "/"), http: &http.Client{Timeout: 15 * time.Second}, sessionID: envOr("GARDEN_HOST_SESSION_ID", rand.Text())}
+	if path := os.Getenv("GARDEN_HOST_CREDENTIAL_FILE"); path != "" {
+		info, err := os.Lstat(path)
+		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+			c.credentialError = errors.New("host credential file unavailable or not private")
+			return c
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			c.credentialError = errors.New("host credential file unreadable")
+			return c
+		}
+		c.token = strings.TrimSpace(string(raw))
 	}
+	return c
 }
 
 // get performs a GET request and decodes the JSON response into out.
@@ -97,6 +110,9 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 }
 
 func (c *Client) doWithHeaders(ctx context.Context, method, path string, body any, headers map[string]string, out any) error {
+	if c.credentialError != nil {
+		return c.credentialError
+	}
 	var rdr io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -118,6 +134,7 @@ func (c *Client) doWithHeaders(ctx context.Context, method, path string, body an
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
+	req.Header.Set("X-Garden-Session", c.sessionID)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("%w: %v", errBackendTransport, err)
@@ -189,10 +206,11 @@ type fastRecallRequest struct {
 }
 
 type fastRecallResponse struct {
-	TraceID  string   `json:"trace_id"`
-	Mode     string   `json:"mode"`
-	Cards    []rcard  `json:"cards"`
-	Context  string   `json:"context"`
+	TraceID string  `json:"trace_id"`
+	Mode    string  `json:"mode"`
+	Cards   []rcard `json:"cards"`
+	Context string  `json:"context"
+"crypto/rand"`
 	Degraded bool     `json:"degraded"`
 	Warnings []string `json:"warnings"`
 }
@@ -210,14 +228,11 @@ type rcard struct {
 
 // --- Memories types (mirror of /v2/memories response) ---
 
-type memoriesResponse struct {
-	Items []memoryItem `json:"items"`
-}
-
 type memoryMutationResponse struct {
-	Memory     memoryItem `json:"memory"`
-	IndexState string     `json:"index_state"`
-	IndexJobID *string    `json:"index_job_id"`
+	Memory          memoryItem `json:"memory"`
+	CanonicalStatus string     `json:"canonical_status"`
+	IndexState      string     `json:"index_status"`
+	IndexJobID      *string    `json:"index_job_id"`
 }
 
 type memoryItem struct {
@@ -354,9 +369,7 @@ type activityEvent struct {
 type createMemoryRequest struct {
 	Content string   `json:"content"`
 	Kind    string   `json:"kind,omitempty"`
-	Scope   string   `json:"scope,omitempty"`
 	Tags    []string `json:"tags,omitempty"`
-	Source  any      `json:"source,omitempty"`
 }
 
 type createActivityRequest struct {
@@ -391,8 +404,6 @@ func newMCPServer(client *Client) *server.MCPServer {
 
 	srv.AddTool(handlePersonaStatus(client))
 	srv.AddTool(handlePersonaGet(client))
-	srv.AddTool(handlePersonaPropose(client))
-	srv.AddTool(handlePersonaP16(client))
 	srv.AddTool(handleActmemRead(client))
 	srv.AddTool(handleActmemQuery(client))
 	srv.AddTool(handleActmemAppend(client))
@@ -648,54 +659,23 @@ func handleIndexHealth(client *Client) (mcp.Tool, server.ToolHandlerFunc) {
 }
 
 func handleMemorySearch(client *Client) (mcp.Tool, server.ToolHandlerFunc) {
-	tool := mcp.NewTool(
-		toolMemorySearch,
-		mcp.WithDescription("Search Garden memory using query-scoped Fast Recall plus canonical memories whose fields literally match the query. Results include sources; no unfiltered recent tail is presented as a match."),
-		mcp.WithString("query", mcp.Required(), mcp.Description("Search query text")),
-		mcp.WithNumber("max_results", mcp.Description("Maximum number of results (default 5)")),
-	)
-	handler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	tool := mcp.NewTool(toolMemorySearch, mcp.WithDescription("Search admitted memory cards. Expand selected IDs with their expected revision using evidence_get."), mcp.WithString("query", mcp.Required()), mcp.WithNumber("max_results"))
+	return tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		args, _ := req.Params.Arguments.(map[string]any)
 		query, _ := args["query"].(string)
-		query = strings.TrimSpace(query)
-		if query == "" {
-			return errorResult(fmt.Errorf("missing required argument: query")), nil
+		if strings.TrimSpace(query) == "" {
+			return errorResult(errors.New("query required")), nil
 		}
-		maxResults, err := optionalInteger(args, "max_results", 5, 1, 100)
+		limit, err := optionalInteger(args, "max_results", 5, 1, 100)
 		if err != nil {
 			return errorResult(err), nil
 		}
-
-		var recall fastRecallResponse
-		recallErr := client.post(ctx, "/v2/recall/fast", fastRecallRequest{
-			Query:       query,
-			BudgetChars: 6000,
-		}, &recall)
-
-		var mems memoriesResponse
-		memErr := client.get(ctx, "/v2/memories?limit=100", &mems)
-
-		if recallErr != nil && memErr != nil {
-			recallFailure := errorResult(recallErr).StructuredContent.(map[string]any)
-			memoryFailure := errorResult(memErr).StructuredContent.(map[string]any)
-			payload := map[string]any{
-				"code":       "backend_error",
-				"message":    "memory search backends unavailable",
-				"retryable":  recallFailure["retryable"] == true || memoryFailure["retryable"] == true,
-				"request_id": "",
-				"details":    map[string]any{"recall": recallFailure, "memories": memoryFailure},
-			}
-			return &mcp.CallToolResult{
-				Content:           []mcp.Content{mcp.NewTextContent("error [backend_error]: memory search backends unavailable")},
-				StructuredContent: payload,
-				IsError:           true,
-			}, nil
+		var cards evidenceCardsResponse
+		if err = client.get(ctx, fmt.Sprintf("/v2/materials/cards?query=%s&limit=%d", urlQueryEscape(query), limit), &cards); err != nil {
+			return errorResult(err), nil
 		}
-
-		text := formatMemorySearch(query, maxResults, &recall, recallErr, &mems, memErr)
-		return okResult(text), nil
+		return okResult(formatEvidenceCards(cards)), nil
 	}
-	return tool, handler
 }
 
 func handleEvidenceSearch(client *Client) (mcp.Tool, server.ToolHandlerFunc) {
@@ -731,6 +711,7 @@ func handleEvidenceGet(client *Client) (mcp.Tool, server.ToolHandlerFunc) {
 		toolEvidenceGet,
 		mcp.WithDescription("Get the evidence fragments for a specific Garden Mentle card by card id."),
 		mcp.WithString("card_id", mcp.Required(), mcp.Description("Card id, e.g. mem_...")),
+		mcp.WithNumber("expected_revision", mcp.Required(), mcp.Description("Revision observed on the selected card")),
 	)
 	handler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		args, _ := req.Params.Arguments.(map[string]any)
@@ -739,8 +720,12 @@ func handleEvidenceGet(client *Client) (mcp.Tool, server.ToolHandlerFunc) {
 		if cardID == "" {
 			return errorResult(fmt.Errorf("missing required argument: card_id")), nil
 		}
+		revision, valid := integerArgument(args["expected_revision"])
+		if !valid || revision <= 0 {
+			return errorResult(errors.New("positive expected_revision required")), nil
+		}
 		var resp evidenceGetResponse
-		if err := client.get(ctx, "/v2/materials/cards/"+urlPathEscape(cardID)+"/evidence", &resp); err != nil {
+		if err := client.get(ctx, "/v2/materials/cards/"+urlPathEscape(cardID)+"/evidence?expected_revision="+fmt.Sprint(revision), &resp); err != nil {
 			return errorResult(err), nil
 		}
 		text := formatEvidenceGet(resp)
@@ -845,7 +830,6 @@ func handleRecordSignal(client *Client) (mcp.Tool, server.ToolHandlerFunc) {
 			Content: content,
 			Kind:    kind,
 			Tags:    tags,
-			Source:  map[string]any{"type": "agent"},
 		}
 		var resp memoryMutationResponse
 		encoded, _ := json.Marshal(body)
@@ -853,7 +837,7 @@ func handleRecordSignal(client *Client) (mcp.Tool, server.ToolHandlerFunc) {
 		if err := client.postWithHeaders(ctx, "/v2/memories", body, map[string]string{"Idempotency-Key": key}, &resp); err != nil {
 			return errorResult(err), nil
 		}
-		text := fmt.Sprintf("recorded memory %s (lifecycle=%s, collection=%s, index_state=%s)\ncontent: %s", resp.Memory.ID, resp.Memory.Lifecycle, resp.Memory.Collection, resp.IndexState, resp.Memory.Content)
+		text := fmt.Sprintf("memory %s canonical=%s index=%s revision=%d", resp.Memory.ID, resp.CanonicalStatus, resp.IndexState, resp.Memory.Version)
 		return okResult(text), nil
 	}
 	return tool, handler
@@ -942,90 +926,6 @@ func formatPersonaDocument(resp personaDocumentResponse) string {
 	}
 	fmt.Fprintf(&b, "---\n%s\n", resp.Content)
 	return b.String()
-}
-
-func formatMemorySearch(query string, maxResults int, recall *fastRecallResponse, recallErr error, mems *memoriesResponse, memErr error) string {
-	if maxResults < 1 {
-		maxResults = 1
-	}
-	var b strings.Builder
-	matchedMemories := []memoryItem(nil)
-	if memErr == nil && mems != nil {
-		matchedMemories = filterMemoryItems(mems.Items, query)
-	}
-	degraded := recallErr != nil || memErr != nil
-	resultCount := 0
-	if recallErr == nil && recall != nil {
-		resultCount += len(recall.Cards)
-	}
-	resultCount += len(matchedMemories)
-	state := "ok"
-	if degraded {
-		state = "degraded"
-	} else if resultCount == 0 {
-		state = "empty"
-	}
-	fmt.Fprintf(&b, "Memory search: %q (status=%s)\n\n", query, state)
-
-	if recallErr == nil && recall != nil {
-		fmt.Fprintf(&b, "=== Fast Recall (mode=%s, trace=%s) ===\n", recall.Mode, recall.TraceID)
-		if len(recall.Cards) == 0 {
-			fmt.Fprintf(&b, "(no recall cards)\n")
-		} else {
-			n := maxResults
-			if len(recall.Cards) < n {
-				n = len(recall.Cards)
-			}
-			for _, c := range recall.Cards[:n] {
-				fmt.Fprintf(&b, "- [%s] %s (%s) heat=%.3f\n  %s\n", c.ID, c.Title, c.SourceRef, c.HeatScore, c.Summary)
-			}
-		}
-		if recall.Context != "" {
-			fmt.Fprintf(&b, "\ncontext: %s\n", recall.Context)
-		}
-	} else if recallErr != nil {
-		fmt.Fprintf(&b, "(recall unavailable: %v)\n", recallErr)
-	}
-
-	if memErr == nil && len(matchedMemories) > 0 {
-		fmt.Fprintf(&b, "\n=== Canonical memories matching query ===\n")
-		n := maxResults
-		if len(matchedMemories) < n {
-			n = len(matchedMemories)
-		}
-		for _, m := range matchedMemories[:n] {
-			tags := ""
-			if len(m.Tags) > 0 {
-				tags = " tags=[" + strings.Join(m.Tags, ",") + "]"
-			}
-			fmt.Fprintf(&b, "- [%s] (%s/%s)%s\n  %s\n", m.ID, m.Lifecycle, m.Collection, tags, m.Content)
-		}
-	} else if memErr != nil {
-		fmt.Fprintf(&b, "(memories unavailable: %v)\n", memErr)
-	} else if resultCount == 0 {
-		fmt.Fprintf(&b, "(no query-matched results)\n")
-	}
-
-	return b.String()
-}
-
-func filterMemoryItems(items []memoryItem, query string) []memoryItem {
-	needle := strings.ToLower(strings.TrimSpace(query))
-	if needle == "" {
-		return nil
-	}
-	matched := make([]memoryItem, 0, len(items))
-	for _, item := range items {
-		values := []string{item.Content, item.Kind, item.Lifecycle, item.Collection, item.Source.Type, item.Source.SessionID, item.Source.EventID, item.Source.URI}
-		values = append(values, item.Tags...)
-		for _, value := range values {
-			if strings.Contains(strings.ToLower(value), needle) {
-				matched = append(matched, item)
-				break
-			}
-		}
-	}
-	return matched
 }
 
 func formatIndexHealth(resp indexHealthResponse) string {

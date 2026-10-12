@@ -31,13 +31,15 @@ export function useApi<T>(path: string | null, opts: UseApiOptions = {}): UseApi
   const reload = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
-    if (!enabled || !path) return;
+    setData(null); setError(null);
+ if (!enabled || !path) { setLoading(false); return; }
+ const controller = new AbortController();
     let cancelled = false;
     setLoading(true);
 
     const run = async () => {
       try {
-        const result = await get<T>(path);
+        const result = await get<T>(path, controller.signal);
         if (!cancelled && alive.current) {
           setData(result);
           setError(null);
@@ -57,6 +59,7 @@ export function useApi<T>(path: string | null, opts: UseApiOptions = {}): UseApi
 
     return () => {
       cancelled = true;
+ controller.abort();
       if (timer) clearInterval(timer);
     };
   }, [path, enabled, poll, tick]);

@@ -100,7 +100,13 @@ func (e AuthorizedExpansion) Validate() error {
 // AuthorizedMutation is one scoped canonical write. Scope and destination
 // must equal the bound writer; create/update/tombstone carry the contract's
 // revision and absent-precondition shapes.
+type MutationOrigin struct{ ProfileID, AgentID, Platform, SessionID string }
+
 type AuthorizedMutation struct {
+	Kind             string                      `json:"kind,omitempty"`
+	Tags             *[]string                   `json:"tags,omitempty"`
+	Collection       string                      `json:"collection,omitempty"`
+	Origin           MutationOrigin              `json:"origin,omitempty"`
 	Scope            evolution.Scope             `json:"scope"`
 	DestinationID    string                      `json:"destination_id"`
 	OperationID      string                      `json:"operation_id"`

@@ -1,12 +1,9 @@
 package server
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -23,6 +20,7 @@ import (
 	"github.com/ProjectViVy/laputa/garden/internal/pipeline"
 	"github.com/ProjectViVy/laputa/garden/internal/recall"
 	"github.com/ProjectViVy/laputa/garden/internal/report"
+	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
 	"github.com/ProjectViVy/laputa/laputa/actmem"
 	"github.com/ProjectViVy/laputa/laputa/persona"
 	"github.com/ProjectViVy/laputa/mentle/facade"
@@ -31,13 +29,12 @@ import (
 
 // Server exposes garden CRUD over HTTP.
 type Server struct {
+	Owner        *runtimecore.Owner
+	binding      agentapi.Binding
 	Installation *agentapi.Installation
 	Pairing      *Pairing
 	AgentAPI     *agentapi.Service
 	ProfileID    string
-	Facade       *facade.Service
-	FastRecall   *recall.FastService
-	DeepRecall   *recall.DeepService
 	TraceStore   *recall.TraceStore
 	Evolution    *evolution.Service
 	Activity     *activity.Store
@@ -71,72 +68,72 @@ func (s *Server) HTTPHandler() http.Handler {
 	mux := http.NewServeMux()
 	s.mountAccess(mux)
 	mux.HandleFunc("GET /health", s.handleHealth)
-	mux.HandleFunc("POST /v2/memories", s.handleCreateMemory)
-	mux.HandleFunc("GET /v2/memories/{id}", s.handleGetMemory)
-	mux.HandleFunc("GET /v2/memories", s.handleListMemories)
-	mux.HandleFunc("PATCH /v2/memories/{id}", s.handleUpdateMemory)
-	mux.HandleFunc("DELETE /v2/memories/{id}", s.handleDeleteMemory)
-	mux.HandleFunc("POST /v2/ingest/sessions", s.handleSessionSubmit)
-	mux.HandleFunc("GET /v2/ingestions/{id}", s.handleIngestionStatus)
-	mux.HandleFunc("POST /v2/recall/bootstrap", s.handleBootstrap)
-	mux.HandleFunc("GET /v2/reports", s.handleReportsList)
-	mux.HandleFunc("GET /v2/reports/latest", s.handleLatestReport)
-	mux.HandleFunc("POST /v2/reports/generate", s.handleReportGenerate)
-	mux.HandleFunc("GET /v2/reports/orientation", s.handleReportOrientation)
-	mux.HandleFunc("GET /v2/reports/modules", s.handleModulesList)
-	mux.HandleFunc("POST /v2/reports/modules", s.handleModuleCreate)
-	mux.HandleFunc("PATCH /v2/reports/modules/{id}", s.handleModuleUpdate)
-	mux.HandleFunc("GET /v2/pipelines", s.handlePipelines)
-	mux.HandleFunc("GET /v2/pipelines/{name}", s.handlePipeline)
-	mux.HandleFunc("GET /v2/pipelines/{name}/runs", s.handlePipelineRuns)
-	mux.HandleFunc("GET /v2/pipelines/{name}/runs/{trace_id}", s.handlePipelineRun)
-	mux.HandleFunc("POST /v2/recall/fast", s.handleFastRecall)
-	mux.HandleFunc("POST /v2/recall/deep", s.handleDeepRecall)
-	mux.HandleFunc("GET /v2/recall/traces/{trace_id}", s.handleRecallTrace)
-	mux.HandleFunc("POST /v2/activity/events", s.handleActivityEvents)
-	mux.HandleFunc("GET /v2/activity/sessions/{session_id}", s.handleSessionActivity)
-	mux.HandleFunc("POST /v2/evolution/runs", s.handleEvolutionStartRun)
-	mux.HandleFunc("GET /v2/evolution/runs", s.handleEvolutionListRuns)
-	mux.HandleFunc("GET /v2/evolution/runs/{run_id}", s.handleEvolutionGetRun)
-	mux.HandleFunc("GET /v2/evolution/candidates/{candidate_id}", s.handleEvolutionGetCandidate)
-	mux.HandleFunc("POST /v2/evolution/proposals", s.handleEvolutionCreateProposal)
-	mux.HandleFunc("GET /v2/evolution/proposals", s.handleEvolutionListProposals)
-	mux.HandleFunc("GET /v2/evolution/proposals/{proposal_id}", s.handleEvolutionGetProposal)
-	mux.HandleFunc("POST /v2/evolution/proposals/{proposal_id}/review", s.handleEvolutionReviewProposal)
-	mux.HandleFunc("GET /v2/evolution/events/{event_id}", s.handleEvolutionGetEvent)
-	mux.HandleFunc("GET /v2/evolution/hub/status", s.handleEvolutionHubStatus)
-	mux.HandleFunc("GET /v2/mailbox/inbox", s.handleMailboxInbox)
-	mux.HandleFunc("GET /v2/mailbox/outbox", s.handleMailboxOutbox)
-	mux.HandleFunc("GET /v2/mailbox/dead-letter", s.handleMailboxDeadLetter)
-	mux.HandleFunc("GET /v2/persona/documents", s.handlePersonaDocuments)
-	mux.HandleFunc("GET /v2/persona/documents/{kind}", s.handlePersonaDocumentV2)
-	mux.HandleFunc("PUT /v2/persona/documents/{kind}", s.handlePersonaDocumentPutV2)
-	mux.HandleFunc("POST /v2/persona/initialize", s.handlePersonaInitializeV2)
-	mux.HandleFunc("POST /v2/persona/repair", s.handlePersonaRepairV2)
-	mux.HandleFunc("GET /v2/persona/reviews", s.handlePersonaReviewsV2)
-	mux.HandleFunc("POST /v2/persona/reviews", s.handlePersonaReviewCreateV2)
-	mux.HandleFunc("GET /v2/persona/reviews/{id}", s.handlePersonaReviewV2)
-	mux.HandleFunc("POST /v2/persona/reviews/{id}/approve", func(w http.ResponseWriter, r *http.Request) { s.handlePersonaReviewDecisionV2(w, r, true) })
-	mux.HandleFunc("POST /v2/persona/reviews/{id}/reject", func(w http.ResponseWriter, r *http.Request) { s.handlePersonaReviewDecisionV2(w, r, false) })
-	mux.HandleFunc("GET /v2/persona/history/{kind}", s.handlePersonaHistoryV2)
-	mux.HandleFunc("GET /v2/persona/history/{kind}/{revision}", s.handlePersonaHistoryRevisionV2)
-	mux.HandleFunc("GET /v2/actmem", s.handleActmemRead)
-	mux.HandleFunc("POST /v2/actmem/query", s.handleActmemQuery)
-	mux.HandleFunc("PUT /v2/actmem", s.handleActmemPut)
-	mux.HandleFunc("POST /v2/actmem/maintenance", s.handleActmemMaintenance)
-	mux.HandleFunc("GET /v2/actmem/capsules", s.handleActmemCapsules)
-	mux.HandleFunc("GET /v2/actmem/capsules/{name}", s.handleActmemCapsule)
-	mux.HandleFunc("DELETE /v2/actmem/capsules/{name}", s.handleActmemCapsuleDelete)
-	mux.HandleFunc("POST /v2/mailbox/items/{id}/approve", s.handleMailboxApprove)
-	mux.HandleFunc("POST /v2/mailbox/items/{id}/reject", s.handleMailboxReject)
-	mux.HandleFunc("GET /v2/admin/overview", s.handleAdminOverview)
-	mux.HandleFunc("GET /v2/admin/components", s.handleAdminComponents)
-	mux.HandleFunc("GET /v2/admin/index-health", s.handleAdminIndexHealth)
-	mux.HandleFunc("GET /v2/admin/context-manifest/{trace_id}", s.handleAdminContextManifest)
-	mux.HandleFunc("GET /v2/admin/spool", s.handleAdminSpool)
-	mux.HandleFunc("GET /v2/materials/cards", s.handleMaterialsCards)
-	mux.HandleFunc("GET /v2/materials/cards/{id}/evidence", s.handleMaterialsEvidence)
-	mux.HandleFunc("GET /v2/materials/collections", s.handleMaterialsCollections)
+	mux.HandleFunc("POST /v2/memories", s.boundRoute(agentapi.OpRemember, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleCreateMemory(w, r) }))
+	mux.HandleFunc("GET /v2/memories/{id}", s.boundRoute(agentapi.OpSearch, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleGetMemory(w, r) }))
+	mux.HandleFunc("GET /v2/memories", s.boundRoute(agentapi.OpSearch, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleListMemories(w, r) }))
+	mux.HandleFunc("PATCH /v2/memories/{id}", s.boundRoute(agentapi.OpRemember, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleUpdateMemory(w, r) }))
+	mux.HandleFunc("DELETE /v2/memories/{id}", s.boundRoute(agentapi.OpRemember, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleDeleteMemory(w, r) }))
+	mux.HandleFunc("POST /v2/ingest/sessions", s.boundRoute(agentapi.OpCapture, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleSessionSubmit(w, r) }))
+	mux.HandleFunc("GET /v2/ingestions/{id}", s.boundRoute(agentapi.OpCapture, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleIngestionStatus(w, r) }))
+	mux.HandleFunc("POST /v2/recall/bootstrap", s.boundRoute(agentapi.OpBootstrap, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleBootstrap(w, r) }))
+	mux.HandleFunc("GET /v2/reports", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleReportsList(w, r) }))
+	mux.HandleFunc("GET /v2/reports/latest", s.boundRoute(agentapi.OpSearch, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleLatestReport(w, r) }))
+	mux.HandleFunc("POST /v2/reports/generate", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleReportGenerate(w, r) }))
+	mux.HandleFunc("GET /v2/reports/orientation", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleReportOrientation(w, r) }))
+	mux.HandleFunc("GET /v2/reports/modules", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleModulesList(w, r) }))
+	mux.HandleFunc("POST /v2/reports/modules", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleModuleCreate(w, r) }))
+	mux.HandleFunc("PATCH /v2/reports/modules/{id}", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleModuleUpdate(w, r) }))
+	mux.HandleFunc("GET /v2/pipelines", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handlePipelines(w, r) }))
+	mux.HandleFunc("GET /v2/pipelines/{name}", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handlePipeline(w, r) }))
+	mux.HandleFunc("GET /v2/pipelines/{name}/runs", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handlePipelineRuns(w, r) }))
+	mux.HandleFunc("GET /v2/pipelines/{name}/runs/{trace_id}", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handlePipelineRun(w, r) }))
+	mux.HandleFunc("POST /v2/recall/fast", s.boundRoute(agentapi.OpSearch, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleFastRecall(w, r) }))
+	mux.HandleFunc("POST /v2/recall/deep", s.boundRoute(agentapi.OpSearch, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleDeepRecall(w, r) }))
+	mux.HandleFunc("GET /v2/recall/traces/{trace_id}", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleRecallTrace(w, r) }))
+	mux.HandleFunc("POST /v2/activity/events", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleActivityEvents(w, r) }))
+	mux.HandleFunc("GET /v2/activity/sessions/{session_id}", s.boundRoute(agentapi.OpSearch, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleSessionActivity(w, r) }))
+	mux.HandleFunc("POST /v2/evolution/runs", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleEvolutionStartRun(w, r) }))
+	mux.HandleFunc("GET /v2/evolution/runs", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleEvolutionListRuns(w, r) }))
+	mux.HandleFunc("GET /v2/evolution/runs/{run_id}", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleEvolutionGetRun(w, r) }))
+	mux.HandleFunc("GET /v2/evolution/candidates/{candidate_id}", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleEvolutionGetCandidate(w, r) }))
+	mux.HandleFunc("POST /v2/evolution/proposals", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleEvolutionCreateProposal(w, r) }))
+	mux.HandleFunc("GET /v2/evolution/proposals", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleEvolutionListProposals(w, r) }))
+	mux.HandleFunc("GET /v2/evolution/proposals/{proposal_id}", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleEvolutionGetProposal(w, r) }))
+	mux.HandleFunc("POST /v2/evolution/proposals/{proposal_id}/review", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleEvolutionReviewProposal(w, r) }))
+	mux.HandleFunc("GET /v2/evolution/events/{event_id}", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleEvolutionGetEvent(w, r) }))
+	mux.HandleFunc("GET /v2/evolution/hub/status", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleEvolutionHubStatus(w, r) }))
+	mux.HandleFunc("GET /v2/mailbox/inbox", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleMailboxInbox(w, r) }))
+	mux.HandleFunc("GET /v2/mailbox/outbox", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleMailboxOutbox(w, r) }))
+	mux.HandleFunc("GET /v2/mailbox/dead-letter", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleMailboxDeadLetter(w, r) }))
+	mux.HandleFunc("GET /v2/persona/documents", s.boundRoute(agentapi.OpPersonaGet, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handlePersonaDocuments(w, r) }))
+	mux.HandleFunc("GET /v2/persona/documents/{kind}", s.boundRoute(agentapi.OpPersonaGet, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handlePersonaDocumentV2(w, r) }))
+	mux.HandleFunc("PUT /v2/persona/documents/{kind}", s.boundRoute(agentapi.OpPersonaReview, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handlePersonaDocumentPutV2(w, r) }))
+	mux.HandleFunc("POST /v2/persona/initialize", s.boundRoute(agentapi.OpPersonaReview, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handlePersonaInitializeV2(w, r) }))
+	mux.HandleFunc("POST /v2/persona/repair", s.boundRoute(agentapi.OpPersonaReview, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handlePersonaRepairV2(w, r) }))
+	mux.HandleFunc("GET /v2/persona/reviews", s.boundRoute(agentapi.OpPersonaGet, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handlePersonaReviewsV2(w, r) }))
+	mux.HandleFunc("POST /v2/persona/reviews", s.boundRoute(agentapi.OpPersonaReview, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handlePersonaReviewCreateV2(w, r) }))
+	mux.HandleFunc("GET /v2/persona/reviews/{id}", s.boundRoute(agentapi.OpPersonaGet, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handlePersonaReviewV2(w, r) }))
+	mux.HandleFunc("POST /v2/persona/reviews/{id}/approve", s.boundRoute(agentapi.OpPersonaReview, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handlePersonaReviewDecisionV2(w, r, true) }))
+	mux.HandleFunc("POST /v2/persona/reviews/{id}/reject", s.boundRoute(agentapi.OpPersonaReview, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handlePersonaReviewDecisionV2(w, r, false) }))
+	mux.HandleFunc("GET /v2/persona/history/{kind}", s.boundRoute(agentapi.OpPersonaGet, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handlePersonaHistoryV2(w, r) }))
+	mux.HandleFunc("GET /v2/persona/history/{kind}/{revision}", s.boundRoute(agentapi.OpPersonaGet, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handlePersonaHistoryRevisionV2(w, r) }))
+	mux.HandleFunc("GET /v2/actmem", s.boundRoute(agentapi.OpActmemRead, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleActmemRead(w, r) }))
+	mux.HandleFunc("POST /v2/actmem/query", s.boundRoute(agentapi.OpActmemQuery, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleActmemQuery(w, r) }))
+	mux.HandleFunc("PUT /v2/actmem", s.boundRoute(agentapi.OpActmemSave, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleActmemPut(w, r) }))
+	mux.HandleFunc("POST /v2/actmem/maintenance", s.boundRoute(agentapi.OpActmemMaintain, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleActmemMaintenance(w, r) }))
+	mux.HandleFunc("GET /v2/actmem/capsules", s.boundRoute(agentapi.OpActmemRead, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleActmemCapsules(w, r) }))
+	mux.HandleFunc("GET /v2/actmem/capsules/{name}", s.boundRoute(agentapi.OpActmemRead, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleActmemCapsule(w, r) }))
+	mux.HandleFunc("DELETE /v2/actmem/capsules/{name}", s.boundRoute(agentapi.OpActmemMaintain, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleActmemCapsuleDelete(w, r) }))
+	mux.HandleFunc("POST /v2/mailbox/items/{id}/approve", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleMailboxApprove(w, r) }))
+	mux.HandleFunc("POST /v2/mailbox/items/{id}/reject", s.boundRoute(agentapi.OpSearch, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleMailboxReject(w, r) }))
+	mux.HandleFunc("GET /v2/admin/overview", s.boundRoute(agentapi.OpIndexHealth, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleAdminOverview(w, r) }))
+	mux.HandleFunc("GET /v2/admin/components", s.boundRoute(agentapi.OpIndexHealth, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleAdminComponents(w, r) }))
+	mux.HandleFunc("GET /v2/admin/index-health", s.boundRoute(agentapi.OpIndexHealth, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleAdminIndexHealth(w, r) }))
+	mux.HandleFunc("GET /v2/admin/context-manifest/{trace_id}", s.boundRoute(agentapi.OpIndexHealth, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleAdminContextManifest(w, r) }))
+	mux.HandleFunc("GET /v2/admin/spool", s.boundRoute(agentapi.OpIndexHealth, true, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleAdminSpool(w, r) }))
+	mux.HandleFunc("GET /v2/materials/cards", s.boundRoute(agentapi.OpSearch, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleMaterialsCards(w, r) }))
+	mux.HandleFunc("GET /v2/materials/cards/{id}/evidence", s.boundRoute(agentapi.OpExpand, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleMaterialsEvidence(w, r) }))
+	mux.HandleFunc("GET /v2/materials/collections", s.boundRoute(agentapi.OpSearch, false, func(v *Server, w http.ResponseWriter, r *http.Request) { v.handleMaterialsCollections(w, r) }))
 	mux.HandleFunc("/", s.spaHandler())
 
 	return requestMiddleware(mux)
@@ -175,172 +172,6 @@ func (s *Server) spaHandler() http.HandlerFunc {
 	}
 }
 
-func (s *Server) handleCreateMemory(w http.ResponseWriter, r *http.Request) {
-	if s.Facade == nil {
-		writeHandlerError(w, facade.ErrUnavailable)
-		return
-	}
-	principal, ok := s.requirePrincipal(w, r, PrincipalUser, PrincipalAgent)
-	if !ok {
-		return
-	}
-	if !personaContentTypeOK(r) {
-		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("content type must be application/json"))
-		return
-	}
-	raw, err := readBody(w, r, 64<<10)
-	if err != nil {
-		writeRequestError(w, err)
-		return
-	}
-	var body facade.CreateMemoryRequest
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&body); err != nil {
-		writeRequestError(w, err)
-		return
-	}
-	body.Actor = auditLabel(r, principal)
-	body.RequestID = w.Header().Get("X-Garden-Request-ID")
-	hash := fmt.Sprintf("sha256:%x", sha256.Sum256(raw))
-	result, err := s.Facade.CreateMemoryWithIndexStatus(r.Context(), body, r.Header.Get("Idempotency-Key"), hash)
-	if err != nil {
-		writeMemoryError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, result)
-}
-
-func (s *Server) handleGetMemory(w http.ResponseWriter, r *http.Request) {
-	if s.Facade == nil {
-		writeHandlerError(w, facade.ErrUnavailable)
-		return
-	}
-	if _, ok := s.requireReadPrincipal(w, r, PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator); !ok {
-		return
-	}
-	id := r.PathValue("id")
-	if id == "" {
-		writeError(w, http.StatusBadRequest, errors.New("id is required"))
-		return
-	}
-	memory, err := s.Facade.GetMemory(r.Context(), id)
-	if err != nil {
-		writeHandlerError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, memory)
-}
-
-func (s *Server) handleListMemories(w http.ResponseWriter, r *http.Request) {
-	if s.Facade == nil {
-		writeHandlerError(w, facade.ErrUnavailable)
-		return
-	}
-	if _, ok := s.requireReadPrincipal(w, r, PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator); !ok {
-		return
-	}
-	for key := range r.URL.Query() {
-		if key != "limit" && key != "cursor" && key != "status" && key != "kind" {
-			writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("unknown memory query parameter: "+key))
-			return
-		}
-	}
-	limit := 50
-	if raw := r.URL.Query().Get("limit"); raw != "" {
-		parsed, err := strconv.Atoi(raw)
-		if err != nil || parsed < 1 || parsed > 200 {
-			writeError(w, http.StatusBadRequest, errors.New("limit must be between 1 and 200"))
-			return
-		}
-		limit = parsed
-	}
-	page, err := s.Facade.ListMemories(r.Context(), facade.ListMemoryOptions{Limit: limit, Cursor: r.URL.Query().Get("cursor"), Status: r.URL.Query().Get("status"), Kind: r.URL.Query().Get("kind")})
-	if err != nil {
-		writeHandlerError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, page)
-}
-
-func (s *Server) handleDeleteMemory(w http.ResponseWriter, r *http.Request) {
-	if s.Facade == nil {
-		writeHandlerError(w, facade.ErrUnavailable)
-		return
-	}
-	principal, ok := s.requirePrincipal(w, r, PrincipalUser, PrincipalAgent)
-	if !ok {
-		return
-	}
-	if !personaContentTypeOK(r) {
-		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("content type must be application/json"))
-		return
-	}
-	id := r.PathValue("id")
-	if id == "" {
-		writeError(w, http.StatusBadRequest, errors.New("id is required"))
-		return
-	}
-	var body facade.DeleteMemoryRequest
-	if err := decodeJSON(w, r, 16<<10, &body); err != nil {
-		writeRequestError(w, err)
-		return
-	}
-	if body.ExpectedVersion <= 0 || strings.TrimSpace(body.Reason) == "" {
-		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("expected_version and reason are required"))
-		return
-	}
-	body.Actor = auditLabel(r, principal)
-	body.RequestID = w.Header().Get("X-Garden-Request-ID")
-	result, err := s.Facade.DeleteMemory(r.Context(), id, body.ExpectedVersion, body.Actor, body.RequestID, body.Reason)
-	if err != nil {
-		writeHandlerError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-func (s *Server) handleUpdateMemory(w http.ResponseWriter, r *http.Request) {
-	if s.Facade == nil {
-		writeHandlerError(w, facade.ErrUnavailable)
-		return
-	}
-	principal, ok := s.requirePrincipal(w, r, PrincipalUser, PrincipalAgent)
-	if !ok {
-		return
-	}
-	if !personaContentTypeOK(r) {
-		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("content type must be application/json"))
-		return
-	}
-	id := r.PathValue("id")
-	if id == "" {
-		writeError(w, http.StatusBadRequest, errors.New("id is required"))
-		return
-	}
-	var body facade.UpdateMemoryRequest
-	if err := decodeJSON(w, r, 64<<10, &body); err != nil {
-		writeRequestError(w, err)
-		return
-	}
-	if body.ExpectedVersion == nil || *body.ExpectedVersion <= 0 || strings.TrimSpace(body.Reason) == "" {
-		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("expected_version, reason and a mutable field are required"))
-		return
-	}
-	if body.Content == nil && body.Tags == nil {
-		writeErrorWithCode(w, http.StatusBadRequest, "invalid_request", errors.New("expected_version, reason and a mutable field are required"))
-		return
-	}
-	body.Actor = auditLabel(r, principal)
-	body.RequestID = w.Header().Get("X-Garden-Request-ID")
-	result, err := s.Facade.UpdateMemoryWithIndexStatus(r.Context(), id, body)
-	if err != nil {
-		writeMemoryError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
 func (s *Server) handleSessionSubmit(w http.ResponseWriter, r *http.Request) {
 	principal, ok := s.requirePrincipal(w, r, PrincipalUser, PrincipalAgent, PrincipalAutodream)
 	if !ok {
@@ -359,7 +190,13 @@ func (s *Server) handleSessionSubmit(w http.ResponseWriter, r *http.Request) {
 		writeRequestError(w, err)
 		return
 	}
-	accepted, err := s.AgentAPI.SubmitSession(r.Context(), agentapi.Principal(principal), body)
+	var accepted agentapi.SessionAccepted
+	var err error
+	if s.Installation != nil {
+		accepted, err = s.AgentAPI.SubmitBoundSession(r.Context(), agentapi.Principal(principal), s.requestBinding(body.SessionID), body)
+	} else {
+		accepted, err = s.AgentAPI.SubmitSession(r.Context(), agentapi.Principal(principal), body)
+	}
 	if err != nil {
 		var domainErr *agentapi.Error
 		if errors.As(err, &domainErr) {
@@ -381,16 +218,29 @@ func (s *Server) handleSessionSubmit(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, accepted)
 }
 func (s *Server) handleIngestionStatus(w http.ResponseWriter, r *http.Request) {
-	if s.Ingestions == nil {
-		writeError(w, http.StatusServiceUnavailable, facade.ErrUnavailable)
+	p, ok := s.requireReadPrincipal(w, r, PrincipalUser, PrincipalAgent, PrincipalRead)
+	if !ok {
 		return
 	}
-	status, err := s.Ingestions.Get(r.Context(), r.PathValue("id"))
+	if s.Installation != nil {
+		st, err := s.AgentAPI.SessionStatus(r.Context(), agentapi.Principal(p), s.requestBinding(r.Header.Get("X-Garden-Session")), r.PathValue("id"), r.URL.Query().Get("event_id"))
+		if err != nil {
+			writeMaterialsReadError(w, err)
+			return
+		}
+		writeJSON(w, 200, st)
+		return
+	}
+	if s.Ingestions == nil {
+		writeError(w, 503, errors.New("ingestion unavailable"))
+		return
+	}
+	st, err := s.Ingestions.Get(r.Context(), r.PathValue("id"))
 	if err != nil {
 		writeHandlerError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, status)
+	writeJSON(w, 200, st)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -451,7 +301,7 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view, err := s.AgentAPI.Bootstrap(r.Context(), agentapi.Principal(principal), agentapi.BootstrapRequest{
-		Binding:   agentapi.Binding{ProfileID: s.ProfileID, AgentID: "garden-http", Platform: "http", SessionID: body.SessionID},
+		Binding:   s.requestBinding(body.SessionID),
 		SessionID: body.SessionID, Intent: intent, BudgetChars: body.BudgetChars,
 	})
 	if err != nil {

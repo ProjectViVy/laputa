@@ -4,110 +4,91 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/ProjectViVy/laputa/garden/agentapi"
+	"github.com/ProjectViVy/laputa/laputa/persona"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
-
-	"github.com/ProjectViVy/laputa/garden/agentapi"
-	"github.com/ProjectViVy/laputa/garden/internal/server"
-	"github.com/ProjectViVy/laputa/laputa/persona"
-	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
 func TestRuntimeConfigNormalizesLegacyRelativePaths(t *testing.T) {
-	cfg := runtimeConfig("persona", "palace", "models", "state.db", "profile-a")
-	for name, path := range map[string]string{
-		"persona": cfg.PersonaDir, "palace": cfg.PalacePath,
-		"models": cfg.ModelsDir, "state": cfg.StateDB,
-	} {
-		if !filepath.IsAbs(path) {
-			t.Errorf("%s path remains relative: %q", name, path)
+	cfg := runtimeConfig("persona", "palace", "models", "state.db", "A")
+	for _, p := range []string{cfg.PersonaDir, cfg.PalacePath, cfg.ModelsDir, cfg.StateDB} {
+		if !filepath.IsAbs(p) {
+			t.Fatal(p)
 		}
 	}
-	if cfg.ProfileID != "profile-a" {
-		t.Fatalf("profile changed: %q", cfg.ProfileID)
-	}
 }
-
-func TestOpenAppSharesOneRuntimeAcrossAdapters(t *testing.T) {
+func TestOpenAppSharesOneOwnerAcrossAdapters(t *testing.T) {
+	ctx := context.Background()
 	root := t.TempDir()
-	t.Setenv("GARDEN_PIPELINE_CONFIG", filepath.Join(root, "missing-pipelines.yaml"))
-	t.Setenv("GARDEN_EVOMAP_CREDS", filepath.Join(root, "missing-creds"))
-	cfg := runtimeConfig(root, filepath.Join(root, "palace"), filepath.Join(root, "models"), filepath.Join(root, "state.db"), "profile-a")
-	app, err := openApp(context.Background(), cfg)
+	cfg := runtimeConfig("", filepath.Join(root, "memory"), filepath.Join(root, "models"), filepath.Join(root, "garden.db"), "A")
+	cfg.CatalogOnly = true
+	app, err := openApp(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer app.Close()
-	if app.runtime == nil || app.server.AgentAPI == nil {
-		t.Fatal("missing shared runtime or agent adapter")
+	for _, id := range []string{"A", "B"} {
+		if _, err = app.installation.RegisterProfile(ctx, agentapi.ProfileRegistration{ProfileID: id, Create: true}); err != nil {
+			t.Fatal(err)
+		}
+		g, _ := app.owner.Subject(ctx, id)
+		if _, err = g.Persona.Initialize(persona.Initialization{Identity: id, Relationship: "r", Redline: "safe", User: "u", World: "w"}, "user", persona.SourceInit, "init"); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if app.server.ProfileID != "profile-a" {
-		t.Fatalf("fixed profile = %q", app.server.ProfileID)
+	a, _ := app.owner.Subject(ctx, "A")
+	b, _ := app.owner.Subject(ctx, "B")
+	if a.Mentle != b.Mentle || a.Ingest != b.Ingest || app.server.Installation != app.installation {
+		t.Fatal("duplicated owner")
 	}
-	if app.server.Persona != app.runtime.Persona || app.server.Actmem != app.runtime.Actmem || app.server.Facade != app.runtime.Mentle || app.server.FastRecall != app.runtime.FastRecall || app.server.Ingestions != app.runtime.Ingest || app.server.Activity != app.runtime.Activity || app.server.TraceStore != app.runtime.Trace {
-		t.Fatal("HTTP adapter has a duplicate domain service")
+	info, err := os.Stat(filepath.Join(root, "pairing-code"))
+	if err != nil || info.Mode().Perm() != 0600 {
+		t.Fatal("pairing code not private", info, err)
 	}
-	if app.server.Components["mentle"] != "degraded" {
-		t.Fatalf("optional local model state: %v", app.server.Components)
+	raw, _ := os.ReadFile(filepath.Join(root, "pairing-code"))
+	body, _ := json.Marshal(map[string]string{"code": strings.TrimSpace(string(raw))})
+	req := httptest.NewRequest("POST", "http://localhost/v2/pairing", bytes.NewReader(body))
+	req.Header.Set("Origin", "http://localhost")
+	w := httptest.NewRecorder()
+	app.server.HTTPHandler().ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
 	}
-	if app.server.Checkpointer == nil || app.server.Reports == nil || app.server.Evolution == nil || app.server.Mailbox == nil || app.server.DeepRecall == nil {
-		t.Fatal("app-level management was lost")
+	cookie := w.Result().Cookies()[0]
+	for _, id := range []string{"A", "B"} {
+		req = httptest.NewRequest("GET", "http://localhost/v2/persona/documents/identity", nil)
+		req.AddCookie(cookie)
+		req.Header.Set("X-Garden-Profile", id)
+		w = httptest.NewRecorder()
+		app.server.HTTPHandler().ServeHTTP(w, req)
+		if w.Code != 200 || !strings.Contains(w.Body.String(), `"content":"`+id+`"`) {
+			t.Fatal(id, w.Code, w.Body.String())
+		}
 	}
-	if app.server.DeepRecall.Fast != app.runtime.FastRecall {
-		t.Fatal("deep recall uses another runtime")
-	}
-	if _, err := app.runtime.Persona.Initialize(persona.Initialization{Identity: "identity", Relationship: "relationship", Redline: "redline", User: "user", World: "world"}, "user", persona.SourceInit, "init"); err != nil {
-		t.Fatal(err)
-	}
-	binding := agentapi.Binding{ProfileID: "profile-a", AgentID: "agent", Platform: "test", SessionID: "session"}
-	if _, err := app.server.AgentAPI.FastRecall(context.Background(), agentapi.PrincipalAgent, agentapi.FastRecallRequest{Binding: binding, Query: "test", BudgetChars: 1000}); err != nil {
-		t.Fatalf("bound agent recall: %v", err)
-	}
-	binding.ProfileID = "other-profile"
-	if _, err := app.server.AgentAPI.FastRecall(context.Background(), agentapi.PrincipalAgent, agentapi.FastRecallRequest{Binding: binding, Query: "test", BudgetChars: 1000}); err == nil {
-		t.Fatal("agent could select another profile")
-	}
-}
-
-func TestOpenAppWithExistingCanonicalAndNoModelStaysLexicalReadOnly(t *testing.T) {
-	root := t.TempDir()
-	palace := filepath.Join(root, "palace")
-	if err := os.MkdirAll(palace, 0700); err != nil {
-		t.Fatal(err)
-	}
-	catalog, err := facade.OpenCatalog(filepath.Join(palace, "canonical.sqlite3"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := catalog.Close(); err != nil {
-		t.Fatal(err)
-	}
-	cfg := runtimeConfig(filepath.Join(root, "persona"), palace, filepath.Join(root, "absent-model"), filepath.Join(root, "state.db"), "profile-local")
-	app, err := openApp(context.Background(), cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer app.Close()
-	if !app.runtime.LexicalOnly || app.server.Components["mentle"] != "degraded" || app.server.DeepRecall.Graph != nil {
-		t.Fatalf("lexical startup enabled full-model capability: lexical=%v components=%v graph=%v", app.runtime.LexicalOnly, app.server.Components, app.server.DeepRecall.Graph)
-	}
-	app.server.Capabilities = server.CapabilityConfig{UserToken: "fixture-user"}
-	req := httptest.NewRequest(http.MethodPost, "/v2/memories", bytes.NewBufferString(`{"content":"must-not-write","kind":"note"}`))
+	req = httptest.NewRequest("GET", "http://localhost/v2/memories", nil)
 	req.RemoteAddr = "127.0.0.1:1234"
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer fixture-user")
-	rec := httptest.NewRecorder()
-	app.server.HTTPHandler().ServeHTTP(rec, req)
-	var body struct {
-		Code string `json:"code"`
+	w = httptest.NewRecorder()
+	app.server.HTTPHandler().ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatal("loopback granted", w.Code)
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+}
+func TestOpenAppDoesNotDiscoverAuthority(t *testing.T) {
+	root := t.TempDir()
+	cfg := runtimeConfig("", filepath.Join(root, "memory"), filepath.Join(root, "models"), filepath.Join(root, "garden.db"), "default")
+	cfg.CatalogOnly = true
+	app, err := openApp(context.Background(), cfg)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if rec.Code != http.StatusServiceUnavailable || body.Code != "memory_read_only" {
-		t.Fatalf("lexical write response: status=%d body=%s", rec.Code, rec.Body.String())
+	defer app.Close()
+	profiles, err := app.installation.ListProfiles(context.Background())
+	if err != nil || len(profiles) != 0 {
+		t.Fatal("implicit profile", profiles, err)
 	}
 }

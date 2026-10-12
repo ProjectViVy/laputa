@@ -25,7 +25,9 @@ func TestFastRecallUsesSharedServiceWithOptionalSession(t *testing.T) {
 	fast := &recall.FastService{Frozen: fastFrozenFixture{}, Searcher: fakeCardSearcher{}}
 	srv := testServer()
 	// A route wired only to the old handler's FastRecall pointer cannot pass.
-	srv.AgentAPI = agentapi.NewService(&runtimecore.Garden{ProfileID: srv.ProfileID, FastRecall: fast})
+	_, m := materialsTestServerMentle(t)
+	materialsSeedCard(t, m, "test card evidence")
+	srv.AgentAPI = agentapi.NewService(&runtimecore.Garden{ProfileID: srv.ProfileID, FastRecall: fast, Mentle: m})
 	for _, tc := range []struct {
 		name, body, frozenID string
 		degraded             bool
@@ -75,7 +77,6 @@ func TestFastRecallRejectsClientIdentityClaims(t *testing.T) {
 
 func TestFastRecallRequiresSharedService(t *testing.T) {
 	srv := testServer()
-	srv.FastRecall = &recall.FastService{Searcher: fakeCardSearcher{}}
 	req := localRequest(http.MethodPost, "/v2/recall/fast", bytes.NewBufferString(`{"query":"test"}`))
 	rec := httptest.NewRecorder()
 	srv.HTTPHandler().ServeHTTP(rec, req)

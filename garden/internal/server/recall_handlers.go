@@ -30,7 +30,7 @@ func (s *Server) handleFastRecall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view, err := s.AgentAPI.FastRecall(r.Context(), agentapi.Principal(principal), agentapi.FastRecallRequest{
-		Binding: agentapi.Binding{ProfileID: s.ProfileID, AgentID: "garden-http", Platform: "http", SessionID: body.SessionID},
+		Binding: s.requestBinding(body.SessionID),
 		Query:   body.Query, Scope: body.Scope, BudgetChars: body.BudgetChars,
 	})
 	if err != nil {
@@ -53,8 +53,8 @@ func (s *Server) handleDeepRecall(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireReadPrincipal(w, r, PrincipalRead, PrincipalUser, PrincipalAgent, PrincipalAutodream, PrincipalOperator); !ok {
 		return
 	}
-	if s.DeepRecall == nil {
-		writeError(w, http.StatusServiceUnavailable, errors.New("deep recall service unavailable"))
+	if s.AgentAPI == nil {
+		writeError(w, 503, errors.New("deep recall unavailable"))
 		return
 	}
 	var body recall.DeepRequest
@@ -62,9 +62,10 @@ func (s *Server) handleDeepRecall(w http.ResponseWriter, r *http.Request) {
 		writeRequestError(w, err)
 		return
 	}
-	resp, err := s.DeepRecall.Recall(r.Context(), body)
+	p, _ := s.principalForReadRequest(r)
+	resp, err := s.AgentAPI.DeepRecall(r.Context(), agentapi.Principal(p), s.requestBinding(body.SessionID), body)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		writeMaterialsReadError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)

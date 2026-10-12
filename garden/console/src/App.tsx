@@ -11,11 +11,15 @@ import MaterialsPage from "./pages/MaterialsPage";
 import ReportsPage from "./pages/ReportsPage";
 import ModulesPage from "./pages/ModulesPage";
 import EvolutionPage from "./pages/EvolutionPage";
+import { OwnerGate, useProfiles } from "./api/profiles";
+import AccessPage from "./pages/AccessPage";
 import SettingsPage from "./pages/SettingsPage";
 
-export default function App() {
+export default function App() { return <OwnerGate><ProfileRoutes /></OwnerGate>; }
+function ProfileRoutes() {
+ const { selected } = useProfiles();
   return (
-    <Routes>
+    <Routes key={selected}>
       <Route element={<Shell />}>
         <Route index element={<Overview />} />
         <Route path="/persona" element={<PersonaPage />} />
@@ -28,7 +32,8 @@ export default function App() {
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/modules" element={<ModulesPage />} />
         <Route path="/evolution" element={<EvolutionPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/access" element={<AccessPage />} />
+ <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

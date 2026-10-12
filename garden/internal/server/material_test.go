@@ -66,7 +66,7 @@ func TestMaterialsCardsPreserveWireKeys(t *testing.T) {
 			t.Errorf("missing %s", key)
 		}
 	}
-	if result["source"] != "live" || len(result) != 3 {
+	if result["source"] != "live" || len(result) != 4 {
 		t.Fatalf("unexpected response %v", result)
 	}
 }
@@ -124,9 +124,9 @@ func TestMaterialsEvidenceBudgetFallback(t *testing.T) {
 	}
 }
 
-func TestMaterialsCollectionsUnavailableWhenMentleGraphMissing(t *testing.T) {
+func TestMaterialsCollectionsUseCanonicalCatalogWithoutGraph(t *testing.T) {
 	rec := materialRequest(materialsTestServer(t), "/v2/materials/collections")
-	if rec.Code != http.StatusServiceUnavailable {
+	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
