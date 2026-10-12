@@ -84,6 +84,9 @@ func (s *Service) recoverFile(v *projectionState, file string) error {
 func (s *Service) Apply(ctx context.Context, p FilePlan) (HostStatus, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.validateTarget(ctx, p.Path); err != nil {
+		return HostStatus{}, err
+	}
 	if _, err := s.binding(ctx, p.BindingID, true); err != nil {
 		return HostStatus{}, err
 	}

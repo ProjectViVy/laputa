@@ -56,7 +56,7 @@ func NewInstallation(owner *runtimecore.Owner) *Installation {
 			return nil, err
 		}
 		return g.Persona, nil
-	})
+	}, owner.ProtectedPaths()...)
 	return i
 }
 func (i *Installation) Close() error {

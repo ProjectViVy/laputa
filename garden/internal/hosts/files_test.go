@@ -2,6 +2,7 @@ package hosts
 
 import (
 	"context"
+	"fmt"
 	"github.com/ProjectViVy/laputa/garden/internal/registry"
 	"os"
 	"strings"
@@ -122,20 +123,34 @@ func TestRevokeUserEditPreserved(t *testing.T) {
 	}
 }
 func TestManagedFileMissingRestoredOnRevoke(t *testing.T) {
-	s, id, path := hostFixture(t)
-	ctx := context.Background()
-	s.registry.SetHostControls(ctx, id, registry.HostControls{PersonaSync: true})
-	p, err := s.Preview(ctx, ProjectionRequest{BindingID: id, Path: path})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.Apply(ctx, p); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.Revoke(ctx, id); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = os.Stat(path); !os.IsNotExist(err) {
-		t.Fatal("original missing state lost", err)
+	for _, existed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("original-exists-%t", existed), func(t *testing.T) {
+			s, id, path := hostFixture(t)
+			ctx := context.Background()
+			s.registry.SetHostControls(ctx, id, registry.HostControls{PersonaSync: true})
+			if existed {
+				if err := os.WriteFile(path, nil, 0640); err != nil {
+					t.Fatal(err)
+				}
+			}
+			p, err := s.Preview(ctx, ProjectionRequest{BindingID: id, Path: path})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = s.Apply(ctx, p); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = s.Revoke(ctx, id); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := os.ReadFile(path)
+			if existed {
+				if err != nil || len(raw) != 0 {
+					t.Fatal("original empty state lost", raw, err)
+				}
+			} else if !os.IsNotExist(err) {
+				t.Fatal("original missing state lost", err)
+			}
+		})
 	}
 }

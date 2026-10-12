@@ -8,6 +8,7 @@ import (
 	"github.com/ProjectViVy/laputa/laputa/persona"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -16,14 +17,15 @@ type Service struct {
 	closed    bool
 	registry  *registry.Store
 	backupDir string
+	protected []string
 	persona   func(context.Context, string) (*persona.Service, error)
 	// Qualified adapters may supply proof of an exact authenticated session
 	// loading this projection. No adapters are qualified by this common core.
 	LoadedEvidence func(context.Context, registry.HostBinding, string, string) error
 }
 
-func New(r *registry.Store, backupDir string, reader func(context.Context, string) (*persona.Service, error)) *Service {
-	return &Service{registry: r, backupDir: backupDir, persona: reader}
+func New(r *registry.Store, backupDir string, reader func(context.Context, string) (*persona.Service, error), protected ...string) *Service {
+	return &Service{registry: r, backupDir: backupDir, persona: reader, protected: append([]string{filepath.Dir(backupDir)}, protected...)}
 }
 
 type Candidate struct {
@@ -69,3 +71,31 @@ func (s *Service) binding(ctx context.Context, id string, syncRequired bool) (re
 func (s *Service) Close() { s.mu.Lock(); defer s.mu.Unlock(); s.closed = true }
 
 func failure(code, message string) error { return &registry.AccessError{Code: code, Message: message} }
+
+// Host projections are derivatives, never a writer into owned control,
+// memory or Persona authority. This is a filesystem ownership check.
+func (s *Service) validateTarget(ctx context.Context, path string) error {
+	target, err := registry.CanonicalPath(path)
+	if err != nil {
+		return failure("invalid_request", "invalid host target")
+	}
+	profiles, err := s.registry.ListProfiles(ctx)
+	if err != nil {
+		return err
+	}
+	roots := append([]string{}, s.protected...)
+	for _, p := range profiles {
+		roots = append(roots, p.AuthorityDir)
+	}
+	for _, root := range roots {
+		canonical, err := registry.CanonicalPath(root)
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(canonical, target)
+		if err == nil && (relative == "." || (!strings.HasPrefix(relative, ".."+string(filepath.Separator)) && relative != "..")) {
+			return failure("invalid_request", "host target overlaps Garden-owned data")
+		}
+	}
+	return nil
+}

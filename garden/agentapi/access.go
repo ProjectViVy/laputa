@@ -104,12 +104,8 @@ func (i *Installation) SetHostControls(ctx context.Context, id string, c HostCon
 	return accessError(i.owner.Registry.SetHostControls(ctx, id, c))
 }
 func (i *Installation) RevokeHostBinding(ctx context.Context, id string) error {
-	u, err := i.enter()
-	if err != nil {
-		return err
-	}
-	defer u()
-	return accessError(i.owner.Registry.RevokeHostBinding(ctx, id))
+	_, err := i.RevokeHostProjection(ctx, id)
+	return err
 }
 func (i *Installation) CreateSharedSpace(ctx context.Context, name string) (SharedSpace, error) {
 	u, err := i.enter()

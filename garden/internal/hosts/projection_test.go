@@ -40,7 +40,7 @@ func hostFixture(t *testing.T) (*Service, string, string) {
 		t.Fatal(err)
 	}
 	s := New(reg, filepath.Join(home, "backups"), func(context.Context, string) (*persona.Service, error) { return svc, nil })
-	return s, b.BindingID, filepath.Join(home, "CLAUDE.md")
+	return s, b.BindingID, filepath.Join(t.TempDir(), "CLAUDE.md")
 }
 func TestHostDiscoveryInert(t *testing.T) {
 	s, id, path := hostFixture(t)

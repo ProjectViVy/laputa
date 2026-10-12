@@ -30,6 +30,7 @@ type Owner struct {
 	base         *Garden
 	Registry     *registry.Store
 	home         string
+	protected    []string
 	closed       bool
 	locks        *ownership
 	subjectLocks map[string]*ownership
@@ -52,7 +53,7 @@ func OpenOwner(ctx context.Context, cfg OwnerConfig) (_ *Owner, err error) {
 	if err != nil {
 		return nil, err
 	}
-	o := &Owner{home: cfg.Home, locks: locks, subjectLocks: map[string]*ownership{}, subjects: map[string]*Garden{}}
+	o := &Owner{protected: []string{cfg.Home, cfg.StateDB, cfg.PalacePath}, home: cfg.Home, locks: locks, subjectLocks: map[string]*ownership{}, subjects: map[string]*Garden{}}
 	defer func() {
 		if err != nil {
 			_ = o.Close()
@@ -254,3 +255,5 @@ func (g *Garden) Enter() (func(), error) {
 func (g *Garden) InstallationOwned() bool { return g.owner != nil }
 
 func (o *Owner) Home() string { return o.home }
+
+func (o *Owner) ProtectedPaths() []string { return append([]string{}, o.protected...) }

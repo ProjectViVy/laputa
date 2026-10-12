@@ -62,6 +62,9 @@ func (s *Service) projection(ctx context.Context, id string, kinds []persona.Kin
 func (s *Service) Preview(ctx context.Context, req ProjectionRequest) (FilePlan, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.validateTarget(ctx, req.Path); err != nil {
+		return FilePlan{}, err
+	}
 	body, revisions, err := s.projection(ctx, req.BindingID, req.Kinds)
 	if err != nil {
 		return FilePlan{}, err
@@ -82,6 +85,11 @@ func (s *Service) Preview(ctx context.Context, req ProjectionRequest) (FilePlan,
 	}
 	if state.Path != "" && state.Path != req.Path {
 		return FilePlan{}, failure("conflict", "binding already manages a different path")
+	}
+	if state.Path != "" {
+		if err = s.recoverFile(&state, file); err != nil {
+			return FilePlan{}, err
+		}
 	}
 	if start >= 0 && (state.WrittenHash == "" || hash(file[start:end]) != state.WrittenHash) {
 		return FilePlan{}, failure("conflict", "managed block changed or not owned by this binding")

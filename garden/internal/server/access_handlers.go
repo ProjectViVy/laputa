@@ -24,6 +24,10 @@ func (s *Server) mountAccess(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v2/host-bindings", s.handleHostBindings)
 	mux.HandleFunc("POST /v2/host-bindings", s.handleHostBindings)
 	mux.HandleFunc("POST /v2/host-bindings/{id}/projection/preview", s.handleHostProjectionPreview)
+	mux.HandleFunc("GET /v2/host-bindings/{id}/projection", s.handleHostProjectionStatus)
+	mux.HandleFunc("PUT /v2/host-bindings/{id}/projection", s.handleHostProjectionApply)
+	mux.HandleFunc("DELETE /v2/host-bindings/{id}/projection", s.handleHostProjectionRevoke)
+	mux.HandleFunc("POST /v2/host-bindings/{id}/projection/loaded", s.handleHostProjectionLoaded)
 	mux.HandleFunc("PUT /v2/host-bindings/{id}/controls", s.handleHostControls)
 	mux.HandleFunc("DELETE /v2/host-bindings/{id}", s.handleHostControls)
 }
@@ -108,7 +112,7 @@ func (s *Server) handleSharedMembers(w http.ResponseWriter, r *http.Request) {
 		err = s.Installation.SetSharedMember(r.Context(), space, r.PathValue("profile_id"), in.Access)
 	}
 	if err != nil {
-		writeHandlerError(w, err)
+		writeMaterialsReadError(w, err)
 		return
 	}
 	writeJSON(w, 200, map[string]bool{"saved": true})
@@ -154,7 +158,7 @@ func (s *Server) handleHostControls(w http.ResponseWriter, r *http.Request) {
 		err = s.Installation.SetHostControls(r.Context(), r.PathValue("id"), in)
 	}
 	if err != nil {
-		writeHandlerError(w, err)
+		writeMaterialsReadError(w, err)
 		return
 	}
 	writeJSON(w, 200, map[string]bool{"saved": true})
