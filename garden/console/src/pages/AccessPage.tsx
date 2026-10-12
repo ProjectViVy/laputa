@@ -2,6 +2,7 @@ import { useState } from "react";
 import { post, put, remove } from "../api/client";
 import { useApi } from "../api/hooks";
 import { useProfiles } from "../api/profiles";
+import HostBindings from "./HostBindings";
 import PageHeader from "../components/PageHeader";
 interface Space { id: string; name: string }
 interface Member { space_id: string; profile_id: string; access: "read" | "read_write" }
@@ -21,6 +22,7 @@ export default function AccessPage() {
       <input className="modules-input" aria-label="共享空间名称" value={name} onChange={(e) => setName(e.target.value)} placeholder="空间名称" /><button className="btn-primary" disabled={!name.trim()}>创建空间</button>
     </form></section>
     {error && <p role="alert">{error}</p>}{spaces.error && <p role="alert">{spaces.error}</p>}
+    <HostBindings />
     {(spaces.data ?? []).map((space) => <SpacePanel key={space.id} space={space} />)}
   </div>;
 }

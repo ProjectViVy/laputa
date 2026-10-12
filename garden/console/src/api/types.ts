@@ -338,3 +338,9 @@ export interface IndexHealthResponse {
   embedding_identity: EmbeddingIdentity | null;
   expected_embedding_identity: EmbeddingIdentity | null;
 }
+
+export interface HostControls { persona_sync: boolean; recall: boolean; capture: boolean }
+export interface HostBinding { binding_id: string; profile_id: string; agent_id: string; platform: string; workspace_id: string; controls: HostControls; revoked: boolean; worker: boolean }
+export interface NativeBindingConfig { adapter_id: string; adapter_version: string; host_version: string; host_instance: string; scope_fingerprint: string; kinds: string[] }
+export interface HostStatus { binding_id: string; state: string; mode: string; native?: NativeBindingConfig; saved_revisions: Record<string, number>; written_revisions?: Record<string, number>; written_hash?: string; loaded_hash?: string; offered_hash?: string; offered_revisions?: Record<string, number>; pending_retry: boolean; pending_reason?: string; waiting_host: boolean; last_host_seen_at?: string; manual_action?: string; manual_path?: string }
+export interface HostRetryPreview { preview_id: string; projection: { binding_id: string; source_revisions: Record<string, number>; hash: string; markdown: string }; mode: string; scope_fingerprint: string; expires_at: string }
