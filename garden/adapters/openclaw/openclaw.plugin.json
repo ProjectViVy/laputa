@@ -1,0 +1,40 @@
+{
+  "id": "garden",
+  "name": "Garden",
+  "description": "Opt-in Garden Persona at the native prompt boundary; memory capabilities remain separate.",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "endpoint",
+      "bindingID",
+      "credentialFile",
+      "hostInstance",
+      "agentID",
+      "workspaceDir"
+    ],
+    "properties": {
+      "endpoint": {
+        "type": "string"
+      },
+      "bindingID": {
+        "type": "string"
+      },
+      "credentialFile": {
+        "type": "string"
+      },
+      "hostInstance": {
+        "type": "string"
+      },
+      "agentID": {
+        "type": "string"
+      },
+      "workspaceDir": {
+        "type": "string"
+      }
+    }
+  }
+}

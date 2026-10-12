@@ -1,0 +1,10 @@
+{
+  "name": "@garden/openclaw",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "tsc -p tsconfig.json", "test": "npm run build && node --test dist/index.test.js" },
+  "openclaw": { "extensions": ["./dist/index.js"] },
+  "dependencies": { "openclaw": "2026.10.2" },
+  "devDependencies": { "typescript": "5.9.3", "@types/node": "24.10.1" }
+}
