@@ -1,6 +1,6 @@
 # Standalone Garden v1 — authoritative Epic/Story plan index
 
-**Date:** 2026-10-12 · **Status:** S14 IMPLEMENTED AND INDEPENDENTLY RECHECKED; S15 IN PROGRESS; NATIVE HOST DELIVERY PENDING
+**Date:** 2026-10-12 · **Status:** S14/S15 IMPLEMENTED AND INDEPENDENTLY RECHECKED; S16 IN PROGRESS; ACTUAL HOST DELIVERY PENDING
 
 Authoritative design: [specification](../../specs/2026-10-12-garden-standalone-v1-design.md). Decision record: [ADR-0019](../../../architecture/0019-garden-standalone-v1.md). Increment evidence: [controlled-editing research](../../../research/garden-standalone-v1-controlled-editing-research-2026-10-12.md), [exact host pins](../../../research/garden-host-pins-2026-10-12.md), [spec/plan review and handoff](controlled-editing-review.md). Runtime baseline is `3c4cfffe33d92ad1105ad31dec259c901cc24a4e` on `feat/garden-standalone-v1`.
 
@@ -116,8 +116,8 @@ These are logical orderings, not authorization for parallel agents or an estimat
 | S12 | Blocked | Q3/S04 Recap contract and all required predecessor evidence; history/UI tasks independent in design but full Story cannot claim ready. |
 | S13 | Blocked | Integrated predecessor/host/package/Recap evidence; Q2 needed only for final release timing/completion claim. S05 qualification still required for full R3. |
 | S14 | Implemented; independent code review/recheck PASS | `eb67480`, `2e81381`, `23e745f`: lease/all-writer/snapshot contracts, owner API and live UI. Persona suite/race, embedded Human/DIVA, HTTP and nine real-browser cases PASS. No production no-base caller found. One bounded Acquire-response recovery Minor deferred; see evidence below. |
-| S15 | In progress in original executor | S08 and reviewed S14 contracts now exist. Implement coordinator → transport → minimal host UI, then independent slice review/recheck. No host delivery claim until S16 acceptance. |
-| S16 | Waiting for S15; runtime qualification required | Source-pinned callback/package contract ready; exact isolated embedded runner and actual prompt capture required for acceptance. |
+| S15 | Implemented; independent code review/recheck PASS | `f082269`, `4cb6b31`, `a2bea7d`: durable pending/fresh retry, exact authenticated prompt API, independent owner controls/status UI. Core/registry/server/agentapi, public concurrency/race and ten browser scenarios PASS. Actual native callbacks remain S16/S17/S10. |
+| S16 | In progress in original executor; runtime qualification required | Reviewed S15 contracts landed. Build one thin pinned plugin, then exact isolated embedded runner and actual prompt capture. No callback-only or manual-copy acceptance. |
 | S17 | Waiting for S15; runtime qualification required | Source-pinned persistent-turn hook ready; real same-profile CLI/gateway evidence required. Additive user-context priority is explicit; no unapproved SOUL replacement. |
 
 Only two policy choices need early owner attention: **Q3** (recommend personal-only contribution/admission excluding shared/restricted sessions, still unapproved) and **Q2** (recommend independent Mentle delivery with BML qualification still required; full-release timing unapproved). Q2 does not stop independent development. Q1/Q5 become necessary before S06/S11: recommend owner-selected local Mentle takeover first, an explicit versioned transfer format for other machines, and one confirmed local OS/package with private host secret storage. Exact Persona qualification targets are now fixed in §7/evidence; unavailable runtime binaries are evidence gates, not a request for four broad version choices. Cross-repo writes are separate authorization, not implicit plan publication permission.
@@ -288,3 +288,19 @@ Ruling: keep the actual history API envelope across the helper, viewer and lost-
 Deferred Minor: a lost Acquire response can require waiting for the bounded 120-second lease expiry instead of reusing the same client request ID; no draft has been acquired or lost, and the server's acquire idempotency remains implemented.
 
 S14 closes U1/U2 authority/editor acceptance only. S15/S16/S17/S10 remain necessary for automatic host delivery; independent memory qualification and Q2/Q3 are unchanged.
+
+### Native coordinator execution evidence — S15
+
+Implementation: `f082269a0342b6af89bbd007c4e322502ac436f0` native coordinator; `4cb6b31` trusted transport/control integration; `a2bea7d` minimal host binding/preview/status UI. Independent code review/recheck PASS. No remaining Critical/Important or deferred S15 Minor.
+
+Observed verification: host/registry suites; server/agentapi suites; focused public concurrent status/pull/control regression (actual old-wrapper lock inversion RED timeout → corrected GREEN); focused host/conservative/public concurrency race; exact HTTP binding/session/origin/operation checks; console build PASS. Actual SQLite-triggered metadata write failures return unavailable without a projection body. Reopened registry preserves pending and discards armed previews; 60-second preview expiry, later source revisions/edit generations, disable→enable, wrong scope, oversize rendering and manual-file cleanup are covered.
+
+Real Chromium against the S15 owner API passed ten scenarios: inert creation, preview while off, independent controls, offline waiting with no delivery claim, authenticated bound pull offered-only, human save retaining pending, stale preview denial, fresh retry at newest revision, persisted exact tuple/status after reload, and credential revocation. No page errors. Restart is evidenced by the real reopened-registry lifecycle test; this browser check does not substitute for a native host callback. Supporting artifacts: `/workspace/garden-standalone-v1-evidence-20261012/S15/`.
+
+Ruling: native wrappers and the public control setter use existing hosts.Close→owner.Close serialization, without Owner.Enter around hosts operations that resolve Owner.Subject. Cost if wrong: owner-read→hosts and hosts→owner-write inversion deadlocks actual prompt/controls. The RED concurrent stack and GREEN regression preserve this decision.
+Ruling: allow existing selected-card worker Recall control updates; native projection/configuration still rejects workers and resolves persona_get independently from Recall/Capture. Cost if wrong: a retained live memory caller loses its existing read capability.
+Ruling: expose the existing non-secret native configuration on owner HostStatus, serialized once, so the persisted exact version/instance/scope/kinds can be inspected after reload. Cost if wrong: UI otherwise shows defaults instead of the actual configured tuple; no Persona body, credential or preview proof is exposed in status.
+Ruling: a stale tab's preview-ID mismatch does not delete another tab's newer preview; source/expiry/disable/revoke still invalidate current admission. Cost if wrong: fresh owner retry is needlessly lost.
+Ruling: native-form hydration waits initial status and happens once; controls show a pending change while busy and roll back on PUT failure. Cost if wrong: polling/stale props can overwrite a local configuration or another independent flag.
+
+S15 supplies coordinator/API/UI contracts only; OpenClaw/Hermes/CLI actual prompt assembly remains required in S16/S17/S10. No automatic host completion, generic loaded receipt, migration, new queue, credentials or real user host setup is claimed.
