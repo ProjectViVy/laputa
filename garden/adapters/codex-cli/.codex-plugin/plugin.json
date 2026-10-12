@@ -1,0 +1,8 @@
+{
+  "name": "garden",
+  "version": "0.1.0",
+  "description": "Opt-in current Garden Persona through native command hooks",
+  "author": {
+    "name": "ProjectViVy"
+  }
+}

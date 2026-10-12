@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${GARDEN_HOST_CONTEXT_BIN}\" --config \"${GARDEN_HOST_CONTEXT_CONFIG}\"",
+            "timeout": 2,
+            "additionalContextLimit": 0
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${GARDEN_HOST_CONTEXT_BIN}\" --config \"${GARDEN_HOST_CONTEXT_CONFIG}\"",
+            "timeout": 2,
+            "additionalContextLimit": 0
+          }
+        ]
+      }
+    ]
+  }
+}

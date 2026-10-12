@@ -48,3 +48,7 @@ An explicitly Garden-owned derived file can be atomically replaced in the truste
 - Hermes: pinned persistent CLI/gateway turn includes current additive block without changing SOUL/profile/history; ephemeral/worker paths are denied unless explicitly qualified; retained history is not represented as erased.
 - Claude/Codex: exact binary/plugin loader and command output semantics in isolated homes, same workspace, unchanged native instruction files, new turn/restart/compact behavior. No user transcript scraping.
 - Reuse a bounded prompt-capture fixture or official host runner where available. An echoing model answer alone is not evidence of the exact prompt; a stub that only tests our callback is not host conformance.
+
+## Subsequent installed-host evidence
+
+The source-finding snapshot above is preserved. Later owner-authorized exact Linux runtime qualification is recorded separately: [OpenClaw embedded CLI](garden-openclaw-native-qualification-2026-10-12.md), [Hermes persistent CLI](garden-hermes-native-qualification-2026-10-12.md), and [Codex/Claude native CLI](garden-cli-native-qualification-2026-10-12.md). These reports scope actual Persona paths and separate explicit memory evidence; they do not qualify every frontend/build, automatic memory lifecycle or S09 native memory mappings. The [index](../superpowers/plans/garden-standalone-v1/index.md) alone owns current Story disposition.
