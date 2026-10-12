@@ -1,0 +1,13 @@
+name: garden
+version: 0.1.0
+description: Opt-in Garden Persona at persistent turn boundaries; native memory remains separate.
+kind: standalone
+requires_hermes: "==0.21.7"
+provides_hooks:
+  - pre_llm_call
+config_schema:
+  endpoint: {type: str, required: true}
+  binding_id: {type: str, required: true}
+  credential_file: {type: str, required: true}
+  host_instance: {type: str, required: true}
+  hermes_home: {type: str, required: true}
