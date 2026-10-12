@@ -139,3 +139,27 @@ func TestHumanIndexHealthIsScopedToBinding(t *testing.T) {
 		t.Fatal("empty index health status")
 	}
 }
+
+func TestHumanPersonaSaveRespectsEditLease(t *testing.T) {
+	ctx, client, human := openHuman(t)
+	doc, err := client.runtime.Persona.GetDocument(persona.KindIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := client.runtime.Persona.AcquireEdit(persona.KindIdentity, doc.Revision, doc.ContentHash, "console-editor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = human.SavePersona(ctx, persona.KindIdentity, "embedded writer", doc.Revision, "direct save")
+	assertCode(t, err, "persona_edit_locked")
+	current, err := human.ReadPersona(ctx, "identity")
+	if err != nil || current.Revision != doc.Revision || current.ContentHash != doc.ContentHash {
+		t.Fatal(current, err)
+	}
+	if err = client.runtime.Persona.ReleaseEdit(persona.KindIdentity, persona.EditProof{Token: lease.Token, Generation: lease.Generation}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = human.SavePersona(ctx, persona.KindIdentity, "embedded writer", doc.Revision, "direct save"); err != nil {
+		t.Fatal(err)
+	}
+}

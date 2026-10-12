@@ -123,7 +123,7 @@ func TestMissionHumanWriteEditClearRestore(t *testing.T) {
 // mission — P16 direct writes, review requests, and non-direct write sources.
 func TestMissionRejectsNonHumanPaths(t *testing.T) {
 	svc := initMissionPersona(t)
-	if _, err := svc.SaveAgentP16(KindMission, "agent mission", "reason"); !errors.Is(err, ErrKindForbidden) {
+	if _, err := svc.SaveAgentP16WithRevision(KindMission, "agent mission", 0, "reason"); !errors.Is(err, ErrKindForbidden) {
 		t.Fatalf("SaveAgentP16(mission) = %v", err)
 	}
 	if _, err := svc.SaveAgentP16WithRevision(KindMission, "agent mission", 0, "reason"); !errors.Is(err, ErrKindForbidden) {

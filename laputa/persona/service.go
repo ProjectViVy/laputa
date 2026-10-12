@@ -379,6 +379,9 @@ func fileExists(path string) bool {
 func (s *Service) Initialize(init Initialization, actor string, source WriteSource, reason string) (*WriteOutcome, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.guardSetLocked(RequiredKinds); err != nil {
+		return nil, err
+	}
 	view, err := s.statusLocked()
 	if err != nil {
 		return nil, err
@@ -476,6 +479,13 @@ func (s *Service) Initialize(init Initialization, actor string, source WriteSour
 func (s *Service) Repair(input RepairInput) (*StatusView, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	kinds := make([]Kind, 0, len(input.Documents))
+	for kind := range input.Documents {
+		kinds = append(kinds, kind)
+	}
+	if err := s.guardSetLocked(kinds); err != nil {
+		return nil, err
+	}
 	view, err := s.statusLocked()
 	if err != nil {
 		return nil, err
@@ -536,7 +546,7 @@ func (s *Service) Write(kind Kind, content string, baseRevision uint64, actor st
 func (s *Service) SaveUserDocument(kind Kind, content string, baseRevision uint64, actor string, source WriteSource, reason string) (*WriteOutcome, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.requireReadyLocked(); err != nil {
+	if err := s.requireHumanReadyLocked(kind, ContentHash(content)); err != nil {
 		return nil, err
 	}
 	if actor == "" {
@@ -567,30 +577,6 @@ func (s *Service) SaveUserObservations(content string, baseRevision uint64, reas
 	}
 	proposed := ReplaceMarkdownSection(current.Content, "Observations", content)
 	return s.writeDocumentCoreLocked(KindUser, proposed, baseRevision, "user", SourceUserDirect, reason, false, "")
-}
-
-// SaveAgentP16 is the only direct agent write operation: DREAM, DARK, or
-// USER's Observations section.
-func (s *Service) SaveAgentP16(kind Kind, content, reason string) (*WriteOutcome, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.requireReadyLocked(); err != nil {
-		return nil, err
-	}
-	current, err := s.readDocumentUncheckedLocked(kind)
-	if err != nil {
-		return nil, err
-	}
-	var proposed string
-	switch kind {
-	case KindDream, KindDark:
-		proposed = content
-	case KindUser:
-		proposed = ReplaceMarkdownSection(current.Content, "Observations", content)
-	default:
-		return nil, ErrKindForbidden
-	}
-	return s.writeDocumentCoreLocked(kind, proposed, current.Revision, "agent", SourceAgentP16, reason, false, "")
 }
 
 // SaveAgentP16WithRevision is the HTTP-facing form that enforces the caller's
@@ -722,6 +708,9 @@ func (s *Service) AcceptRequest(id string) (*WriteOutcome, error) {
 	if req.State != RequestPending {
 		return nil, &RequestStaleError{ID: id}
 	}
+	if err := s.guardWriteLocked(req.Kind, nil); err != nil {
+		return nil, err
+	}
 	current, err := s.readDocumentUncheckedLocked(req.Kind)
 	if err != nil {
 		return nil, err
@@ -835,7 +824,14 @@ type fileBackup struct {
 	exists bool
 }
 
-func (s *Service) writeDocumentCoreLocked(kind Kind, content string, baseRevision uint64, actor string, source WriteSource, reason string, force bool, acceptingRequest string) (*WriteOutcome, error) {
+func (s *Service) writeDocumentCoreLocked(kind Kind, content string, baseRevision uint64, actor string, source WriteSource, reason string, force bool, acceptingRequest string, editorProof ...*EditProof) (*WriteOutcome, error) {
+	var proof *EditProof
+	if len(editorProof) > 0 {
+		proof = editorProof[0]
+	}
+	if err := s.guardWriteLocked(kind, proof); err != nil {
+		return nil, err
+	}
 	normalized := NormalizeMarkdown(content)
 	// MISSION.MD alone permits an empty body: clearing unassigns the mission.
 	if err := validateContent(kind, normalized, kind != KindMission); err != nil {
@@ -849,8 +845,14 @@ func (s *Service) writeDocumentCoreLocked(kind Kind, content string, baseRevisio
 		return nil, &RevisionConflictError{Expected: baseRevision, Current: current.Revision}
 	}
 	if !force && current.Exists && current.ContentHash == ContentHash(normalized) {
-		current.PendingCount, _ = s.pendingCountLocked(kind)
-		return &WriteOutcome{Document: *current, Changed: false}, nil
+		history, err := s.listHistoryLocked(kind)
+		if err != nil {
+			return nil, err
+		}
+		if len(history) > 0 && history[0].ContentHash == current.ContentHash {
+			current.PendingCount, _ = s.pendingCountLocked(kind)
+			return &WriteOutcome{Document: *current, Changed: false}, nil
+		}
 	}
 	backups, err := s.stalePendingLocked(kind, acceptingRequest)
 	if err != nil {

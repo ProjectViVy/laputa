@@ -211,7 +211,7 @@ func TestDivaCognitiveDecisiveEndToEnd(t *testing.T) {
 			t.Fatalf("%s mutated Mission", source)
 		}
 	}
-	if _, err := psvc.SaveAgentP16(persona.KindMission, "hijack", "x"); err == nil {
+	if _, err := psvc.SaveAgentP16WithRevision(persona.KindMission, "hijack", 0, "x"); err == nil {
 		t.Fatal("conversational path mutated Mission")
 	}
 	// A stale Mission pin refuses autonomous effects before any model call.
@@ -304,7 +304,7 @@ func TestDivaCognitiveDecisiveEndToEnd(t *testing.T) {
 	}
 	// The conversational dream tool writes DREAM; neither it nor AutoDream
 	// can reach Mission again.
-	if _, err := psvc.SaveAgentP16(persona.KindDream, "# Dream\n\nbecome steadily more helpful", "considered"); err != nil {
+	if _, err := psvc.SaveAgentP16WithRevision(persona.KindDream, "# Dream\n\nbecome steadily more helpful", 0, "considered"); err != nil {
 		t.Fatalf("conversational dream tool refused: %v", err)
 	}
 	missionDoc2, _ := psvc.GetDocument(persona.KindMission)
