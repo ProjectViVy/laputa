@@ -93,6 +93,24 @@ func (s *Server) capabilityConfig() CapabilityConfig {
 }
 
 func (s *Server) principalForRequest(r *http.Request) (Principal, error) {
+	if s.Installation != nil {
+		if s.Pairing.owner(r) {
+			if r.Method != "GET" && r.Method != "HEAD" && !sameOrigin(r) {
+				return "", errInvalidCapability
+			}
+			return PrincipalUser, nil
+		}
+		header := strings.TrimSpace(r.Header.Get("Authorization"))
+		parts := strings.SplitN(header, " ", 2)
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+			return "", errAuthenticationRequired
+		}
+		if _, err := s.Installation.AuthenticateHost(r.Context(), strings.TrimSpace(parts[1])); err != nil {
+			return "", errAuthenticationRequired
+		}
+		return PrincipalAgent, nil
+	}
+
 	header := strings.TrimSpace(r.Header.Get("Authorization"))
 	if header == "" {
 		if r.Method == http.MethodGet && isLoopbackRequest(r) {
@@ -112,7 +130,7 @@ func (s *Server) principalForRequest(r *http.Request) (Principal, error) {
 // route: callers must opt into this helper only for read-only operations.
 func (s *Server) principalForReadRequest(r *http.Request) (Principal, error) {
 	header := strings.TrimSpace(r.Header.Get("Authorization"))
-	if header == "" && isLoopbackRequest(r) {
+	if s.Installation == nil && header == "" && isLoopbackRequest(r) {
 		return PrincipalRead, nil
 	}
 	return s.principalForRequest(r)

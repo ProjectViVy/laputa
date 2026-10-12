@@ -41,6 +41,7 @@ type Config struct {
 // Client owns a domain runtime without opening a listener or exporting storage handles.
 type Client struct {
 	installation *Installation
+	bindingID    string
 	mu           sync.RWMutex
 	// Serializes host authority writes with pinned effect checks/commits.
 	// Model inference never holds this bounded mutation gate.
@@ -161,7 +162,7 @@ func (b *BoundClient) service() (*Service, func(), error) {
 		b.client.mu.RUnlock()
 		return nil, nil, failure("unavailable", "installation closed")
 	}
-	return NewService(b.client.runtime), func() { release(); b.client.mu.RUnlock() }, nil
+	return b.client.newService(), func() { release(); b.client.mu.RUnlock() }, nil
 }
 
 // Requests may omit Binding; an explicit conflicting binding fails instead of

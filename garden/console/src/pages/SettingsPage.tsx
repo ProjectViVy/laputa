@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { setCapabilityToken } from "../api/client";
+import { post } from "../api/client";
 import { useApi } from "../api/hooks";
 import type { PipelinesResponse, ProviderStatus } from "../api/types";
 import PageHeader from "../components/PageHeader";
@@ -9,14 +9,18 @@ export default function SettingsPage() {
   const { t, i18n } = useTranslation();
   const { data: pipelines } = useApi<PipelinesResponse>("/v2/pipelines");
   const { data: hubStatus } = useApi<ProviderStatus>("/v2/evolution/hub/status");
-  const [token, setToken] = useState("");
+  const [pairCode, setPairCode] = useState("");
+  const [pairError, setPairError] = useState("");
   const [theme, setTheme] = useState(() => localStorage.getItem("garden.console.theme") ?? "cyber-dark");
 
   const toggleLanguage = () => {
     i18n.changeLanguage(i18n.language === "zh" ? "en" : "zh");
   };
 
-  const saveToken = () => setCapabilityToken(token);
+  const pairOwner = async () => {
+    try { await post("/v2/pairing", { code: pairCode }); setPairCode(""); window.location.reload(); }
+    catch (error) { setPairError(error instanceof Error ? error.message : "Pairing failed"); }
+  };
   const changeTheme = (value: string) => {
     setTheme(value);
     localStorage.setItem("garden.console.theme", value);
@@ -50,11 +54,12 @@ export default function SettingsPage() {
       </div>
 
       <div className="panel panel-pad reveal" style={{ marginBottom: "1.5rem" }}>
-        <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.1rem" }}>Capability session</h3>
-        <p className="source-note">Write actions use the server capability contract. The token is held in session storage and is never sent to a different origin.</p>
+        <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.1rem" }}>Local owner pairing</h3>
+        <p className="source-note">Enter the one-use code from Garden’s private local pairing file. The owner session uses an HttpOnly cookie.</p>
         <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginTop: "0.75rem" }}>
-          <input className="modules-input" type="password" value={token} onChange={(event) => setToken(event.target.value)} placeholder="Paste a capability token" />
-          <button className="btn-ghost" onClick={saveToken}>Save for session</button>
+          <input className="modules-input" type="password" value={pairCode} onChange={(event) => setPairCode(event.target.value)} placeholder="One-use pairing code" autoComplete="off" />
+          <button className="btn-ghost" onClick={pairOwner}>Pair this browser</button>
+          {pairError && <span role="alert">{pairError}</span>}
           <select className="modules-input" value={theme} onChange={(event) => changeTheme(event.target.value)} aria-label="Theme">
             <option value="cyber-dark">Cyber dark</option>
             <option value="warm-editorial">Warm editorial</option>

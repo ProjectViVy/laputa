@@ -15,7 +15,11 @@ import (
 
 // Service is the trusted in-process entrypoint. The caller supplies a principal
 // obtained from authentication independently of untrusted Binding metadata.
-type Service struct{ runtime *runtimecore.Garden }
+type Service struct {
+	runtime      *runtimecore.Garden
+	installation *Installation
+	bindingID    string
+}
 
 func NewService(runtime *runtimecore.Garden) *Service { return &Service{runtime: runtime} }
 
@@ -55,6 +59,9 @@ func (s *Service) check(binding Binding, principal Principal, op Operation) erro
 	if strings.TrimSpace(binding.AgentID) == "" || strings.TrimSpace(binding.Platform) == "" || (op != OpSearch && op != OpIndexHealth && strings.TrimSpace(binding.SessionID) == "") {
 		return failure("invalid_binding", "agent_id, platform and session_id are required")
 	}
+	if _, err := s.resolve(context.Background(), binding, op, ""); err != nil {
+		return err
+	}
 	return nil
 }
 func convert[T any](value any) (T, error) {
@@ -75,7 +82,11 @@ func (s *Service) recall(ctx context.Context, binding Binding, principal Princip
 	}
 	fast := *s.runtime.FastRecall
 	if s.runtime.InstallationOwned() {
-		fast.Frozen = &boundFrozen{runtime: s.runtime, binding: binding}
+		key := s.bindingID
+		if key == "" {
+			key = bindingKey(binding)
+		}
+		fast.Frozen = &boundFrozen{runtime: s.runtime, binding: binding, bindingID: key}
 	}
 	view, err := fast.Recall(ctx, recall.FastRequest{Query: query, Scope: scope, BudgetChars: budget, SessionID: binding.SessionID})
 	if err != nil {

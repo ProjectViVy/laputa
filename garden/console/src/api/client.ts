@@ -7,11 +7,10 @@ export class ApiError extends Error {
 }
 
 async function send<T>(path: string, init: RequestInit): Promise<T> {
-  const token = sessionStorage.getItem("garden.capability_token")?.trim();
-  const auth: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
   const res = await fetch(path, {
     ...init,
-    headers: { Accept: "application/json", ...auth, ...(init.headers ?? {}) },
+    credentials: "same-origin",
+    headers: { Accept: "application/json", ...(init.headers ?? {}) },
   });
   if (!res.ok) {
     let detail = res.statusText;
@@ -56,10 +55,4 @@ export function put<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-}
-
-export function setCapabilityToken(token: string): void {
-  const value = token.trim();
-  if (value) sessionStorage.setItem("garden.capability_token", value);
-  else sessionStorage.removeItem("garden.capability_token");
 }

@@ -37,7 +37,10 @@ func Open(path, home string) (*Store, error) {
 	}
 	s := &Store{db: db, home: canonical}
 	if _, err = db.Exec(`CREATE TABLE IF NOT EXISTS registry_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS profiles(profile_id TEXT PRIMARY KEY,authority_dir TEXT NOT NULL UNIQUE,installation_id TEXT NOT NULL,display_name TEXT NOT NULL);`); err != nil {
+CREATE TABLE IF NOT EXISTS profiles(profile_id TEXT PRIMARY KEY,authority_dir TEXT NOT NULL UNIQUE,installation_id TEXT NOT NULL,display_name TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS host_bindings(binding_id TEXT PRIMARY KEY,profile_id TEXT NOT NULL REFERENCES profiles(profile_id),body TEXT NOT NULL,credential_digest TEXT UNIQUE);
+CREATE TABLE IF NOT EXISTS shared_spaces(space_id TEXT PRIMARY KEY,name TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS shared_members(space_id TEXT NOT NULL REFERENCES shared_spaces(space_id),profile_id TEXT NOT NULL REFERENCES profiles(profile_id),access TEXT NOT NULL CHECK(access IN ('read','read_write')),PRIMARY KEY(space_id,profile_id));`); err != nil {
 		return nil, errors.Join(err, db.Close())
 	}
 	if _, err = db.Exec(`INSERT OR IGNORE INTO registry_meta(key,value) VALUES('installation_id',?)`, uuid.NewString()); err != nil {

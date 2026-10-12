@@ -162,6 +162,9 @@ func (s *Service) SearchCards(ctx context.Context, principal Principal, binding 
 
 // ReadEvidence expands selected cards under explicit per-item and total budgets.
 func (s *Service) ReadEvidence(ctx context.Context, principal Principal, binding Binding, q EvidenceRead) ([]EvidenceFragment, error) {
+	if err := s.checkSelectedCards(ctx, binding, q); err != nil {
+		return nil, err
+	}
 	if err := s.check(binding, principal, OpExpand); err != nil {
 		return nil, err
 	}

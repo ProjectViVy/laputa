@@ -123,7 +123,7 @@ func (h *handle) runtime() (*Service, func(), error) {
 		h.client.mu.RUnlock()
 		return nil, nil, failure("unavailable", "installation closed")
 	}
-	return NewService(h.client.runtime), func() { release(); h.client.mu.RUnlock() }, nil
+	return h.client.newService(), func() { release(); h.client.mu.RUnlock() }, nil
 }
 
 // selectedBackend resolves the scope-bound writer: an injected backend bound
@@ -798,7 +798,7 @@ func (h *HumanClient) ReadFrozen(ctx context.Context) (FrozenCore, error) {
 	if s.runtime.Frozen == nil {
 		return FrozenCore{}, failure("unavailable", "frozen store unavailable")
 	}
-	key, err := s.runtime.SessionKey(bindingKey(h.binding), h.binding.SessionID)
+	key, err := s.runtime.SessionKey(h.client.bindingID, h.binding.SessionID)
 	if err != nil {
 		return FrozenCore{}, err
 	}

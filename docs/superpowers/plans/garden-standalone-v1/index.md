@@ -90,8 +90,8 @@ These are logical orderings, not authorization for parallel agents or an estimat
 | Story | Plan state | Remaining gate beyond predecessor delivery |
 | --- | --- | --- |
 | S01 | Implemented foundation / final review pending | Shared-owner/profile/Frozen tests and Garden suite PASS; main listener cutover deferred to S03 closure (recorded execution ruling). |
-| S02 | Approved / next | S01 foundation interfaces verified; implement trusted binding/membership next. |
-| S03 | Approved / predecessor pending | S02; actual Mentle/model fixture evidence required, not documentation checks. |
+| S02 | Implemented / final review pending | Trusted host bindings, owner pairing/cookie/origin, read/read_write membership and current revocation tests PASS; multi-persona data listener closure belongs to S03. |
+| S03 | Approved / in progress | S02 domain/transport tests PASS; actual Mentle/model fixture evidence and bypass removal next. |
 | S04 | Blocked | Q3 approved mixed-source/restricted-session Recap policy + coordinated live Work/desktop DTO cutover. Authority mechanics independently reviewable; no new consolidation enabled. |
 | S05 | Blocked | Reviewed/authorized BML provider-owned schema/public API and explicit legacy mapping on dedicated VIVY branch; final offered UI/client/setup consumers must qualify. Q2 does not block planning this lane. |
 | S06 | Blocked | Q1/Q5 initial supported local attachment/package + versioned other-machine export/import grammar; supported VIVY client/lock composition on authorized dedicated consumer branch. |
@@ -170,3 +170,10 @@ Execution authorization received 2026-10-12 13:13 UTC: start the unblocked plans
 - `cd garden && GOSUMDB=off go test ./...` PASS using repository-pinned Go 1.26.4. Baseline console `pnpm build` PASS. Runtime main cutover intentionally paired with S03 complete auth/route closure; no multi-profile listener exposed early.
 - Worktree `/workspace/laputa-garden` uses the existing branch. Workflow helper scripts unavailable; prescribed brief/BASE/RED→GREEN/ledger records maintained manually under ignored `.superpowers/sdd/<Story>`. Test/toolchain caches are outside repository; provider archive fallback verified against unchanged go.sum. No user environment/production data/configuration touched.
 - Whole approved-scope independent review remains pending; do not treat green tests alone as final acceptance.
+
+### Observed S02 implementation evidence
+
+- Opaque per-host digest credentials; stable internal trusted bindings; host creation inactive; separate three controls and role operation ceilings. Owner-only profile/share/binding APIs use one-use local pairing and HttpOnly/SameSite owner cookie with mutation Origin checks. No browser bearer token input/storage code.
+- Named shared-space read/read_write and no foreign private grants; current membership digest invalidates revoked views. Workers have no automatic Persona/Recap/search; explicit selected-source expansion is constrained. No IAM/delegation/taint framework.
+- Missing APIs RED → focused auth/membership tests GREEN; duplicate same-profile host/session IDs RED → real BindingID Frozen namespace GREEN; initially active creation RED → inactive creation + explicit control enable GREEN. `go test ./internal/registry ./agentapi ./internal/server -count=1`, Garden `go test ./...`, and console `pnpm build` PASS.
+- New installation control plane denies role-token/loopback auth. S03 will perform the atomic data-handler/main cutover and remove raw memory bypasses; S02 alone is not end-to-end memory isolation acceptance.

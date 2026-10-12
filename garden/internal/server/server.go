@@ -31,6 +31,8 @@ import (
 
 // Server exposes garden CRUD over HTTP.
 type Server struct {
+	Installation *agentapi.Installation
+	Pairing      *Pairing
 	AgentAPI     *agentapi.Service
 	ProfileID    string
 	Facade       *facade.Service
@@ -67,6 +69,7 @@ func (s *Server) ListenAndServe() error {
 
 func (s *Server) HTTPHandler() http.Handler {
 	mux := http.NewServeMux()
+	s.mountAccess(mux)
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("POST /v2/memories", s.handleCreateMemory)
 	mux.HandleFunc("GET /v2/memories/{id}", s.handleGetMemory)

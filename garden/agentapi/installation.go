@@ -75,7 +75,11 @@ func (i *Installation) BindProfile(profileID string, cfg ClientConfig) (*Client,
 	if err != nil {
 		return nil, err
 	}
-	return &Client{runtime: g, principal: cfg.Principal, identity: Binding{ProfileID: profileID, AgentID: cfg.AgentID, Platform: cfg.Platform, WorkspaceID: cfg.WorkspaceID}, backendID: i.backendID, destinationID: i.destinationID, installation: i}, nil
+	rb, err := i.owner.Registry.TrustedBinding(context.Background(), registry.HostBinding{ProfileID: profileID, AgentID: cfg.AgentID, Platform: cfg.Platform, WorkspaceID: cfg.WorkspaceID, Controls: HostControls{PersonaSync: true, Recall: true, Capture: true}, Operations: trustedOperations})
+	if err != nil {
+		return nil, err
+	}
+	return &Client{bindingID: rb.BindingID, runtime: g, principal: cfg.Principal, identity: Binding{ProfileID: profileID, AgentID: cfg.AgentID, Platform: cfg.Platform, WorkspaceID: cfg.WorkspaceID}, backendID: i.backendID, destinationID: i.destinationID, installation: i}, nil
 }
 
 func bindingKey(b Binding) string {
@@ -83,12 +87,13 @@ func bindingKey(b Binding) string {
 }
 
 type boundFrozen struct {
-	runtime *runtimecore.Garden
-	binding Binding
+	runtime   *runtimecore.Garden
+	binding   Binding
+	bindingID string
 }
 
 func (p *boundFrozen) Get(ctx context.Context, sessionID string) (FrozenCore, error) {
-	key, err := p.runtime.SessionKey(bindingKey(p.binding), sessionID)
+	key, err := p.runtime.SessionKey(p.bindingID, sessionID)
 	if err != nil {
 		return FrozenCore{}, err
 	}

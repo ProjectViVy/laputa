@@ -27,7 +27,7 @@ func (c *Client) DiscardFrozenSession(ctx context.Context, sessionID string) err
 	if strings.TrimSpace(sessionID) == "" {
 		return failure("invalid_binding", "session_id is required")
 	}
-	key, err := c.runtime.SessionKey(bindingKey(c.identity), sessionID)
+	key, err := c.runtime.SessionKey(c.bindingID, sessionID)
 	if err != nil {
 		return err
 	}
@@ -55,7 +55,7 @@ func (c *Client) ListFrozenSessions(ctx context.Context, capturedBefore time.Tim
 	}
 	prefix := ""
 	if c.installation != nil {
-		prefix = registry.SessionPrefix(c.identity.ProfileID, bindingKey(c.identity))
+		prefix = registry.SessionPrefix(c.identity.ProfileID, c.bindingID)
 	}
 	ids, err := c.runtime.Frozen.ListFrozenSessionsPrefix(ctx, capturedBefore, prefix)
 	if err != nil {
