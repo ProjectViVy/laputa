@@ -7,6 +7,8 @@
 
 This directory is the canonical entry point for Garden MemoryOS documentation.
 
+**Standalone Garden review proposal:** [Specification](./superpowers/specs/2026-10-12-garden-standalone-v1-design.md), [ADR-0019](./architecture/0019-garden-standalone-v1.md), and [proposed Epic/Story index](./superpowers/plans/garden-standalone-v1/index.md). This new scope awaits written-spec approval; the historical readiness/completion status above does not apply to it. No standalone Story is Ready.
+
 ## Read First
 
 1. [ADR-0018: VIVY Unified Context and Subject Recap Policy](./architecture/0018-vivy-unified-context-and-recap-policy.md) — current policy scope, targeted deletion, deferred tools, lifecycle and backend boundaries.
