@@ -18,6 +18,7 @@ import (
 // directory. Authority bodies are Markdown files; JSON is used only for the
 // review queue and JSONL history metadata.
 type Service struct {
+	edits map[Kind]*editRecord
 	root  string
 	mu    sync.Mutex
 	clock func() time.Time
