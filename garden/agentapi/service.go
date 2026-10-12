@@ -73,7 +73,11 @@ func (s *Service) recall(ctx context.Context, binding Binding, principal Princip
 	if s.runtime.FastRecall == nil {
 		return ContextView{}, failure("unavailable", "fast recall unavailable")
 	}
-	view, err := s.runtime.FastRecall.Recall(ctx, recall.FastRequest{Query: query, Scope: scope, BudgetChars: budget, SessionID: binding.SessionID})
+	fast := *s.runtime.FastRecall
+	if s.runtime.InstallationOwned() {
+		fast.Frozen = &boundFrozen{runtime: s.runtime, binding: binding}
+	}
+	view, err := fast.Recall(ctx, recall.FastRequest{Query: query, Scope: scope, BudgetChars: budget, SessionID: binding.SessionID})
 	if err != nil {
 		return ContextView{}, failure("invalid_request", err.Error())
 	}
@@ -112,6 +116,9 @@ func (s *Service) Capture(ctx context.Context, principal Principal, req CaptureR
 	}
 	if strings.TrimSpace(req.Provenance.RunID) == "" || req.Provenance.EventSeq == 0 {
 		return CaptureReceipt{}, failure("invalid_request", "run_id and event_seq are required")
+	}
+	if s.runtime.InstallationOwned() {
+		return CaptureReceipt{}, failure("unavailable", "installation capture requires per-row binding")
 	}
 	if s.runtime.Ingest == nil {
 		return CaptureReceipt{}, failure("unavailable", "ingest unavailable")

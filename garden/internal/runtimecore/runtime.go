@@ -65,6 +65,8 @@ type Garden struct {
 	backendMu sync.Mutex
 	mu        sync.Mutex
 	closed    bool
+	owner     *Owner
+	ownership *ownership
 }
 
 func validate(cfg Config) error {
@@ -104,6 +106,23 @@ func Open(ctx context.Context, cfg Config) (_ *Garden, err error) {
 	if err = validate(cfg); err != nil {
 		return nil, err
 	}
+	lock, err := acquireOwnership(cfg.PersonaDir, cfg.PalacePath, cfg.StateDB)
+	if err != nil {
+		return nil, err
+	}
+	g, err := open(ctx, cfg, true)
+	if err != nil {
+		_ = lock.Close()
+		return nil, err
+	}
+	g.ownership = lock
+	return g, nil
+}
+
+func open(ctx context.Context, cfg Config, authority bool) (_ *Garden, err error) {
+	if err = validate(cfg); err != nil {
+		return nil, err
+	}
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -136,10 +155,12 @@ func Open(ctx context.Context, cfg Config) (_ *Garden, err error) {
 			_ = g.Close()
 		}
 	}()
-	if g.Persona, err = persona.Open(cfg.PersonaDir); err != nil {
-		return nil, fmt.Errorf("persona: %w", err)
+	if authority {
+		if g.Persona, err = persona.Open(cfg.PersonaDir); err != nil {
+			return nil, fmt.Errorf("persona: %w", err)
+		}
+		g.Actmem = actmem.New(cfg.PersonaDir)
 	}
-	g.Actmem = actmem.New(cfg.PersonaDir)
 	if available || lexicalOnly {
 		m := &facade.Service{}
 		if err = m.Init(ctx, facade.Options{PalacePath: cfg.PalacePath, ModelsDir: cfg.ModelsDir, RequireLocalModel: !lexicalOnly, LexicalOnly: lexicalOnly}); err != nil {
@@ -178,7 +199,9 @@ func Open(ctx context.Context, cfg Config) (_ *Garden, err error) {
 	g.Ingest.Activity = g.Activity
 	g.Ingest.Actmem = g.Actmem
 	g.Ingest.Spool = g.TransientSpool
-	g.Ingest.ProfileID = cfg.ProfileID
+	if authority {
+		g.Ingest.ProfileID = cfg.ProfileID
+	}
 	if !lexicalOnly && g.Mentle != nil {
 		if drained, drainErr := g.Ingest.DrainSpool(ctx); drainErr != nil {
 			return nil, fmt.Errorf("spool drain: %w", drainErr)
@@ -207,6 +230,9 @@ func (g *Garden) Close() error {
 		return nil
 	}
 	g.closed = true
+	if g.owner != nil {
+		return nil
+	}
 	var errs []error
 	if g.Trace != nil {
 		errs = append(errs, g.Trace.Close())
@@ -235,6 +261,9 @@ func (g *Garden) Close() error {
 	}
 	g.Actmem = nil
 	g.Persona = nil
+	if g.ownership != nil {
+		errs = append(errs, g.ownership.Close())
+	}
 	return errors.Join(errs...)
 }
 
@@ -243,6 +272,12 @@ func (g *Garden) Close() error {
 // this profile's subject. A foreign subject is denied, an absent backend
 // reports unavailable — memory is never silently re-routed.
 func (g *Garden) BackendFor(scope evolution.Scope) (memory.Backend, error) {
+	if g.owner != nil {
+		if scope.SubjectID != g.ProfileID {
+			return nil, &evolution.ContractError{Code: evolution.ErrAuthorityDenied, Message: "foreign private subject"}
+		}
+		return g.owner.BackendFor(context.Background(), scope, "mentle")
+	}
 	if err := scope.Validate(); err != nil {
 		return nil, err
 	}

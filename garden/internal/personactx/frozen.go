@@ -226,13 +226,18 @@ func OpenStore(path string) (*Store, error) {
 }
 
 func (s *Store) Capture(ctx context.Context, sessionID string, reader Reader) (FrozenCore, error) {
+	return s.CaptureKey(ctx, sessionID, sessionID, reader)
+}
+
+// CaptureKey keeps host IDs in the envelope while isolating durable keys.
+func (s *Store) CaptureKey(ctx context.Context, key, sessionID string, reader Reader) (FrozenCore, error) {
 	if s == nil || s.db == nil {
 		return FrozenCore{}, errors.New("personactx: store is unavailable")
 	}
 	if strings.TrimSpace(sessionID) == "" {
 		return FrozenCore{}, errors.New("personactx: session_id is required")
 	}
-	if persisted, err := s.load(ctx, sessionID); err == nil {
+	if persisted, err := s.load(ctx, key); err == nil {
 		return persisted, nil
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return FrozenCore{}, err
@@ -245,13 +250,13 @@ func (s *Store) Capture(ctx context.Context, sessionID string, reader Reader) (F
 	if err != nil {
 		return FrozenCore{}, err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT OR IGNORE INTO frozen_core_sessions(session_id,captured_at,core_json) VALUES(?,?,?)`, sessionID, core.CapturedAt.Format(time.RFC3339Nano), string(rawBytes))
+	_, err = s.db.ExecContext(ctx, `INSERT OR IGNORE INTO frozen_core_sessions(session_id,captured_at,core_json) VALUES(?,?,?)`, key, core.CapturedAt.Format(time.RFC3339Nano), string(rawBytes))
 	if err != nil {
 		return FrozenCore{}, err
 	}
 	// If another process won the race, return its persisted value rather than
 	// exposing a non-authoritative local capture.
-	if persisted, loadErr := s.Get(ctx, sessionID); loadErr == nil {
+	if persisted, loadErr := s.Get(ctx, key); loadErr == nil {
 		return persisted, nil
 	}
 	return core, nil
@@ -313,10 +318,14 @@ func (s *Store) DiscardSession(ctx context.Context, sessionID string) error {
 // enumerate orphan candidates and apply its own keep-predicate; the store
 // never decides which rows are orphans.
 func (s *Store) ListFrozenSessions(ctx context.Context, capturedBefore time.Time) ([]string, error) {
+	return s.ListFrozenSessionsPrefix(ctx, capturedBefore, "")
+}
+
+func (s *Store) ListFrozenSessionsPrefix(ctx context.Context, capturedBefore time.Time, prefix string) ([]string, error) {
 	if s == nil || s.db == nil {
 		return nil, errors.New("personactx: store is unavailable")
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT session_id FROM frozen_core_sessions WHERE captured_at < ? ORDER BY captured_at ASC`, capturedBefore.UTC().Format(time.RFC3339Nano))
+	rows, err := s.db.QueryContext(ctx, `SELECT session_id FROM frozen_core_sessions WHERE captured_at < ? AND substr(session_id,1,length(?))=? ORDER BY captured_at ASC`, capturedBefore.UTC().Format(time.RFC3339Nano), prefix, prefix)
 	if err != nil {
 		return nil, err
 	}

@@ -5,6 +5,7 @@ go 1.26.4
 require (
 	github.com/ProjectViVy/laputa/laputa v0.0.0-20261005120813-1b60b4b48d10
 	github.com/ProjectViVy/laputa/mentle v0.0.0-20261005120813-1b60b4b48d10
+	github.com/gofrs/flock v0.13.0
 	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v0.58.0
 	github.com/rivo/uniseg v0.4.7
@@ -22,7 +23,6 @@ require (
 	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
-	github.com/gofrs/flock v0.13.0 // indirect
 	github.com/gomlx/exceptions v0.0.3 // indirect
 	github.com/gomlx/go-huggingface v0.3.5 // indirect
 	github.com/gomlx/go-xla v0.2.2 // indirect

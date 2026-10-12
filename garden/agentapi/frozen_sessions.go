@@ -2,6 +2,7 @@ package agentapi
 
 import (
 	"context"
+	"github.com/ProjectViVy/laputa/garden/internal/registry"
 	"strings"
 	"time"
 )
@@ -26,7 +27,11 @@ func (c *Client) DiscardFrozenSession(ctx context.Context, sessionID string) err
 	if strings.TrimSpace(sessionID) == "" {
 		return failure("invalid_binding", "session_id is required")
 	}
-	if err := c.runtime.Frozen.DiscardSession(ctx, sessionID); err != nil {
+	key, err := c.runtime.SessionKey(bindingKey(c.identity), sessionID)
+	if err != nil {
+		return err
+	}
+	if err := c.runtime.Frozen.DiscardSession(ctx, key); err != nil {
 		return failure("unavailable", err.Error())
 	}
 	return nil
@@ -48,9 +53,24 @@ func (c *Client) ListFrozenSessions(ctx context.Context, capturedBefore time.Tim
 	if c.runtime.Frozen == nil {
 		return nil, failure("unavailable", "frozen store unavailable")
 	}
-	ids, err := c.runtime.Frozen.ListFrozenSessions(ctx, capturedBefore)
+	prefix := ""
+	if c.installation != nil {
+		prefix = registry.SessionPrefix(c.identity.ProfileID, bindingKey(c.identity))
+	}
+	ids, err := c.runtime.Frozen.ListFrozenSessionsPrefix(ctx, capturedBefore, prefix)
 	if err != nil {
 		return nil, failure("unavailable", err.Error())
+	}
+	if c.installation != nil {
+		sessions := []string{}
+		for _, key := range ids {
+			core, err := c.runtime.Frozen.Get(ctx, key)
+			if err != nil {
+				return nil, err
+			}
+			sessions = append(sessions, core.SessionID)
+		}
+		return sessions, nil
 	}
 	return ids, nil
 }

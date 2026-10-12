@@ -118,7 +118,12 @@ func (h *handle) runtime() (*Service, func(), error) {
 		h.client.mu.RUnlock()
 		return nil, nil, failure("unavailable", "Garden runtime unavailable")
 	}
-	return NewService(h.client.runtime), h.client.mu.RUnlock, nil
+	release, err := h.client.runtime.Enter()
+	if err != nil {
+		h.client.mu.RUnlock()
+		return nil, nil, failure("unavailable", "installation closed")
+	}
+	return NewService(h.client.runtime), func() { release(); h.client.mu.RUnlock() }, nil
 }
 
 // selectedBackend resolves the scope-bound writer: an injected backend bound
@@ -793,7 +798,11 @@ func (h *HumanClient) ReadFrozen(ctx context.Context) (FrozenCore, error) {
 	if s.runtime.Frozen == nil {
 		return FrozenCore{}, failure("unavailable", "frozen store unavailable")
 	}
-	core, err := s.runtime.Frozen.Get(ctx, h.binding.SessionID)
+	key, err := s.runtime.SessionKey(bindingKey(h.binding), h.binding.SessionID)
+	if err != nil {
+		return FrozenCore{}, err
+	}
+	core, err := s.runtime.Frozen.Get(ctx, key)
 	if err != nil {
 		return FrozenCore{}, failure("not_found", "no captured frozen core for this session")
 	}

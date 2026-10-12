@@ -13,6 +13,10 @@ func SessionKey(profileID, bindingID, sessionID string) (string, error) {
 			return "", errors.New("session identity requires profile, binding and session")
 		}
 	}
-	tuple := fmt.Sprintf("%d:%s%d:%s%d:%s", len(profileID), profileID, len(bindingID), bindingID, len(sessionID), sessionID)
-	return "garden-session/v1:" + base64.RawURLEncoding.EncodeToString([]byte(tuple)), nil
+	return SessionPrefix(profileID, bindingID) + fmt.Sprintf("%d:", len(sessionID)) + base64.RawURLEncoding.EncodeToString([]byte(sessionID)), nil
+}
+
+func SessionPrefix(profileID, bindingID string) string {
+	tuple := fmt.Sprintf("%d:%s%d:%s", len(profileID), profileID, len(bindingID), bindingID)
+	return "garden-session/v1:" + base64.RawURLEncoding.EncodeToString([]byte(tuple)) + ":"
 }

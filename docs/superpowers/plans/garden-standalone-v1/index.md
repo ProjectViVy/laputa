@@ -1,10 +1,10 @@
 # Standalone Garden v1 — authoritative Epic/Story plan index
 
-**Date:** 2026-10-12 · **Status:** STORY PLANS PREPARED — PARENT/OWNER REVIEW PENDING; NO RUNTIME EXECUTION
+**Date:** 2026-10-12 · **Status:** UNBLOCKED PLANS APPROVED 2026-10-12 13:13 UTC — NATIVE IMPLEMENTATION IN PROGRESS
 
 Authoritative design: [specification for user review](../../specs/2026-10-12-garden-standalone-v1-design.md). Decision record: [ADR-0019](../../../architecture/0019-garden-standalone-v1.md). Research baseline: [Stage 1](../../../research/garden-standalone-v1.md), `76baea03e9913b8bfeb35c44cae0a66e4f5eed59`.
 
-The owner development assignment on 2026-10-12 authorizes advancing the delivered written architecture into concrete Story planning and publishing those plans on `feat/garden-standalone-v1`. It does **not** approve plans that did not exist, resolve Q2/Q3, authorize runtime changes, or authorize changes in other repositories. The 13 linked plans below now specify files, consumed/produced interfaces, focused tasks, verification and removal. Four are Ready-for-review; nine are Blocked for the exact decisions/evidence listed below, with independent tasks separated where useful. **No Story is Ready for runtime execution yet.**
+The owner development assignment on 2026-10-12 authorizes advancing the delivered written architecture into concrete Story planning and publishing those plans on `feat/garden-standalone-v1`. It does **not** approve plans that did not exist, resolve Q2/Q3, authorize runtime changes, or authorize changes in other repositories. The 13 linked plans below now specify files, consumed/produced interfaces, focused tasks, verification and removal. Four are Ready-for-review; nine are Blocked for the exact decisions/evidence listed below, with independent tasks separated where useful. Owner approved starting S01/S02/S03/S08 on 2026-10-12 13:13 UTC; Q2/Q3 and the blocked rows remain unresolved.
 
 The preserved execution choice is one development session on GPT-6.1-SOL HIGH using `superpowers:executing-plans` after parent/owner review; do not ask to rechoose the model or create per-task implementer agents. This index is the sole owner of status and immediate dependency data; the graph and waves derive from the predecessor column. A plan being reviewable does not satisfy its unimplemented predecessors. Review approval promotes only unblocked plans; execution starts with S01 after that gate. Native tests/host configuration/data transfer remain future work.
 
@@ -89,14 +89,14 @@ These are logical orderings, not authorization for parallel agents or an estimat
 
 | Story | Plan state | Remaining gate beyond predecessor delivery |
 | --- | --- | --- |
-| S01 | Ready-for-review | Parent/owner plan review; no owner choice blocks the isolated resource/registry task. |
-| S02 | Ready-for-review | Parent/owner plan review, then S01 interface evidence. |
-| S03 | Ready-for-review | Parent/owner plan review, then S02; runtime acceptance needs actual working Mentle/model fixtures, not doc checks. |
+| S01 | Implemented foundation / final review pending | Shared-owner/profile/Frozen tests and Garden suite PASS; main listener cutover deferred to S03 closure (recorded execution ruling). |
+| S02 | Approved / next | S01 foundation interfaces verified; implement trusted binding/membership next. |
+| S03 | Approved / predecessor pending | S02; actual Mentle/model fixture evidence required, not documentation checks. |
 | S04 | Blocked | Q3 approved mixed-source/restricted-session Recap policy + coordinated live Work/desktop DTO cutover. Authority mechanics independently reviewable; no new consolidation enabled. |
 | S05 | Blocked | Reviewed/authorized BML provider-owned schema/public API and explicit legacy mapping on dedicated VIVY branch; final offered UI/client/setup consumers must qualify. Q2 does not block planning this lane. |
 | S06 | Blocked | Q1/Q5 initial supported local attachment/package + versioned other-machine export/import grammar; supported VIVY client/lock composition on authorized dedicated consumer branch. |
 | S07 | Blocked | S04/Q3 coordinated Work replacement; selected source-linked fact task independently reviewable without accepting Q3. |
-| S08 | Ready-for-review | Parent/owner review, then S03; common temp-file/control/status core needs no guessed native-host version. |
+| S08 | Approved / predecessor pending | S03; common temp-file/control/status core needs no guessed native-host version. |
 | S09 | Blocked | X4 pinned OpenClaw/Hermes releases, exact SDK signatures and installed isolated-host evidence; four-host commitment unchanged. |
 | S10 | Blocked | X4 pinned Claude Code/Codex CLI floors and exact config/discovery syntax; files + explicit MCP stable, lifecycle hooks experimental. |
 | S11 | Blocked | Q5 target OS/package/private-permission implementation and S06 attachment support; candidate DeepSeek model needs release/account validation, no new provider chooser. |
@@ -161,4 +161,12 @@ Writing-plans self-review completed against specification §§1–10: R1–R12 a
 
 Documentation-only validation **PASS** (2026-10-12): 13 plans, 17 edges, 7 waves, 4 Ready-for-review / 9 Blocked; 115 existing source paths and 102 proposed source/artifact paths classified; 20 cross-Story contract-owner symbols checked alongside manual type/step review. Checked owned Markdown relative links/anchors and existing/proposed path classification; required plan header/interfaces/checkbox tasks and focused commands; 13 Story IDs, known endpoints/no self-edges/no cycles/no redundant transitive edges; 17 graph edges and 7 table/graph/wave agreement; cross-Story contract owner references; `git diff --check`; changed files confined to docs. No Go/console/host/model runtime suites run or acceptance evidence manufactured. Remote recheck/commit/push verification is reported with the delivery commit.
 
-Next action: parent/owner review the linked plans, then authorize implementation of unblocked Stories in this preserved session. Writing-plans explicitly requires waiting for that review even when execution method was supplied. No implementation work starts from this index before review; Q2/Q3 and concrete attachment/host/package gates stay open.
+Execution authorization received 2026-10-12 13:13 UTC: start the unblocked plans in the same GPT-6.1-SOL HIGH/native session. The writing-plans review gate is satisfied. Next: S02, then S03 and S08 once each predecessor passes. Q2/Q3 and concrete attachment/host/package gates stay open.
+
+### Observed S01 implementation evidence
+
+- Task 1 `8591dba`: profile registry/path identity and exclusive resource locks. Profile missing-API RED; subprocess no-lock/partial-lock RED; `go test ./internal/registry ./internal/runtimecore -run 'Test(Profile|SessionKey|OwnerLock)' -count=1` and full package suites PASS.
+- Task 2: one installation resource owner, lightweight subject clients, persisted host-qualified Frozen keys, bound enumeration/cleanup and lifecycle gates. Installation missing-API RED; cleanup showed foreign session keys before fix; focused and full `./agentapi ./internal/runtimecore ./internal/personactx ./internal/registry` suites PASS.
+- `cd garden && GOSUMDB=off go test ./...` PASS using repository-pinned Go 1.26.4. Baseline console `pnpm build` PASS. Runtime main cutover intentionally paired with S03 complete auth/route closure; no multi-profile listener exposed early.
+- Worktree `/workspace/laputa-garden` uses the existing branch. Workflow helper scripts unavailable; prescribed brief/BASE/RED→GREEN/ledger records maintained manually under ignored `.superpowers/sdd/<Story>`. Test/toolchain caches are outside repository; provider archive fallback verified against unchanged go.sum. No user environment/production data/configuration touched.
+- Whole approved-scope independent review remains pending; do not treat green tests alone as final acceptance.
