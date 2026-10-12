@@ -531,17 +531,28 @@ func (s *Service) mutateMemory(ctx context.Context, p Principal, binding Binding
 		return memory.MutationReceipt{}, failure("invalid_binding", "write scope does not match selected target")
 	}
 	m.Scope = access.WriteScope
-	if m.Operation == evolution.MutationUpdate && m.Tags != nil && m.Body == "" {
-		r, err := s.accessBackend(binding, p, target).rawRecord(ctx, access, m.RecordID)
-		if err != nil {
-			return memory.MutationReceipt{}, err
-		}
-		m.Body = r.Body
-	}
 	m.Origin = memory.MutationOrigin{ProfileID: binding.ProfileID, AgentID: binding.AgentID, Platform: binding.Platform, SessionID: binding.SessionID}
 	m.PayloadDigest = mutationDigest(m)
 	if err = m.Validate(); err != nil {
 		return memory.MutationReceipt{}, failure("invalid_request", err.Error())
+	}
+	backend := s.accessBackend(binding, p, target)
+	prior, err := backend.MutationStatus(ctx, m.OperationID)
+	if err == nil {
+		if prior.PayloadDigest != m.PayloadDigest {
+			return memory.MutationReceipt{}, failure("conflict", "operation replayed with a different payload")
+		}
+		return prior, nil
+	}
+	if evolution.CodeOf(err) != evolution.ErrEffectNotFound {
+		return memory.MutationReceipt{}, materialErrorOrNil(err)
+	}
+	if m.Operation == evolution.MutationUpdate && m.Tags != nil && m.Body == "" {
+		r, err := backend.rawRecord(ctx, access, m.RecordID)
+		if err != nil {
+			return memory.MutationReceipt{}, err
+		}
+		m.Body = r.Body
 	}
 	receipt, err := s.accessBackend(binding, p, target).Mutate(ctx, m)
 	return receipt, materialErrorOrNil(err)

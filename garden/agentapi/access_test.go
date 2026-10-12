@@ -49,11 +49,11 @@ func TestHostSessionCollision(t *testing.T) {
 	defer i.Close()
 	p := installPersona(t, i, "A")
 	makeHost := func() *BoundClient {
-		b, _, err := i.CreateHostBinding(ctx, HostBinding{ProfileID: "A", AgentID: "same", Platform: "test", Controls: HostControls{Recall: true}, Operations: []Operation{OpBootstrap}})
+		b, _, err := i.CreateHostBinding(ctx, HostBinding{ProfileID: "A", AgentID: "same", Platform: "test", Controls: HostControls{Recall: true, PersonaSync: true}, Operations: []Operation{OpBootstrap}})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = i.SetHostControls(ctx, b.BindingID, HostControls{Recall: true}); err != nil {
+		if err = i.SetHostControls(ctx, b.BindingID, HostControls{Recall: true, PersonaSync: true}); err != nil {
 			t.Fatal(err)
 		}
 		h, err := i.BindHostSession(b.BindingID, "same-chat")

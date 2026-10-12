@@ -254,6 +254,11 @@ type memoryItem struct {
 }
 
 type actmemResponse struct {
+	Entries []struct {
+		Section string `json:"section"`
+		Field   string `json:"field"`
+		Body    string `json:"body"`
+	} `json:"entries,omitempty"`
 	Revision  uint64 `json:"revision"`
 	UpdatedAt string `json:"updated_at"`
 	Markdown  string `json:"markdown"`
@@ -555,6 +560,13 @@ func handleActmemRead(client *Client) (mcp.Tool, server.ToolHandlerFunc) {
 		var resp actmemResponse
 		if err := client.get(ctx, path, &resp); err != nil {
 			return errorResult(err), nil
+		}
+		if resp.Markdown == "" {
+			var scoped strings.Builder
+			for _, entry := range resp.Entries {
+				fmt.Fprintf(&scoped, "## %s %s\n%s\n", entry.Section, entry.Field, entry.Body)
+			}
+			resp.Markdown = scoped.String()
 		}
 		return okResult(fmt.Sprintf("ACTMEM revision=%d updated_at=%s truncated=%t\n---\n%s", resp.Revision, resp.UpdatedAt, resp.Truncated, resp.Markdown)), nil
 	}

@@ -104,12 +104,25 @@ func bindingKey(b Binding) string {
 }
 
 type boundFrozen struct {
+	service   *Service
 	runtime   *runtimecore.Garden
 	binding   Binding
 	bindingID string
 }
 
 func (p *boundFrozen) Get(ctx context.Context, sessionID string) (FrozenCore, error) {
+	if p.service != nil && p.service.installation != nil {
+		b, err := p.service.installation.owner.Registry.Binding(ctx, p.bindingID)
+		if err != nil {
+			return FrozenCore{}, accessError(err)
+		}
+		if b.Revoked {
+			return FrozenCore{}, failure("binding_revoked", "host binding revoked")
+		}
+		if !b.Controls.PersonaSync {
+			return FrozenCore{}, nil
+		}
+	}
 	key, err := p.runtime.SessionKey(p.bindingID, sessionID)
 	if err != nil {
 		return FrozenCore{}, err

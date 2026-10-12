@@ -105,7 +105,11 @@ func (s *Server) mutateHTTP(w http.ResponseWriter, r *http.Request, op evolution
 		writeError(w, 400, errors.New("expected_version and reason required"))
 		return
 	}
-	receipt, err := s.AgentAPI.MutateMemory(r.Context(), agentapi.Principal(p), s.requestBinding("garden-http-write"), agentapi.MemoryTarget{SharedSpaceID: body.SharedSpaceID}, m)
+	binding := s.requestBinding("garden-http-write")
+	if s.Installation != nil {
+		binding = s.binding
+	}
+	receipt, err := s.AgentAPI.MutateMemory(r.Context(), agentapi.Principal(p), binding, agentapi.MemoryTarget{SharedSpaceID: body.SharedSpaceID}, m)
 	if err != nil {
 		writeMaterialsReadError(w, err)
 		return

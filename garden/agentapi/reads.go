@@ -106,6 +106,27 @@ func (s *Service) ReadACTMEM(_ context.Context, principal Principal, binding Bin
 	if s.runtime.Actmem == nil {
 		return ActmemDocument{}, failure("unavailable", "ACTMEM unavailable")
 	}
+	if s.installation != nil && principal != PrincipalUser {
+		scope, err := binding.TrustedScope()
+		if err != nil {
+			return ActmemDocument{}, failure("invalid_binding", err.Error())
+		}
+		result, err := s.runtime.Actmem.ReadScoped(scope, evolution.ReadRequest{})
+		if err != nil {
+			return ActmemDocument{}, failure(actmem.CodeOf(err), "ACTMEM read failed")
+		}
+		sections := map[evolution.EntrySection][]string{}
+		for _, e := range result.Entries {
+			body := e.Body
+			if e.Field != "" {
+				body = "### " + string(e.Field) + "\n" + body
+			}
+			sections[e.Section] = append(sections[e.Section], body)
+		}
+		out := ActmemDocument{Revision: result.Revision, Pulse: strings.Join(sections[evolution.SectionPulse], "\n\n"), Recap: strings.Join(sections[evolution.SectionRecap], "\n\n"), Work: strings.Join(sections[evolution.SectionWork], "\n\n")}
+		out.Markdown = "# ACTMEM scoped view\n\n## Pulse\n" + out.Pulse + "\n\n## Recap\n" + out.Recap + "\n\n## Work\n" + out.Work
+		return out, nil
+	}
 	doc, err := s.runtime.Actmem.Read()
 	if err != nil {
 		return ActmemDocument{}, failure(actmem.CodeOf(err), "ACTMEM read failed")

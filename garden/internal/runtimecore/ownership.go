@@ -31,13 +31,13 @@ func acquireOwnership(paths ...string) (*ownership, error) {
 		if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
 			return nil, errors.Join(err, own.Close())
 		}
-		lock := flock.New(p + ".garden-owner.lock")
+		lock := flock.New(registry.OwnershipLockPath(p))
 		ok, err := lock.TryLock()
 		if err != nil || !ok {
 			return nil, errors.Join(fmt.Errorf("owner_conflict: resource already owned"), err, own.Close())
 		}
 		own.locks = append(own.locks, lock)
-		if err = os.Chmod(p+".garden-owner.lock", 0600); err != nil {
+		if err = os.Chmod(registry.OwnershipLockPath(p), 0600); err != nil {
 			return nil, errors.Join(err, own.Close())
 		}
 	}

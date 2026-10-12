@@ -59,7 +59,7 @@ func (s *Service) DeepRecall(ctx context.Context, p Principal, b Binding, q reca
 	fast := *s.runtime.FastRecall
 	fast.Searcher = &authorizedCardSearcher{s: s, b: b, p: p}
 	if s.installation != nil {
-		fast.Frozen = &boundFrozen{runtime: s.runtime, binding: b, bindingID: s.bindingID}
+		fast.Frozen = &boundFrozen{service: s, runtime: s.runtime, binding: b, bindingID: s.bindingID}
 	}
 	q.SessionID = b.SessionID
 	deep := recall.DeepService{Fast: &fast, Planner: rag.RulePlanner{}, Arbiter: arbiter.New()}

@@ -82,5 +82,8 @@ func (s *Service) FoldSession(_ context.Context, principal Principal, binding Bi
 	if s.runtime.Actmem == nil {
 		return nil, failure("unavailable", "ACTMEM unavailable")
 	}
+	if s.installation != nil && principal != PrincipalUser {
+		return nil, failure("unavailable", "installed host archive maintenance requires a scoped contract")
+	}
 	return s.runtime.Actmem.FoldSession(sessionID)
 }

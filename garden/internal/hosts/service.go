@@ -92,6 +92,9 @@ func (s *Service) validateTarget(ctx context.Context, path string) error {
 		if err != nil {
 			return err
 		}
+		if target == registry.OwnershipLockPath(canonical) {
+			return failure("invalid_request", "host target overlaps Garden ownership lock")
+		}
 		relative, err := filepath.Rel(canonical, target)
 		if err == nil && (relative == "." || (!strings.HasPrefix(relative, ".."+string(filepath.Separator)) && relative != "..")) {
 			return failure("invalid_request", "host target overlaps Garden-owned data")

@@ -115,7 +115,7 @@ func (s *Service) recall(ctx context.Context, binding Binding, principal Princip
 		if key == "" {
 			key = bindingKey(binding)
 		}
-		fast.Frozen = &boundFrozen{runtime: s.runtime, binding: binding, bindingID: key}
+		fast.Frozen = &boundFrozen{service: s, runtime: s.runtime, binding: binding, bindingID: key}
 	}
 	view, err := fast.Recall(ctx, recall.FastRequest{Query: query, Scope: scope, BudgetChars: budget, SessionID: binding.SessionID})
 	if err != nil {

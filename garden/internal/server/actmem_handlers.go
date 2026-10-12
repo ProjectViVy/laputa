@@ -311,6 +311,10 @@ func (s *Server) handleActmemMaintenance(w http.ResponseWriter, r *http.Request)
 		}
 		payload["result"] = map[string]any{"changed": result.Changed, "revision": result.Revision, "entries": result.Entries}
 	case "fold_session":
+		if s.Installation != nil && principal != PrincipalUser {
+			writeErrorWithCode(w, 503, "unavailable", errors.New("installed host archive maintenance requires a scoped contract"))
+			return
+		}
 		if strings.TrimSpace(body.SessionKey) == "" {
 			writeErrorWithCode(w, http.StatusBadRequest, "actmem_invalid_edit", errors.New("session_key is required"))
 			return
@@ -329,7 +333,12 @@ func (s *Server) handleActmemMaintenance(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleActmemCapsules(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.actmemReadPrincipal(w, r); !ok {
+	principal, ok := s.actmemReadPrincipal(w, r)
+	if !ok {
+		return
+	}
+	if s.Installation != nil && principal != PrincipalUser {
+		writeErrorWithCode(w, 503, "unavailable", errors.New("installed host archive reads require a scoped contract"))
 		return
 	}
 	if s.Actmem == nil {
@@ -345,7 +354,12 @@ func (s *Server) handleActmemCapsules(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleActmemCapsule(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.actmemReadPrincipal(w, r); !ok {
+	principal, ok := s.actmemReadPrincipal(w, r)
+	if !ok {
+		return
+	}
+	if s.Installation != nil && principal != PrincipalUser {
+		writeErrorWithCode(w, 503, "unavailable", errors.New("installed host archive reads require a scoped contract"))
 		return
 	}
 	if s.Actmem == nil {
