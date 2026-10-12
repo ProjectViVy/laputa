@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ProjectViVy/laputa/garden/memory"
+
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -229,10 +231,11 @@ type rcard struct {
 // --- Memories types (mirror of /v2/memories response) ---
 
 type memoryMutationResponse struct {
-	Memory          memoryItem `json:"memory"`
-	CanonicalStatus string     `json:"canonical_status"`
-	IndexState      string     `json:"index_status"`
-	IndexJobID      *string    `json:"index_job_id"`
+	Memory          memoryItem             `json:"memory"`
+	CanonicalStatus string                 `json:"canonical_status"`
+	IndexState      string                 `json:"index_status"`
+	IndexJobID      *string                `json:"index_job_id"`
+	Receipt         memory.MutationReceipt `json:"receipt"`
 }
 
 type memoryItem struct {
@@ -372,9 +375,10 @@ type activityEvent struct {
 // --- Write types (POST /v2/memories, POST /v2/activity/events) ---
 
 type createMemoryRequest struct {
-	Content string   `json:"content"`
-	Kind    string   `json:"kind,omitempty"`
-	Tags    []string `json:"tags,omitempty"`
+	Content       string   `json:"content"`
+	Kind          string   `json:"kind,omitempty"`
+	Tags          []string `json:"tags,omitempty"`
+	SharedSpaceID string   `json:"shared_space_id,omitempty"`
 }
 
 type createActivityRequest struct {
@@ -814,10 +818,12 @@ func handleActivityRecent(client *Client) (mcp.Tool, server.ToolHandlerFunc) {
 func handleRecordSignal(client *Client) (mcp.Tool, server.ToolHandlerFunc) {
 	tool := mcp.NewTool(
 		toolRecordSignal,
-		mcp.WithDescription("Record a durable signal/memory into Garden as a persistent memory entry (writes via POST /v2/memories). Use when the agent discovers a fact worth persisting. This is a WRITE operation."),
+		mcp.WithDescription("Persist an explicitly selected fact into Garden through POST /v2/memories. This is a WRITE operation; no transcript or automatic lifecycle selection. Reuse event_id for retries of the same selection."),
 		mcp.WithString("content", mcp.Required(), mcp.Description("The signal/fact content to persist")),
 		mcp.WithString("kind", mcp.Description("Memory kind (default 'note'; valid: note, fact, preference, decision, session_digest, source_artifact, semantic_unit)")),
 		mcp.WithArray("tags", mcp.WithStringItems(), mcp.Description("Tags to attach")),
+		mcp.WithString("event_id", mcp.Description("Stable owner-selected event identity; changed payload with the same identity conflicts")),
+		mcp.WithString("shared_space_id", mcp.Description("Optional named shared space; current read_write membership is required")),
 	)
 	handler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		args, _ := req.Params.Arguments.(map[string]any)
@@ -830,6 +836,16 @@ func handleRecordSignal(client *Client) (mcp.Tool, server.ToolHandlerFunc) {
 		if kind == "" {
 			kind = "note"
 		}
+		eventID, spaceID := "", ""
+		for name, target := range map[string]*string{"event_id": &eventID, "shared_space_id": &spaceID} {
+			if raw, present := args[name]; present {
+				value, ok := raw.(string)
+				if !ok || len(value) > 512 || strings.TrimSpace(value) == "" || strings.ContainsAny(value, "\r\n\x00") {
+					return errorResult(fmt.Errorf("invalid %s", name)), nil
+				}
+				*target = value
+			}
+		}
 		var tags []string
 		if rawTags, ok := args["tags"].([]any); ok {
 			for _, t := range rawTags {
@@ -839,18 +855,24 @@ func handleRecordSignal(client *Client) (mcp.Tool, server.ToolHandlerFunc) {
 			}
 		}
 		body := createMemoryRequest{
-			Content: content,
-			Kind:    kind,
-			Tags:    tags,
+			Content:       content,
+			Kind:          kind,
+			Tags:          tags,
+			SharedSpaceID: spaceID,
 		}
 		var resp memoryMutationResponse
 		encoded, _ := json.Marshal(body)
 		key := fmt.Sprintf("agent-signal-%x", sha256.Sum256(encoded))
+		if eventID != "" {
+			key = fmt.Sprintf("agent-signal-selection-%x", sha256.Sum256([]byte(eventID)))
+		}
 		if err := client.postWithHeaders(ctx, "/v2/memories", body, map[string]string{"Idempotency-Key": key}, &resp); err != nil {
 			return errorResult(err), nil
 		}
 		text := fmt.Sprintf("memory %s canonical=%s index=%s revision=%d", resp.Memory.ID, resp.CanonicalStatus, resp.IndexState, resp.Memory.Version)
-		return okResult(text), nil
+		result := okResult(text)
+		result.StructuredContent = map[string]any{"receipt": resp.Receipt, "id": resp.Memory.ID, "version": resp.Memory.Version, "canonical_status": resp.CanonicalStatus, "index_status": resp.IndexState}
+		return result, nil
 	}
 	return tool, handler
 }
