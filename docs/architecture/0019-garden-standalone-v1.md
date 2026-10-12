@@ -1,6 +1,6 @@
 # ADR-0019: Standalone Garden v1 proposal
 
-**Status:** proposed — awaiting written-spec review; no implementation authorized
+**Status:** proposed decisions; planning authorized — Story-plan review pending; no runtime implementation authorized
 **Date:** 2026-10-12
 
 The authoritative proposal is [Standalone Garden v1 — architecture specification](../superpowers/specs/2026-10-12-garden-standalone-v1-design.md). Its §9 owns the decision/deprecation map; its §10 owns the owner questions. The [proposed Epic/Story index](../superpowers/plans/garden-standalone-v1/index.md) owns dependencies and status. This ADR is a status/pointer record, not a competing specification.
@@ -13,4 +13,4 @@ Owner decisions remain explicit: broader backend release timing (Q2) and restric
 
 Preserve ADR-0012 Persona/Frozen Core/WORLD boundaries, ADR-0014 Mentle canonical authority, ADR-0016 modular library ownership, and ADR-0018 selected VIVY Recap policy. If approved, this proposal refines single-profile authentication/composition, backend-selection restrictions, active Pulse/Work consumers, standalone evolution/console composition and host activation assumptions only as enumerated in the specification. It does not silently change existing VIVY or DIVA backend defaults or historical acceptance results.
 
-Current accepted contracts continue to govern shipped behavior. No executable Story plans or Ready implementation are claimed. Written-spec approval permits the next planning stage; reviewed implementation plans and execution selection remain separate gates.
+Current accepted contracts continue to govern shipped behavior. The owner development assignment now authorizes concrete Story planning and publication on the existing branch; the index links 13 plans and owns their Ready-for-review/Blocked state. No Story is Ready for runtime implementation. Q2/Q3 remain open; parent/owner plan review precedes the preserved native development-session execution method. This status update changes no runtime contract or historical outcome.

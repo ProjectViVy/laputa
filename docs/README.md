@@ -7,7 +7,7 @@
 
 This directory is the canonical entry point for Garden MemoryOS documentation.
 
-**Standalone Garden review proposal:** [Specification](./superpowers/specs/2026-10-12-garden-standalone-v1-design.md), [ADR-0019](./architecture/0019-garden-standalone-v1.md), and [proposed Epic/Story index](./superpowers/plans/garden-standalone-v1/index.md). This new scope awaits written-spec approval; the historical readiness/completion status above does not apply to it. No standalone Story is Ready.
+**Standalone Garden review proposal:** [Specification](./superpowers/specs/2026-10-12-garden-standalone-v1-design.md), [ADR-0019](./architecture/0019-garden-standalone-v1.md), and [authoritative 13-Story plan index](./superpowers/plans/garden-standalone-v1/index.md). Planning/publication is authorized; parent/owner Story-plan review is pending and Q2/Q3 remain open. The historical readiness/completion status above does not apply to it. No standalone Story is Ready for runtime execution.
 
 ## Read First
 

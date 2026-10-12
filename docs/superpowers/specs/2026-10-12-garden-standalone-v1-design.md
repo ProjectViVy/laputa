@@ -1,8 +1,8 @@
 # Standalone Garden v1 — architecture specification for user review
 
-**Date:** 2026-10-12 · **Status:** PROPOSED — WRITTEN-SPEC APPROVAL REQUIRED
+**Date:** 2026-10-12 · **Status:** PLANNING AUTHORIZED — STORY-PLAN REVIEW PENDING; Q2/Q3 OPEN
 
-**Authority:** This is the single proposed design for standalone Garden. [ADR-0019](../../architecture/0019-garden-standalone-v1.md) records its decision status; the [Epic/Story index](../plans/garden-standalone-v1/index.md) owns proposed dependencies and coverage. No executable Story plans exist, no Story is Ready, and no runtime implementation, data transfer or default switch is authorized by this delivery. After written-spec approval, write and review Story plans and select an execution method before implementation.
+**Authority:** This is the single proposed design for standalone Garden. [ADR-0019](../../architecture/0019-garden-standalone-v1.md) records its decision status; the [Epic/Story index](../plans/garden-standalone-v1/index.md) owns proposed dependencies and coverage. The owner development assignment authorizes advancing this written architecture to the 13 concrete linked Story plans and publishing them on the existing branch. It does not resolve open owner choices or retroactively approve those plans. No Story is Ready for runtime execution; parent/owner plan review is required before the preserved native development-session execution method begins. No runtime implementation, data transfer or default switch is authorized by this planning delivery.
 
 ## 1. Outcome, scope and evidence
 
@@ -328,4 +328,4 @@ Material dependencies remain: BML qualification is cross-repo work for the broad
 | Q4: host release commitment? | All four hosts in phase one as §7; OpenClaw/Hermes native, Claude/Codex files + explicit MCP committed, their lifecycle hooks experimental. Full automatic lifecycle parity for all four would add version-specific work. |
 | Q5: initial packaging/secret persistence? | Private host-side file with equivalent Windows ACL; reuse OS vault only where already available. Confirm initial supported OS/package targets before executable host/setup plans; key remains out of content/config exports. |
 
-Approval of this written specification is the next gate. It permits writing executable Story plans; it does not approve those absent plans, authorize production changes or mark any Story Ready. The proposed index supplies only outcome boundaries, immediate dependencies and acceptance coverage.
+The owner development assignment advanced this specification into concrete Story planning. The next gate is parent/owner review of the 13 linked plans in the authoritative index; execution method/model is preserved. Planning authorization does not resolve Q2/Q3, approve the new plans, authorize production changes or mark a Story Ready. Blocked plans retain the exact missing decisions/evidence.
