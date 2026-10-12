@@ -1,5 +1,7 @@
 # DIVA Cognitive Integration — Delivery Index
 
+> **2026-10-11 policy supersession:** The Pulse/Recap/Work, tool-only ACTMEM and fixed-cap/timer contract below is the prior cognitive baseline. Preserve its receipts, scope, Mission/Dream fences and recorded results; replan selected-policy Recap and compatibility through the existing context policy. See [ADR-0018](../../../architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 [Architecture](../../specs/2026-10-02-diva-cognitive-integration-design.md) · [Shared contracts](contracts.md) · [Package checks](verification.md)
 
 

@@ -1,5 +1,7 @@
 # Garden MemoryOS Status
 
+> **2026-10-11 policy supersession:** Completed ACTMEM exclusion tasks below are historical clean-break proof, not current Recap acceptance. The selected VIVY policy supersedes those assumptions without rewriting completion records. See [ADR-0018](docs/architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 > **Last updated:** 2026-09-03
 > **Current contract:** [ADR-0012: Laputa Markdown Clean Break](docs/architecture/0012-laputa-markdown-clean-break.md)
 > **Implementation architecture:** [ADR-0013: Laputa Clean-Break Implementation Architecture](docs/architecture/0013-laputa-clean-break-implementation-architecture.md)
@@ -8,7 +10,17 @@
 
 This file tracks product-level executable work only. Story-level status, dependencies and execution rules live in the [Authority & Recovery TODOLIST](docs/bmad/garden-authority-recovery-2026-09/TODOLIST.md) and [GOAL Execution Runbook](docs/bmad/garden-authority-recovery-2026-09/GOAL-EXECUTION-RUNBOOK.md).
 
-## Active
+## Current policy work — 2026-10-11
+
+- [x] Record selected VIVY context direction and scoped supersession in ADR-0018; reconcile current instructions and preserve earlier evidence.
+- [ ] Implement VIVY issue #58 through existing runtime/context/Journal/policy; LIFE first default-enabled pilot, coding excluded from phase 1.
+- [ ] Plan free-form subject Recap storage, revision-aware consolidation/human conflicts, commit-before-retire and active projection invalidation.
+- [ ] Review dedicated full Recap inspect/edit/delete UI flows and wireframes; targeted active clear leaves raw evidence, older revisions, archives and backend records retained.
+- [ ] Resolve deferred ACTMEM inspect/update/delete discovery and activation, experimental budgets and safe subject/workspace admission; do not add always-on tool schemas.
+- [ ] Inventory Work reconcile/capture/fold/evolution/API/SDK/desktop consumers; keep BML validation and owner's Mentle-through-DIVA path on the same capability-aware interface.
+- [ ] Close installed-product Windows, real-model, unknown/partial recovery and workspace acceptance matrices with fresh proofs. Preserve prior successful developer integration evidence.
+
+## Completed clean-break baseline (historical)
 
 - [x] **LAPUTA-MARKDOWN-CLEAN-BREAK-PLAN** `P0`
   ADR-0013 defines package replacement order, file-store contract, Persona review/history API, `ACTMEM.MD` tools, ContextView changes, Console migration, EvoMap candidate boundary, and the test/deletion proof matrix. The activated GOAL executed that order and its final gates passed.

@@ -1,5 +1,7 @@
 # Laputa External Agent SDK
 
+> **2026-10-11 policy supersession:** This frozen execution/API/acceptance baseline retains its original scope. Its ACTMEM tool-only, structured-head and fixed-budget assumptions must be replanned for the selected VIVY policy; existing interfaces remain until reviewed implementation changes. See [ADR-0018](../../architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 > Historical REST-first execution baseline. [ADR-0016](../../architecture/0016-laputa-embeddable-modular-monolith.md) now governs the library + application split and refines Vivy's transport decision; the status and default transport below describe the prior plan, not the current modular-monolith gate.
 
 BMAD project-sized planning package for the post-clean-break external Agent access plane.

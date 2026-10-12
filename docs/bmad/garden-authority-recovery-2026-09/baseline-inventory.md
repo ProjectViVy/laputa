@@ -1,5 +1,7 @@
 # Story 0.1 — 实施基线与 dirty-tree 所有权清单
 
+> **2026-10-11 policy supersession:** This frozen execution/API/acceptance baseline retains its original scope. Its ACTMEM tool-only, structured-head and fixed-budget assumptions must be replanned for the selected VIVY policy; existing interfaces remain until reviewed implementation changes. See [ADR-0018](../../architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 **Lifecycle:** Historical pre-GOAL baseline snapshot. The final execution state supersedes the planning-only observations below; see `sprint-status.yaml`, `implementation-readiness.md`, and `implementation/` for audited completion evidence.
 
 **记录时间：** 2026-09-03T04:38:06+08:00

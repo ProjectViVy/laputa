@@ -1,5 +1,7 @@
 # LAPUTA
 
+> **2026-10-11 policy supersession:** This translated overview predates the current authority and memory-policy contracts. Use the English README and current documentation index for implementation; historical architecture diagrams below are not a supported compatibility contract. See [ADR-0018](docs/architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 [English](README.md)
 
 面向持续运行 AI Agent 的治理型记忆操作系统。LAPUTA 将个人工作材料连接到可召回的上下文和可复用的能力——同时不把存储、检索或演化输出本身当作权威。
@@ -109,9 +111,9 @@ docs/      架构决策、迁移计划、历史归档
 
 ## 文档
 
-- [架构计划 (vNext)](docs/architecture/0001-memoryos-vnext-architecture.md)
-- [ADR-0002：认知分区决策](docs/architecture/0002-laputa-cognitive-partition-decision.md)
-- [ADR-0003：运维控制台设计](docs/architecture/0003-operations-console-design.md)
+- [架构计划 (vNext)](docs/archive/2026-08-14-laputa-clean-break/0001-memoryos-vnext-architecture.md)
+- [ADR-0002：认知分区决策](docs/archive/2026-08-14-laputa-clean-break/0002-laputa-cognitive-partition-decision.md)
+- [ADR-0003：运维控制台设计](docs/archive/2026-08-14-laputa-clean-break/0003-operations-console-design.md)
 - [文档索引](docs/README.md)
 - [历史归档](docs/archive/2026-08-01-pre-memoryos-redesign/)
 

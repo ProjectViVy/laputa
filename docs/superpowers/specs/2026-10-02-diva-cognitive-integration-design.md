@@ -1,5 +1,7 @@
 # Laputa / DIVA cognitive integration — detailed architecture
 
+> **2026-10-11 policy supersession:** This integration/design baseline does not establish the new Recap UI or context policy. The selected policy requires one subject-level free-form Recap, revision-aware human control and deferred tools; inventory capture/Work/evolution consumers before changing them. Current merged integration evidence is indexed separately. See [ADR-0018](../../architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 Date: 2026-10-02
 
 Status: Written design for owner review. Product decisions listed as confirmed below are accepted in conversation; proposed defaults and interfaces are not shipped contracts. Story plans and readiness are maintained in [the plan index](../plans/2026-10-02-diva-cognitive/index.md); exact DTOs and serialization rules are maintained in [shared contracts](../plans/2026-10-02-diva-cognitive/contracts.md). It does not authorize product implementation. No runtime tests were executed for this document. No repository instructions, remote issues, branches or source files were changed.

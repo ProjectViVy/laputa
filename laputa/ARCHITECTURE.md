@@ -1,5 +1,7 @@
 # Laputa Governance Framework
 
+> **2026-10-11 policy supersession:** The 14-section JSON model below is historical and retired by ADR-0012; it is not a compatibility API or current implementation guide. The selected ACTMEM policy is refined by ADR-0018. See [ADR-0018](../docs/architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 > Pure file-based governance. Zero subprocesses. Mempalace is completely separate.
 
 ## Architecture
@@ -23,7 +25,7 @@
 
 ## Target cognitive partition notice
 
-The table below describes the **current Go compatibility registry**, not the accepted Garden MemoryOS cognitive architecture. [Garden ADR-0002](../docs/architecture/0002-laputa-cognitive-partition-decision.md) removes target LTM/`LONGMEM.MD`, `13-report_indexes` and `14-aaak_summaries`; converts #10/#11 into monthly human report modules; moves #12 to infrastructure logging; and introduces `MEMRULES.MD` plus `WORLD.MD`. Do not add features using the legacy meanings below before the separately approved physical migration plan.
+The table below describes the **current Go compatibility registry**, not the accepted Garden MemoryOS cognitive architecture. [Garden ADR-0002](../docs/archive/2026-08-14-laputa-clean-break/0002-laputa-cognitive-partition-decision.md) removes target LTM/`LONGMEM.MD`, `13-report_indexes` and `14-aaak_summaries`; converts #10/#11 into monthly human report modules; moves #12 to infrastructure logging; and introduces `MEMRULES.MD` plus `WORLD.MD`. Do not add features using the legacy meanings below before the separately approved physical migration plan.
 
 ## 14 Governance Sections
 
