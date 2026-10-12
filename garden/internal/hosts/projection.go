@@ -65,6 +65,13 @@ func (s *Service) Preview(ctx context.Context, req ProjectionRequest) (FilePlan,
 	if err := s.validateTarget(ctx, req.Path); err != nil {
 		return FilePlan{}, err
 	}
+	stateBefore, err := s.state(ctx, req.BindingID)
+	if err != nil {
+		return FilePlan{}, err
+	}
+	if stateBefore.Mode == nativeMode {
+		return FilePlan{}, failure("conflict", "native binding cannot preview host file writes")
+	}
 	body, revisions, err := s.projection(ctx, req.BindingID, req.Kinds)
 	if err != nil {
 		return FilePlan{}, err

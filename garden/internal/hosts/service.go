@@ -10,10 +10,13 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 type Service struct {
 	mu        sync.Mutex
+	previews  map[string]*nativePreview
+	now       func() time.Time
 	closed    bool
 	registry  *registry.Store
 	backupDir string
@@ -25,7 +28,7 @@ type Service struct {
 }
 
 func New(r *registry.Store, backupDir string, reader func(context.Context, string) (*persona.Service, error), protected ...string) *Service {
-	return &Service{registry: r, backupDir: backupDir, persona: reader, protected: append([]string{filepath.Dir(backupDir)}, protected...)}
+	return &Service{previews: map[string]*nativePreview{}, now: time.Now, registry: r, backupDir: backupDir, persona: reader, protected: append([]string{filepath.Dir(backupDir)}, protected...)}
 }
 
 type Candidate struct {

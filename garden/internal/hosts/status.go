@@ -6,9 +6,17 @@ import (
 	"github.com/ProjectViVy/laputa/laputa/persona"
 	"reflect"
 	"sort"
+	"time"
 )
 
 type HostStatus struct {
+	Mode             string            `json:"mode,omitempty"`
+	PendingRetry     bool              `json:"pending_retry"`
+	PendingReason    string            `json:"pending_reason,omitempty"`
+	WaitingHost      bool              `json:"waiting_host"`
+	OfferedHash      string            `json:"offered_hash,omitempty"`
+	OfferedRevisions map[string]uint64 `json:"offered_revisions,omitempty"`
+	LastHostSeenAt   *time.Time        `json:"last_host_seen_at,omitempty"`
 	ManualAction     string            `json:"manual_action,omitempty"`
 	ManualPath       string            `json:"manual_path,omitempty"`
 	BindingID        string            `json:"binding_id"`
@@ -22,6 +30,9 @@ type HostStatus struct {
 	State            string            `json:"state"`
 }
 type projectionState struct {
+	Native             *NativeBindingConfig `json:"native,omitempty"`
+	RequestedRevisions map[string]uint64    `json:"requested_revisions,omitempty"`
+	FirstBlockedAt     *time.Time           `json:"first_blocked_at,omitempty"`
 	HostStatus
 	Path             string            `json:"path,omitempty"`
 	BackupPath       string            `json:"backup_path,omitempty"`
@@ -36,7 +47,7 @@ func (s *Service) state(ctx context.Context, id string) (projectionState, error)
 	if err != nil {
 		return projectionState{}, err
 	}
-	v := projectionState{HostStatus: HostStatus{BindingID: id, State: "inactive"}}
+	v := projectionState{HostStatus: HostStatus{BindingID: id, State: "inactive", Mode: "manual_file"}}
 	if len(b.Projection) > 0 {
 		err = json.Unmarshal(b.Projection, &v)
 	}
@@ -96,6 +107,9 @@ func (s *Service) Apply(ctx context.Context, p FilePlan) (HostStatus, error) {
 	v, err := s.state(ctx, p.BindingID)
 	if err != nil {
 		return v.HostStatus, err
+	}
+	if v.Mode == nativeMode {
+		return v.HostStatus, failure("conflict", "native binding cannot write host files")
 	}
 	file, exists, err := readFile(p.Path)
 	if err != nil {
@@ -210,6 +224,30 @@ func (s *Service) Status(ctx context.Context, id string) (HostStatus, error) {
 	if err != nil {
 		return v.HostStatus, err
 	}
+	if v.Mode == nativeMode {
+		v.WaitingHost = s.previews[id] != nil && s.previews[id].armed && s.now().Before(s.previews[id].ExpiresAt)
+		if b.Revoked {
+			v.State = "revoked"
+			v.WaitingHost = false
+		} else if !b.Controls.PersonaSync {
+			v.State = "inactive"
+		} else if v.WaitingHost {
+			v.State = "waiting_host"
+		} else if v.PendingRetry {
+			v.State = "pending_retry"
+		}
+		if v.Native != nil {
+			if p, e := s.persona(ctx, b.ProfileID); e == nil {
+				v.SavedRevisions = map[string]uint64{}
+				for _, k := range v.Native.Kinds {
+					if d, e := p.GetDocument(k); e == nil {
+						v.SavedRevisions[k.String()] = d.Revision
+					}
+				}
+			}
+		}
+		return v.HostStatus, nil
+	}
 	if b.Revoked {
 		if v.State != "conflict" {
 			v.State = "revoked"
@@ -307,6 +345,8 @@ func (s *Service) Revoke(ctx context.Context, id string) (HostStatus, error) {
 	if err != nil {
 		return v.HostStatus, err
 	}
+	s.invalidatePreview(id)
+	v.WaitingHost = false
 	v.State = "revoked"
 	v.LoadedHash = ""
 	v.LoadedRevisions = nil
