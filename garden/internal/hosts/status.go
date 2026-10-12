@@ -10,29 +10,29 @@ import (
 )
 
 type HostStatus struct {
-	Mode             string            `json:"mode,omitempty"`
-	PendingRetry     bool              `json:"pending_retry"`
-	PendingReason    string            `json:"pending_reason,omitempty"`
-	WaitingHost      bool              `json:"waiting_host"`
-	OfferedHash      string            `json:"offered_hash,omitempty"`
-	OfferedRevisions map[string]uint64 `json:"offered_revisions,omitempty"`
-	LastHostSeenAt   *time.Time        `json:"last_host_seen_at,omitempty"`
-	ManualAction     string            `json:"manual_action,omitempty"`
-	ManualPath       string            `json:"manual_path,omitempty"`
-	BindingID        string            `json:"binding_id"`
-	SavedRevisions   map[string]uint64 `json:"saved_revisions"`
-	WrittenRevisions map[string]uint64 `json:"written_revisions,omitempty"`
-	LoadedRevisions  map[string]uint64 `json:"loaded_revisions,omitempty"`
-	WrittenHash      string            `json:"written_hash,omitempty"`
-	LoadedHash       string            `json:"loaded_hash,omitempty"`
-	SessionID        string            `json:"session_id,omitempty"`
-	AdapterVersion   string            `json:"adapter_version,omitempty"`
-	State            string            `json:"state"`
+	Native           *NativeBindingConfig `json:"native,omitempty"`
+	Mode             string               `json:"mode,omitempty"`
+	PendingRetry     bool                 `json:"pending_retry"`
+	PendingReason    string               `json:"pending_reason,omitempty"`
+	WaitingHost      bool                 `json:"waiting_host"`
+	OfferedHash      string               `json:"offered_hash,omitempty"`
+	OfferedRevisions map[string]uint64    `json:"offered_revisions,omitempty"`
+	LastHostSeenAt   *time.Time           `json:"last_host_seen_at,omitempty"`
+	ManualAction     string               `json:"manual_action,omitempty"`
+	ManualPath       string               `json:"manual_path,omitempty"`
+	BindingID        string               `json:"binding_id"`
+	SavedRevisions   map[string]uint64    `json:"saved_revisions"`
+	WrittenRevisions map[string]uint64    `json:"written_revisions,omitempty"`
+	LoadedRevisions  map[string]uint64    `json:"loaded_revisions,omitempty"`
+	WrittenHash      string               `json:"written_hash,omitempty"`
+	LoadedHash       string               `json:"loaded_hash,omitempty"`
+	SessionID        string               `json:"session_id,omitempty"`
+	AdapterVersion   string               `json:"adapter_version,omitempty"`
+	State            string               `json:"state"`
 }
 type projectionState struct {
-	Native             *NativeBindingConfig `json:"native,omitempty"`
-	RequestedRevisions map[string]uint64    `json:"requested_revisions,omitempty"`
-	FirstBlockedAt     *time.Time           `json:"first_blocked_at,omitempty"`
+	RequestedRevisions map[string]uint64 `json:"requested_revisions,omitempty"`
+	FirstBlockedAt     *time.Time        `json:"first_blocked_at,omitempty"`
 	HostStatus
 	Path             string            `json:"path,omitempty"`
 	BackupPath       string            `json:"backup_path,omitempty"`

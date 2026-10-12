@@ -28,6 +28,10 @@ func (s *Server) mountAccess(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /v2/host-bindings/{id}/projection", s.handleHostProjectionApply)
 	mux.HandleFunc("DELETE /v2/host-bindings/{id}/projection", s.handleHostProjectionRevoke)
 	mux.HandleFunc("POST /v2/host-bindings/{id}/projection/loaded", s.handleHostProjectionLoaded)
+	mux.HandleFunc("PUT /v2/host-bindings/{id}/projection/native-config", s.handleNativeHostConfig)
+	mux.HandleFunc("POST /v2/host-bindings/{id}/projection/prompt", s.handleNativeHostPrompt)
+	mux.HandleFunc("POST /v2/host-bindings/{id}/projection/retry-preview", s.handleNativeHostRetryPreview)
+	mux.HandleFunc("POST /v2/host-bindings/{id}/projection/retry-confirm", s.handleNativeHostRetryConfirm)
 	mux.HandleFunc("PUT /v2/host-bindings/{id}/controls", s.handleHostControls)
 	mux.HandleFunc("DELETE /v2/host-bindings/{id}", s.handleHostControls)
 }

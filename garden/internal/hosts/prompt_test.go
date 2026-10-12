@@ -128,6 +128,24 @@ func TestNativePromptFreshRetry(t *testing.T) {
 		t.Fatal(out, err)
 	}
 }
+func TestNativePromptOlderConfirmationPreservesNewerPreview(t *testing.T) {
+	s, id, _, _, _ := nativeFixture(t)
+	ctx := context.Background()
+	old, err := s.RetryPreview(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	latest, err := s.RetryPreview(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.ConfirmRetry(ctx, id, old.ID); accessCode(err) != "stale_preview" {
+		t.Fatal(err)
+	}
+	if _, err = s.ConfirmRetry(ctx, id, latest.ID); err != nil {
+		t.Fatal("old tab destroyed new preview", err)
+	}
+}
 func TestNativePromptLifecycle(t *testing.T) {
 	s, id, p, cfg, req := nativeFixture(t)
 	ctx := context.Background()

@@ -96,12 +96,9 @@ func (i *Installation) ListHostBindings(ctx context.Context) ([]HostBinding, err
 	return convert[[]HostBinding](b)
 }
 func (i *Installation) SetHostControls(ctx context.Context, id string, c HostControls) error {
-	u, err := i.enter()
-	if err != nil {
-		return err
-	}
-	defer u()
-	return accessError(i.owner.Registry.SetHostControls(ctx, id, c))
+	// The coordinator serializes close and controls; Owner.Enter here would invert
+	// its hosts->Owner.Subject lock order against a concurrent native pull/status.
+	return hostError(i.hosts.SetControls(ctx, id, c))
 }
 func (i *Installation) RevokeHostBinding(ctx context.Context, id string) error {
 	_, err := i.RevokeHostProjection(ctx, id)

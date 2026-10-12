@@ -34,7 +34,7 @@ func writeMaterialsReadError(w http.ResponseWriter, err error) {
 			status = http.StatusForbidden
 		case "not_found":
 			status = http.StatusNotFound
-		case "conflict":
+		case "conflict", "persona_edit_locked", "persona_authority_drift", "retry_required", "stale_preview":
 			status = http.StatusConflict
 		}
 		writeErrorWithDetails(w, status, domainErr.Code, err, domainErr.Details)

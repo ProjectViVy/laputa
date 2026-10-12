@@ -93,9 +93,15 @@ func (s *Service) invalidatePreview(id string) { delete(s.previews, id) }
 func (s *Service) SetControls(ctx context.Context, id string, c registry.HostControls) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	b, err := s.binding(ctx, id, false)
+	if s.closed {
+		return failure("unavailable", "host service closed")
+	}
+	b, err := s.registry.Binding(ctx, id)
 	if err != nil {
 		return err
+	}
+	if b.Revoked {
+		return failure("binding_revoked", "host binding revoked")
 	}
 	if b.Controls.PersonaSync && !c.PersonaSync {
 		s.invalidatePreview(id)
@@ -270,9 +276,12 @@ func (s *Service) ConfirmRetry(ctx context.Context, id, previewID string) (HostS
 		return HostStatus{}, err
 	}
 	preview := s.previews[id]
-	if preview == nil || preview.ID != previewID || !s.now().Before(preview.ExpiresAt) {
+	if preview == nil || preview.ID != previewID {
+		return v.HostStatus, failure("stale_preview", "retry preview is unavailable or superseded")
+	}
+	if !s.now().Before(preview.ExpiresAt) {
 		s.invalidatePreview(id)
-		return v.HostStatus, failure("stale_preview", "retry preview is unavailable or expired")
+		return v.HostStatus, failure("stale_preview", "retry preview expired")
 	}
 	err = s.snapshot(ctx, b, *v.Native, func(snapshot persona.ProjectionSnapshot, p PromptProjection) error {
 		if !s.previewMatches(preview, b, *v.Native, snapshot, p) {
