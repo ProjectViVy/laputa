@@ -81,14 +81,11 @@ func backup(dir, body string) (string, error) {
 	}
 	return name, nil
 }
-func replace(path, body string) error {
+
+// createFile installs a new target without ever replacing an external inode.
+// Link is atomic and fails if an editor created the destination meanwhile.
+func createFile(path, body string) error {
 	mode := os.FileMode(0600)
-	if info, err := os.Lstat(path); err == nil {
-		if !info.Mode().IsRegular() {
-			return failure("conflict", "target is no longer a regular file")
-		}
-		mode = info.Mode().Perm()
-	}
 	f, err := os.CreateTemp(filepath.Dir(path), ".garden-projection-*")
 	if err != nil {
 		return err
@@ -108,5 +105,8 @@ func replace(path, body string) error {
 	if closeErr != nil {
 		return closeErr
 	}
-	return os.Rename(name, path)
+	if err = os.Link(name, path); os.IsExist(err) {
+		return failure("conflict", "host target already exists; manual application required")
+	}
+	return err
 }

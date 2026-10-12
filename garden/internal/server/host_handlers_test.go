@@ -28,10 +28,6 @@ func TestHostProjectionControlAndAuthenticatedLoadIngress(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(t.TempDir(), "CLAUDE.md")
-	original := "Owner instructions\n"
-	if err = os.WriteFile(path, []byte(original), 0640); err != nil {
-		t.Fatal(err)
-	}
 	request := func(method, route string, body any, credential string, owner bool) *httptest.ResponseRecorder {
 		var raw bytes.Buffer
 		if body != nil {
@@ -108,12 +104,30 @@ func TestHostProjectionControlAndAuthenticatedLoadIngress(t *testing.T) {
 		t.Fatal("stable conflict envelope", conflict.Code, conflict.Body.String())
 	}
 	revoked := request("DELETE", "/v2/host-bindings/"+binding.BindingID, nil, "", true)
-	if revoked.Code != 200 {
-		t.Fatal("revoke", revoked.Code, revoked.Body.String())
+	if revoked.Code != 409 {
+		t.Fatal("manual revoke", revoked.Code, revoked.Body.String())
 	}
-	raw, _ := os.ReadFile(path)
-	if string(raw) != original {
-		t.Fatal("revoke left projection or lost instructions", string(raw))
+	var envelope struct {
+		Details struct {
+			HostStatus agentapi.HostStatus `json:"host_status"`
+		} `json:"details"`
+	}
+	if err = json.Unmarshal(revoked.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Details.HostStatus.ManualAction != "remove_projection" || envelope.Details.HostStatus.ManualPath != path {
+		t.Fatal("manual guidance absent", revoked.Body.String())
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil || string(raw) != plan.ProposedContent {
+		t.Fatal("revoke modified host file", err)
+	}
+	if err = os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	ack := request("DELETE", route, nil, "", true)
+	if ack.Code != 200 {
+		t.Fatal("cleanup acknowledgment", ack.Code, ack.Body.String())
 	}
 	if _, err = s.Installation.AuthenticateHost(ctx, token); err == nil {
 		t.Fatal("revoked credential accepted")

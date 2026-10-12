@@ -42,7 +42,12 @@ func (i *Installation) HostProjectionStatus(ctx context.Context, id string) (Hos
 }
 func (i *Installation) RevokeHostProjection(ctx context.Context, id string) (HostStatus, error) {
 	status, err := i.hosts.Revoke(ctx, id)
-	return status, hostError(err)
+	err = hostError(err)
+	var domain *Error
+	if status.State != "" && errors.As(err, &domain) {
+		domain.Details["host_status"] = status
+	}
+	return status, err
 }
 
 // Authentication fixes binding/session at the transport. Qualified native

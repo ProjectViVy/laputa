@@ -37,7 +37,7 @@ func writeMaterialsReadError(w http.ResponseWriter, err error) {
 		case "conflict":
 			status = http.StatusConflict
 		}
-		writeErrorWithCode(w, status, domainErr.Code, err)
+		writeErrorWithDetails(w, status, domainErr.Code, err, domainErr.Details)
 		return
 	}
 	writeErrorWithCode(w, http.StatusInternalServerError, "internal_error", errors.New("material read failed"))

@@ -109,9 +109,11 @@ func TestHostDisabledAndSymlinkTargets(t *testing.T) {
 	if _, err := s.Apply(ctx, p); err == nil {
 		t.Fatal("disabled sync wrote")
 	}
-	raw, _ := os.ReadFile(path)
-	if string(raw) != "User instructions before\n" {
-		t.Fatal(string(raw))
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("disabled sync created target", err)
+	}
+	if err := os.WriteFile(path, []byte("owner-created"), 0640); err != nil {
+		t.Fatal(err)
 	}
 	link := filepath.Join(filepath.Dir(path), "symlink.md")
 	if err := os.Symlink(path, link); err != nil {

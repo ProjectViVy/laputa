@@ -15,9 +15,6 @@ func activeHost(t *testing.T) (*Service, string, string, FilePlan) {
 	if err := s.registry.SetHostControls(context.Background(), id, registry.HostControls{PersonaSync: true}); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte("User instructions before\n"), 0640); err != nil {
-		t.Fatal(err)
-	}
 	p, err := s.Preview(context.Background(), ProjectionRequest{BindingID: id, Path: path})
 	if err != nil {
 		t.Fatal(err)
@@ -25,14 +22,22 @@ func activeHost(t *testing.T) (*Service, string, string, FilePlan) {
 	return s, id, path, p
 }
 func TestManagedBlockPreservation(t *testing.T) {
-	s, id, path, p := activeHost(t)
+	s, id, path, _ := activeHost(t)
 	ctx := context.Background()
-	status, err := s.Apply(ctx, p)
-	if err != nil || status.WrittenHash == "" || status.LoadedHash != "" || status.State != "pending_reload" {
-		t.Fatal(status, err)
+	original := "User instructions before\n"
+	if err := os.WriteFile(path, []byte(original), 0640); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := s.Preview(ctx, ProjectionRequest{BindingID: id, Path: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := s.Apply(ctx, plan)
+	if err == nil || status.ManualAction != "apply_projection" || status.WrittenHash != "" {
+		t.Fatal("automatic existing-file write", status, err)
 	}
 	file, _ := os.ReadFile(path)
-	if !strings.HasPrefix(string(file), "User instructions before\n") {
+	if string(file) != original {
 		t.Fatal("outside bytes overwritten")
 	}
 	state, err := s.state(ctx, id)
@@ -44,25 +49,48 @@ func TestManagedBlockPreservation(t *testing.T) {
 		t.Fatal("backup not private", info, err)
 	}
 	before, _ := os.ReadFile(state.BackupPath)
-	if string(before) != "User instructions before\n" {
+	if string(before) != original {
 		t.Fatal("backup lost original")
 	}
-	if err = os.WriteFile(path, append([]byte("Outside edit\n"), append(file, []byte("After instructions\n")...)...), 0640); err != nil {
+	// The owner applies the reviewed bytes; Garden only observes exact intent.
+	if err = os.WriteFile(path, []byte(plan.ProposedContent), 0640); err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.Revoke(ctx, id)
-	if err != nil {
+	status, err = s.Status(ctx, id)
+	if err != nil || status.WrittenHash != plan.ManagedHash || status.LoadedHash != "" || status.ManualAction != "" {
+		t.Fatal(status, err)
+	}
+	edited := "Outside edit\n" + plan.ProposedContent + "After instructions\n"
+	if err = os.WriteFile(path, []byte(edited), 0640); err != nil {
 		t.Fatal(err)
+	}
+	status, err = s.Revoke(ctx, id)
+	if err == nil || status.ManualAction != "remove_projection" {
+		t.Fatal(status, err)
 	}
 	after, _ := os.ReadFile(path)
-	if string(after) != "Outside edit\nUser instructions before\nAfter instructions\n" {
-		t.Fatal("revoke lost outside edits", string(after))
+	if string(after) != edited {
+		t.Fatal("revoke lost outside edits")
 	}
 	b, _ := s.registry.Binding(ctx, id)
 	if !b.Revoked {
 		t.Fatal("credential live after revoke")
 	}
+	// Owner removes the block; a retry acknowledges without editing the file.
+	cleaned := "Outside edit\n" + original + "After instructions\n"
+	if err = os.WriteFile(path, []byte(cleaned), 0640); err != nil {
+		t.Fatal(err)
+	}
+	status, err = s.Revoke(ctx, id)
+	if err != nil || status.State != "revoked" || status.ManualAction != "" {
+		t.Fatal(status, err)
+	}
+	after, _ = os.ReadFile(path)
+	if string(after) != cleaned {
+		t.Fatal("cleanup acknowledgment edited file")
+	}
 }
+
 func TestManagedBlockConflict(t *testing.T) {
 	s, id, path, p := activeHost(t)
 	ctx := context.Background()
@@ -93,9 +121,8 @@ func TestQueuedHostRevoke(t *testing.T) {
 	if _, err := s.Apply(ctx, p); err == nil {
 		t.Fatal("queued revoked write succeeded")
 	}
-	raw, _ := os.ReadFile(path)
-	if string(raw) != "User instructions before\n" {
-		t.Fatal("revoked write touched disk")
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("revoked write created target", err)
 	}
 }
 func TestRevokeUserEditPreserved(t *testing.T) {
@@ -122,12 +149,14 @@ func TestRevokeUserEditPreserved(t *testing.T) {
 		t.Fatal("cleanup conflict kept credential")
 	}
 }
-func TestManagedFileMissingRestoredOnRevoke(t *testing.T) {
+func TestManualCleanupPreservesOriginalEmptyAndMissingChoices(t *testing.T) {
 	for _, existed := range []bool{false, true} {
 		t.Run(fmt.Sprintf("original-exists-%t", existed), func(t *testing.T) {
 			s, id, path := hostFixture(t)
 			ctx := context.Background()
-			s.registry.SetHostControls(ctx, id, registry.HostControls{PersonaSync: true})
+			if err := s.registry.SetHostControls(ctx, id, registry.HostControls{PersonaSync: true}); err != nil {
+				t.Fatal(err)
+			}
 			if existed {
 				if err := os.WriteFile(path, nil, 0640); err != nil {
 					t.Fatal(err)
@@ -137,19 +166,48 @@ func TestManagedFileMissingRestoredOnRevoke(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err = s.Apply(ctx, p); err != nil {
+			status, err := s.Apply(ctx, p)
+			if existed {
+				if err == nil || status.ManualAction != "apply_projection" {
+					t.Fatal(status, err)
+				}
+				if err = os.WriteFile(path, []byte(p.ProposedContent), 0640); err != nil {
+					t.Fatal(err)
+				}
+			} else if err != nil {
 				t.Fatal(err)
 			}
-			if _, err = s.Revoke(ctx, id); err != nil {
+			before, err := os.ReadFile(path)
+			if err != nil {
 				t.Fatal(err)
+			}
+			status, err = s.Revoke(ctx, id)
+			if err == nil || status.ManualAction != "remove_projection" {
+				t.Fatal(status, err)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil || string(after) != string(before) {
+				t.Fatal("revoke changed original state", err)
+			}
+			if existed {
+				err = os.WriteFile(path, nil, 0640)
+			} else {
+				err = os.Remove(path)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			status, err = s.Revoke(ctx, id)
+			if err != nil || status.State != "revoked" {
+				t.Fatal(status, err)
 			}
 			raw, err := os.ReadFile(path)
 			if existed {
 				if err != nil || len(raw) != 0 {
-					t.Fatal("original empty state lost", raw, err)
+					t.Fatal("owner's empty choice lost", err)
 				}
 			} else if !os.IsNotExist(err) {
-				t.Fatal("original missing state lost", err)
+				t.Fatal("owner's missing choice lost", err)
 			}
 		})
 	}

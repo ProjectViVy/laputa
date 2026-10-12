@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/ProjectViVy/laputa/laputa/persona"
-	"os"
 	"reflect"
 	"sort"
 )
 
 type HostStatus struct {
+	ManualAction     string            `json:"manual_action,omitempty"`
+	ManualPath       string            `json:"manual_path,omitempty"`
 	BindingID        string            `json:"binding_id"`
 	SavedRevisions   map[string]uint64 `json:"saved_revisions"`
 	WrittenRevisions map[string]uint64 `json:"written_revisions,omitempty"`
@@ -75,6 +76,8 @@ func (s *Service) recoverFile(v *projectionState, file string) error {
 		v.PlannedHash = ""
 		v.PlannedRevisions = nil
 		v.State = "pending_reload"
+		v.ManualAction = ""
+		v.ManualPath = ""
 	}
 	if v.WrittenHash != "" && (a < 0 || hash(file[a:z]) != v.WrittenHash) {
 		return failure("conflict", "managed block changed; manual recovery required")
@@ -148,11 +151,20 @@ func (s *Service) Apply(ctx context.Context, p FilePlan) (HostStatus, error) {
 	v.PlannedRevisions = revisions
 	v.AdapterVersion = p.AdapterVersion
 	v.State = "unknown"
+	v.ManualAction, v.ManualPath = "", ""
+	if exists {
+		v.State = "conflict"
+		v.ManualAction = "apply_projection"
+		v.ManualPath = p.Path
+	}
 	if err = s.save(ctx, v); err != nil {
 		return v.HostStatus, err
 	}
+	if exists {
+		return v.HostStatus, failure("conflict", "existing host file requires manual application; automatic compare-and-replace unavailable")
+	}
 	// Queued writes recheck control and the physical file immediately before
-	// replacement, after backup/intent persistence. No snapshot is authority.
+	// exclusive creation, after backup/intent persistence. No snapshot is authority.
 	if _, err = s.binding(ctx, p.BindingID, true); err != nil {
 		return v.HostStatus, err
 	}
@@ -163,7 +175,11 @@ func (s *Service) Apply(ctx context.Context, p FilePlan) (HostStatus, error) {
 	if currentExists != exists || hash(current) != p.OriginalHash {
 		return v.HostStatus, failure("conflict", "host file changed before write")
 	}
-	if err = replace(p.Path, p.ProposedContent); err != nil {
+	if err = createFile(p.Path, p.ProposedContent); err != nil {
+		v.State = "conflict"
+		v.ManualAction = "apply_projection"
+		v.ManualPath = p.Path
+		_ = s.save(ctx, v)
 		return v.HostStatus, err
 	}
 	v.WrittenHash = p.ManagedHash
@@ -224,6 +240,8 @@ func (s *Service) Status(ctx context.Context, id string) (HostStatus, error) {
 	}
 	if !b.Controls.PersonaSync {
 		v.State = "inactive"
+	} else if v.ManualAction != "" {
+		v.State = "conflict"
 	} else if v.WrittenHash != "" && !reflect.DeepEqual(v.SavedRevisions, v.WrittenRevisions) {
 		v.State = "pending_reload"
 	}
@@ -296,35 +314,27 @@ func (s *Service) Revoke(ctx context.Context, id string) (HostStatus, error) {
 	if v.Path == "" {
 		return v.HostStatus, s.save(ctx, v)
 	}
+	v.State = "conflict"
+	v.ManualAction, v.ManualPath = "remove_projection", v.Path
+	if err = s.save(ctx, v); err != nil {
+		return v.HostStatus, err
+	}
 	file, exists, err := readFile(v.Path)
 	if err != nil {
 		return v.HostStatus, err
 	}
-	if !exists {
-		return v.HostStatus, s.save(ctx, v)
+	if exists {
+		a, _, err := managedRegion(file, id)
+		if err != nil {
+			return v.HostStatus, err
+		}
+		if a >= 0 {
+			return v.HostStatus, failure("conflict", "credential revoked; manually remove the Garden projection from the host file")
+		}
 	}
-	a, z, err := managedRegion(file, id)
-	if err != nil {
-		v.State = "conflict"
-		_ = s.save(ctx, v)
-		return v.HostStatus, err
-	}
-	if a < 0 || (hash(file[a:z]) != v.WrittenHash && hash(file[a:z]) != v.PlannedHash) {
-		v.State = "conflict"
-		_ = s.save(ctx, v)
-		return v.HostStatus, failure("conflict", "managed region edited; credential revoked, manual cleanup required")
-	}
-	outside := file[:a] + file[z:]
-	if !v.OriginalExists && outside == "" {
-		err = os.Remove(v.Path)
-	} else {
-		err = replace(v.Path, outside)
-	}
-	if err != nil {
-		v.State = "conflict"
-		_ = s.save(ctx, v)
-		return v.HostStatus, err
-	}
+	// A later retry only observes completed owner cleanup; it does not edit.
+	v.State = "revoked"
+	v.ManualAction, v.ManualPath = "", ""
 	v.WrittenHash = ""
 	v.WrittenRevisions = nil
 	v.PlannedHash = ""
