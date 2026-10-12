@@ -96,7 +96,7 @@ These are logical orderings, not authorization for parallel agents or an estimat
 | S05 | Blocked | Reviewed/authorized BML provider-owned schema/public API and explicit legacy mapping on dedicated VIVY branch; final offered UI/client/setup consumers must qualify. Q2 does not block planning this lane. |
 | S06 | Blocked | Q1/Q5 initial supported local attachment/package + versioned other-machine export/import grammar; supported VIVY client/lock composition on authorized dedicated consumer branch. |
 | S07 | Blocked | S04/Q3 coordinated Work replacement; selected source-linked fact task independently reviewable without accepting Q3. |
-| S08 | Approved / ready to execute | S03 working Mentle slice verified; common temp-file/control/status core needs no guessed native-host version. |
+| S08 | Approved / in progress | S03 `cf77135` verified; inert discovery/default projection selection/independent controls PASS. Compare/backup/revoke/loaded proof next; no native-host qualification claim. |
 | S09 | Blocked | X4 pinned OpenClaw/Hermes releases, exact SDK signatures and installed isolated-host evidence; four-host commitment unchanged. |
 | S10 | Blocked | X4 pinned Claude Code/Codex CLI floors and exact config/discovery syntax; files + explicit MCP stable, lifecycle hooks experimental. |
 | S11 | Blocked | Q5 target OS/package/private-permission implementation and S06 attachment support; candidate DeepSeek model needs release/account validation, no new provider chooser. |

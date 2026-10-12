@@ -5,6 +5,9 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
+	"github.com/ProjectViVy/laputa/garden/internal/hosts"
+	"github.com/ProjectViVy/laputa/laputa/persona"
+	"path/filepath"
 	"strings"
 
 	"github.com/ProjectViVy/laputa/garden/internal/registry"
@@ -23,6 +26,7 @@ type ClientConfig struct {
 	Principal                      Principal
 }
 type Installation struct {
+	hosts                    *hosts.Service
 	cursorKey                [32]byte
 	owner                    *runtimecore.Owner
 	backendID, destinationID string
@@ -45,12 +49,21 @@ func OpenInstallation(ctx context.Context, cfg InstallationConfig) (*Installatio
 // NewInstallation adapts the application's already-open owner; it never opens
 // another backend or exports a storage handle through the domain API.
 func NewInstallation(owner *runtimecore.Owner) *Installation {
-	return &Installation{owner: owner, backendID: BackendMentle, destinationID: BackendMentle, cursorKey: sha256.Sum256([]byte(rand.Text()))}
+	i := &Installation{owner: owner, backendID: BackendMentle, destinationID: BackendMentle, cursorKey: sha256.Sum256([]byte(rand.Text()))}
+	i.hosts = hosts.New(owner.Registry, filepath.Join(owner.Home(), "host-backups"), func(ctx context.Context, id string) (*persona.Service, error) {
+		g, err := owner.Subject(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		return g.Persona, nil
+	})
+	return i
 }
 func (i *Installation) Close() error {
 	if i == nil || i.owner == nil {
 		return nil
 	}
+	i.hosts.Close()
 	return i.owner.Close()
 }
 func (i *Installation) RegisterProfile(ctx context.Context, req ProfileRegistration) (Profile, error) {

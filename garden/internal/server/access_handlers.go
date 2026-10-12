@@ -23,6 +23,7 @@ func (s *Server) mountAccess(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /v2/shared-spaces/{id}/members/{profile_id}", s.handleSharedMembers)
 	mux.HandleFunc("GET /v2/host-bindings", s.handleHostBindings)
 	mux.HandleFunc("POST /v2/host-bindings", s.handleHostBindings)
+	mux.HandleFunc("POST /v2/host-bindings/{id}/projection/preview", s.handleHostProjectionPreview)
 	mux.HandleFunc("PUT /v2/host-bindings/{id}/controls", s.handleHostControls)
 	mux.HandleFunc("DELETE /v2/host-bindings/{id}", s.handleHostControls)
 }

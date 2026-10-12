@@ -252,3 +252,5 @@ func (g *Garden) Enter() (func(), error) {
 }
 
 func (g *Garden) InstallationOwned() bool { return g.owner != nil }
+
+func (o *Owner) Home() string { return o.home }
