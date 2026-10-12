@@ -58,12 +58,14 @@ func (s *Service) binding(ctx context.Context, id string, syncRequired bool) (re
 		return b, err
 	}
 	if b.Revoked || b.Worker {
-		return b, errors.New("host binding revoked or persona-free")
+		return b, failure("principal_forbidden", "host binding revoked or persona-free")
 	}
 	if syncRequired && !b.Controls.PersonaSync {
-		return b, errors.New("persona sync disabled")
+		return b, failure("principal_forbidden", "persona sync disabled")
 	}
 	return b, nil
 }
 
 func (s *Service) Close() { s.mu.Lock(); defer s.mu.Unlock(); s.closed = true }
+
+func failure(code, message string) error { return &registry.AccessError{Code: code, Message: message} }

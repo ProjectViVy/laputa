@@ -19,16 +19,17 @@ type HostControls struct {
 	Capture     bool `json:"capture"`
 }
 type HostBinding struct {
-	BindingID     string       `json:"binding_id"`
-	ProfileID     string       `json:"profile_id"`
-	AgentID       string       `json:"agent_id"`
-	Platform      string       `json:"platform"`
-	WorkspaceID   string       `json:"workspace_id"`
-	Controls      HostControls `json:"controls"`
-	Operations    []string     `json:"operations"`
-	Worker        bool         `json:"worker"`
-	Revoked       bool         `json:"revoked"`
-	SelectedCards []string     `json:"selected_cards,omitempty"`
+	Projection    json.RawMessage `json:"projection,omitempty"`
+	BindingID     string          `json:"binding_id"`
+	ProfileID     string          `json:"profile_id"`
+	AgentID       string          `json:"agent_id"`
+	Platform      string          `json:"platform"`
+	WorkspaceID   string          `json:"workspace_id"`
+	Controls      HostControls    `json:"controls"`
+	Operations    []string        `json:"operations"`
+	Worker        bool            `json:"worker"`
+	Revoked       bool            `json:"revoked"`
+	SelectedCards []string        `json:"selected_cards,omitempty"`
 }
 type AccessError struct{ Code, Message string }
 
@@ -203,4 +204,28 @@ func knownOperation(op string) bool {
 		return true
 	}
 	return false
+}
+
+// SetProjection changes only owner control metadata, preserving current
+// controls/revocation. Cleanup receipts may be saved after credential revoke.
+func (s *Store) SetProjection(ctx context.Context, id string, value json.RawMessage) error {
+	if !json.Valid(value) || len(value) > 32<<10 {
+		return errors.New("invalid projection metadata")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return errors.New("registry closed")
+	}
+	b, err := s.bindingLocked(ctx, id)
+	if err != nil {
+		return err
+	}
+	b.Projection = append(json.RawMessage{}, value...)
+	raw, err := json.Marshal(b)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `UPDATE host_bindings SET body=? WHERE binding_id=?`, string(raw), id)
+	return err
 }

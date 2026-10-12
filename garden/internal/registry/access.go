@@ -98,6 +98,7 @@ func (s *Store) Resolve(ctx context.Context, req AccessRequest) (ResolvedAccess,
 		}
 		a.WriteScope = evolution.Scope{SubjectID: "shared:" + req.SharedSpaceID, Kind: evolution.ScopePersonal}
 	}
+	b.Projection = nil // File/status receipts do not change read authority.
 	raw, _ := json.Marshal(struct {
 		Binding HostBinding
 		Rights  [][2]string

@@ -2,7 +2,6 @@ package hosts
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/ProjectViVy/laputa/laputa/persona"
 	"strings"
@@ -34,7 +33,7 @@ func (s *Service) projection(ctx context.Context, id string, kinds []persona.Kin
 	seen := map[persona.Kind]bool{}
 	for _, kind := range kinds {
 		if kind < persona.KindIdentity || kind > persona.KindMission || kind == persona.KindWorld || seen[kind] {
-			return "", nil, errors.New("invalid or tool-only projection kind")
+			return "", nil, failure("invalid_request", "invalid or tool-only projection kind")
 		}
 		seen[kind] = true
 	}
@@ -53,7 +52,7 @@ func (s *Service) projection(ctx context.Context, id string, kinds []persona.Kin
 			return "", nil, err
 		}
 		if !doc.Exists || !doc.Valid {
-			return "", nil, errors.New("selected Persona document unavailable")
+			return "", nil, failure("unavailable", "selected Persona document unavailable")
 		}
 		revisions[kind.String()] = doc.Revision
 		fmt.Fprintf(&body, "## %s\n%s\n", kind.FileName(), doc.Content)
@@ -77,6 +76,23 @@ func (s *Service) Preview(ctx context.Context, req ProjectionRequest) (FilePlan,
 	}
 	block := managedBlock(req.BindingID, body)
 	proposed := file + block
+	state, err := s.state(ctx, req.BindingID)
+	if err != nil {
+		return FilePlan{}, err
+	}
+	if state.Path != "" && state.Path != req.Path {
+		return FilePlan{}, failure("conflict", "binding already manages a different path")
+	}
+	if start >= 0 && (state.WrittenHash == "" || hash(file[start:end]) != state.WrittenHash) {
+		return FilePlan{}, failure("conflict", "managed block changed or not owned by this binding")
+	}
+	state.SavedRevisions = revisions
+	if state.State == "" {
+		state.State = "inactive"
+	}
+	if err = s.save(ctx, state); err != nil {
+		return FilePlan{}, err
+	}
 	if start >= 0 {
 		proposed = file[:start] + block + file[end:]
 	}
