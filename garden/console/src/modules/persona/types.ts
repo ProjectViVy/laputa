@@ -28,6 +28,7 @@ export interface PersonaDocument {
   content_hash: string;
   updated_at: string | null;
   pending_count: number;
+  edit_status?: { held: boolean; generation: number; expires_at?: string; blocked_writes: number };
 }
 
 export interface PersonaHistoryEntry {
@@ -41,13 +42,10 @@ export interface PersonaHistoryEntry {
 }
 
 export interface PersonaHistoryRevision {
-  revision: number;
-  content_hash: string;
-  actor: string;
-  source: string;
-  reason: string;
-  base_revision: number;
-  created_at: string;
+  kind: string;
+  entry: PersonaHistoryEntry;
   content: string;
   unified_diff: string;
 }
+
+export interface EditLease { token: string; generation: number; kind: string; base_revision: number; base_hash: string; expires_at: string }

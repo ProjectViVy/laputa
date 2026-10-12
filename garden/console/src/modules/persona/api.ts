@@ -14,7 +14,7 @@ export function fetchPersonaHistory(kind: string): Promise<{ kind: string; entri
 }
 
 export function fetchPersonaHistoryRevision(kind: string, revision: number): Promise<PersonaHistoryRevision> {
-  return get<{ kind: string; entry: PersonaHistoryEntry; content: string; unified_diff: string }>(`/v2/persona/history/${encodeURIComponent(kind)}/${revision}`).then((value) => ({ ...value.entry, content: value.content, unified_diff: value.unified_diff }));
+  return get<PersonaHistoryRevision>(`/v2/persona/history/${encodeURIComponent(kind)}/${revision}`);
 }
 
 export const PERSONA_KINDS = ["identity", "relationship", "redline", "user", "dream", "dark", "world"] as const;

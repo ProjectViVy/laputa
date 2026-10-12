@@ -1,6 +1,8 @@
 package server
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -51,7 +53,8 @@ func (s *Server) handlePersonaDocuments(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handlePersonaDocumentV2(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.personaReadPrincipal(w, r); !ok {
+	principal, ok := s.personaReadPrincipal(w, r)
+	if !ok {
 		return
 	}
 	if len(r.URL.Query()) > 0 {
@@ -72,7 +75,19 @@ func (s *Server) handlePersonaDocumentV2(w http.ResponseWriter, r *http.Request)
 		writePersonaAPIError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, doc)
+	var edit *persona.EditStatus
+	if principal == PrincipalUser {
+		status, err := s.Persona.EditState(kind)
+		if err != nil {
+			writePersonaAPIError(w, err)
+			return
+		}
+		edit = &status
+	}
+	writeJSON(w, http.StatusOK, struct {
+		*persona.Document
+		Edit *persona.EditStatus `json:"edit_status,omitempty"`
+	}{doc, edit})
 }
 
 type personaHistoryItem struct {
@@ -186,10 +201,12 @@ func (s *Server) handlePersonaHistoryRevisionV2(w http.ResponseWriter, r *http.R
 }
 
 type personaDocumentWriteV2 struct {
-	BaseRevision *uint64 `json:"base_revision"`
-	Content      string  `json:"content"`
-	Scope        string  `json:"scope"`
-	Reason       string  `json:"reason"`
+	EditProof    json.RawMessage `json:"edit_proof,omitempty"`
+	BaseHash     string          `json:"base_hash,omitempty"`
+	BaseRevision *uint64         `json:"base_revision"`
+	Content      string          `json:"content"`
+	Scope        string          `json:"scope"`
+	Reason       string          `json:"reason"`
 }
 
 func (s *Server) handlePersonaDocumentPutV2(w http.ResponseWriter, r *http.Request) {
@@ -229,25 +246,40 @@ func (s *Server) handlePersonaDocumentPutV2(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var outcome *persona.WriteOutcome
-	switch body.Scope {
-	case "document":
-		if principal == PrincipalUser {
-			outcome, err = s.Persona.SaveUserDocument(kind, body.Content, *body.BaseRevision, auditLabel(r, principal), persona.SourceUserDirect, body.Reason)
-		} else if kind == persona.KindDream || kind == persona.KindDark {
-			outcome, err = s.Persona.SaveAgentP16WithRevision(kind, body.Content, *body.BaseRevision, body.Reason)
-		} else {
+	if len(body.EditProof) > 0 {
+		if principal != PrincipalUser {
+			writeErrorWithCode(w, 403, "principal_forbidden", errors.New("editor proof requires owner authorization"))
+			return
+		}
+		var proof persona.EditProof
+		decoder := json.NewDecoder(bytes.NewReader(body.EditProof))
+		decoder.DisallowUnknownFields()
+		if err = decoder.Decode(&proof); err != nil {
+			writeRequestError(w, err)
+			return
+		}
+		outcome, err = s.Persona.SaveEditorDocument(persona.EditorWrite{Kind: kind, Content: body.Content, Scope: body.Scope, Reason: body.Reason, BaseRevision: *body.BaseRevision, BaseHash: body.BaseHash, Proof: proof})
+	} else {
+		switch body.Scope {
+		case "document":
+			if principal == PrincipalUser {
+				outcome, err = s.Persona.SaveUserDocument(kind, body.Content, *body.BaseRevision, auditLabel(r, principal), persona.SourceUserDirect, body.Reason)
+			} else if kind == persona.KindDream || kind == persona.KindDark {
+				outcome, err = s.Persona.SaveAgentP16WithRevision(kind, body.Content, *body.BaseRevision, body.Reason)
+			} else {
+				err = persona.ErrKindForbidden
+			}
+		case "observations":
+			if kind != persona.KindUser {
+				err = persona.ErrKindForbidden
+			} else if principal == PrincipalUser {
+				outcome, err = s.Persona.SaveUserObservations(body.Content, *body.BaseRevision, body.Reason)
+			} else {
+				outcome, err = s.Persona.SaveAgentP16WithRevision(kind, body.Content, *body.BaseRevision, body.Reason)
+			}
+		default:
 			err = persona.ErrKindForbidden
 		}
-	case "observations":
-		if kind != persona.KindUser {
-			err = persona.ErrKindForbidden
-		} else if principal == PrincipalUser {
-			outcome, err = s.Persona.SaveUserObservations(body.Content, *body.BaseRevision, body.Reason)
-		} else {
-			outcome, err = s.Persona.SaveAgentP16WithRevision(kind, body.Content, *body.BaseRevision, body.Reason)
-		}
-	default:
-		err = persona.ErrKindForbidden
 	}
 	if err != nil {
 		writePersonaAPIError(w, err)
@@ -529,7 +561,7 @@ func writePersonaAPIError(w http.ResponseWriter, err error) {
 	code := persona.CodeOf(err)
 	status := http.StatusInternalServerError
 	switch code {
-	case "persona_uninitialized", "persona_incomplete", "persona_already_initialized", "persona_repair_not_required", "persona_revision_conflict", "persona_review_exists", "persona_review_stale":
+	case "persona_edit_locked", "persona_edit_expired", "persona_authority_drift", "persona_uninitialized", "persona_incomplete", "persona_already_initialized", "persona_repair_not_required", "persona_revision_conflict", "persona_review_exists", "persona_review_stale":
 		status = http.StatusConflict
 	case "persona_kind_forbidden", "persona_invalid_content", "persona_world_entry_gate":
 		status = http.StatusBadRequest
@@ -543,4 +575,60 @@ func writePersonaAPIError(w http.ResponseWriter, err error) {
 		status = http.StatusInternalServerError
 	}
 	writeErrorWithCode(w, status, code, err)
+}
+
+func (s *Server) handlePersonaEditLease(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requirePrincipal(w, r, PrincipalUser); !ok {
+		return
+	}
+	if s.Persona == nil {
+		writeErrorWithCode(w, 503, "service_unavailable", errors.New("persona unavailable"))
+		return
+	}
+	if !personaContentTypeOK(r) {
+		writeErrorWithCode(w, 400, "invalid_request", errors.New("content type must be application/json"))
+		return
+	}
+	kind, err := persona.ParseKind(r.PathValue("kind"))
+	if err != nil {
+		writePersonaAPIError(w, persona.ErrKindForbidden)
+		return
+	}
+	var lease *persona.EditLease
+	if r.Method == http.MethodPost {
+		var in struct {
+			BaseRevision *uint64 `json:"base_revision"`
+			BaseHash     string  `json:"base_hash"`
+			RequestID    string  `json:"request_id"`
+		}
+		if err = decodeJSON(w, r, 4096, &in); err != nil {
+			writeRequestError(w, err)
+			return
+		}
+		if in.BaseRevision == nil {
+			writeErrorWithCode(w, 400, "invalid_request", errors.New("base_revision required"))
+			return
+		}
+		lease, err = s.Persona.AcquireEdit(kind, *in.BaseRevision, in.BaseHash, in.RequestID)
+	} else {
+		var proof persona.EditProof
+		if err = decodeJSON(w, r, 4096, &proof); err != nil {
+			writeRequestError(w, err)
+			return
+		}
+		if r.Method == http.MethodPatch {
+			lease, err = s.Persona.RenewEdit(kind, proof)
+		} else {
+			err = s.Persona.ReleaseEdit(kind, proof)
+		}
+	}
+	if err != nil {
+		writePersonaAPIError(w, err)
+		return
+	}
+	if r.Method == http.MethodDelete {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	writeJSON(w, http.StatusOK, lease)
 }

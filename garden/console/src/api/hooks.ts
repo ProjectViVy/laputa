@@ -20,6 +20,7 @@ export function useApi<T>(path: string | null, opts: UseApiOptions = {}): UseApi
   const [loading, setLoading] = useState(false);
   const [tick, setTick] = useState(0);
   const alive = useRef(true);
+  const resource = useRef("");
 
   useEffect(() => {
     alive.current = true;
@@ -31,25 +32,30 @@ export function useApi<T>(path: string | null, opts: UseApiOptions = {}): UseApi
   const reload = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
-    setData(null); setError(null);
+    const key = `${enabled}:${path}`;
+    if (resource.current !== key) { setData(null); resource.current = key; }
+    setError(null);
  if (!enabled || !path) { setLoading(false); return; }
  const controller = new AbortController();
     let cancelled = false;
     setLoading(true);
 
+    let sequence = 0;
     const run = async () => {
+      if (poll && document.visibilityState !== "visible") return;
+      const request = ++sequence;
       try {
         const result = await get<T>(path, controller.signal);
-        if (!cancelled && alive.current) {
+        if (!cancelled && alive.current && request === sequence) {
           setData(result);
           setError(null);
         }
       } catch (e) {
-        if (!cancelled && alive.current) {
+        if (!cancelled && alive.current && request === sequence) {
           setError(e instanceof Error ? e.message : String(e));
         }
       } finally {
-        if (!cancelled && alive.current) setLoading(false);
+        if (!cancelled && alive.current && request === sequence) setLoading(false);
       }
     };
 
@@ -57,7 +63,10 @@ export function useApi<T>(path: string | null, opts: UseApiOptions = {}): UseApi
     let timer: ReturnType<typeof setInterval> | undefined;
     if (poll && poll > 0) timer = setInterval(run, poll);
 
+    const focus = () => { if (poll) void run(); };
+    window.addEventListener("focus", focus); document.addEventListener("visibilitychange", focus);
     return () => {
+      window.removeEventListener("focus", focus); document.removeEventListener("visibilitychange", focus);
       cancelled = true;
  controller.abort();
       if (timer) clearInterval(timer);

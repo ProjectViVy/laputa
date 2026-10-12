@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { post, put } from "../../api/client";
+import { post } from "../../api/client";
 import { useApi } from "../../api/hooks";
+import { useProfiles } from "../../api/profiles";
+import { usePersonaEdit } from "./usePersonaEdit";
 import PageHeader from "../../components/PageHeader";
 import { fileStateOf, PERSONA_KINDS } from "./api";
-import type { PersonaDocument, PersonaFileState, PersonaHistoryEntry, PersonaHistoryRevision, PersonaStatusView } from "./types";
+import type { PersonaFileState, PersonaHistoryEntry, PersonaHistoryRevision, PersonaStatusView } from "./types";
 
 function fmtTime(iso?: string | null): string {
   if (!iso) return "—";
@@ -17,9 +19,10 @@ function errMsg(error: unknown): string {
 
 export default function PersonaPage() {
   const { t } = useTranslation();
+  const { canNavigate } = useProfiles();
   const [selected, setSelected] = useState("identity");
   const [reviewMode, setReviewMode] = useState(false);
-  const { data, loading, error, reload } = useApi<PersonaStatusView>("/v2/persona/documents");
+  const { data, loading, error, reload } = useApi<PersonaStatusView>("/v2/persona/documents", { poll: 2000 });
 
   if (data?.status === "uninitialized") {
     return <PersonaInitialization onComplete={reload} />;
@@ -44,7 +47,7 @@ export default function PersonaPage() {
                 const item = fileStateOf(data, kind);
                 return (
                   <li key={kind}>
-                    <button type="button" className={`persona-item${selected === kind ? " selected" : ""}`} onClick={() => { setSelected(kind); setReviewMode(false); }}>
+                    <button type="button" className={`persona-item${selected === kind ? " selected" : ""}`} onClick={() => { if (kind !== selected && !canNavigate()) return; setSelected(kind); setReviewMode(false); }}>
                       <span className="persona-item-file mono">{item?.file_name ?? kind}</span>
                       <PersonaFileStatus state={item} />
                     </button>
@@ -52,12 +55,12 @@ export default function PersonaPage() {
                 );
               })}
             </ul>
-            <button type="button" className="btn-ghost" onClick={() => setReviewMode(!reviewMode)}>{reviewMode ? "Document" : "Review queue"}</button>
+            <button type="button" className="btn-ghost" onClick={() => { if (canNavigate()) setReviewMode(!reviewMode); }}>{reviewMode ? "Document" : "Review queue"}</button>
           </section>
           <section className="persona-detail-col panel panel-pad">
-            {reviewMode ? <ReviewQueue /> : <PersonaDocumentDetail kind={selected} state={state} />}
+            {reviewMode ? <ReviewQueue /> : <PersonaDocumentDetail key={selected} kind={selected} state={state} />}
           </section>
-          {!reviewMode && <section className="persona-history-col panel panel-pad"><PersonaHistory kind={selected} /></section>}
+          {!reviewMode && <section className="persona-history-col panel panel-pad"><PersonaHistory key={selected} kind={selected} /></section>}
         </div>
       )}
     </div>
@@ -72,47 +75,30 @@ function PersonaFileStatus({ state }: { state?: PersonaFileState }) {
 }
 
 function PersonaDocumentDetail({ kind, state }: { kind: string; state?: PersonaFileState }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<string | null>(null);
-  const [scope, setScope] = useState<"document" | "observations">("document");
+  const editor = usePersonaEdit(kind);
   const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const { data, loading, error, reload } = useApi<PersonaDocument>(`/v2/persona/documents/${encodeURIComponent(kind)}`);
-  const current = draft ?? data?.content ?? "";
-
-  const save = async () => {
-    if (!data || busy) return;
-    setBusy(true); setMessage(null);
-    try {
-      await put(`/v2/persona/documents/${encodeURIComponent(kind)}`, { base_revision: data.revision, content: current, scope: kind === "user" ? scope : "document", reason: reason.trim() || "User-authorized Persona document edit" });
-      setEditing(false); setDraft(null); setReason(""); reload();
-    } catch (error) { setMessage(errMsg(error)); }
-    finally { setBusy(false); }
-  };
-
-  if (loading && !data) return <p className="materials-empty">Loading document…</p>;
-  if (error) return <InlineError message={error} onRetry={reload} />;
-  if (!data) return <p className="materials-empty">Document is missing or unavailable.</p>;
-  return (
-    <div className="persona-detail">
-      <div className="persona-detail-head"><h2 className="section-title mono">{data.file_name}</h2><span className="persona-meta mono">rev {data.revision} · {fmtTime(data.updated_at)}</span></div>
-      {state?.tool_only && <p className="persona-tool-note">Tool-only document. It is never added to bootstrap, recall, or automatic context.</p>}
-      <div className="persona-meta-row"><span className="persona-meta">{current.length} / {state?.content_limit ?? "—"} chars</span><span className="persona-meta mono">{data.content_hash}</span></div>
-      {editing ? <textarea className="persona-editor mono" value={current} onChange={(event) => setDraft(event.target.value)} autoFocus /> : <pre className="persona-content mono">{data.content || "—"}</pre>}
-      {editing && <>
-        {kind === "user" && <select className="modules-input" value={scope} onChange={(event) => setScope(event.target.value as "document" | "observations")}><option value="document">User preference document</option><option value="observations">Agent observation append</option></select>}
-        <input className="modules-input" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Reason for this document edit" />
-        <div className="modules-actions"><button className="btn-primary" onClick={save} disabled={busy || !current.trim()}>{busy ? "Saving…" : "Save document"}</button><button className="btn-ghost" onClick={() => { setEditing(false); setDraft(null); }}>Cancel</button></div>
-      </>}
-      {!editing && <button className="btn-ghost" onClick={() => { setDraft(data.content); setEditing(true); }}>Edit document</button>}
-      {message && <p className="materials-empty error">{message}</p>}
-    </div>
-  );
+  const data = editor.document;
+  const active = editor.mode !== "viewing";
+  const current = active ? editor.draft : data?.content ?? "";
+  if (!data) return <p className="materials-empty">{editor.message || "Loading document…"}</p>;
+  return <div className="persona-detail">
+    <div className="persona-detail-head"><h2 className="section-title mono">{data.file_name}</h2><span className="persona-meta mono">rev {data.revision} · {fmtTime(data.updated_at)}</span></div>
+    {state?.tool_only && <p className="persona-tool-note">Tool-only document. It is never added to automatic context.</p>}
+    <div className="persona-meta-row"><span className="persona-meta">{current.length} / {state?.content_limit ?? "—"} chars</span><span className="persona-meta mono">{data.content_hash}</span></div>
+    {active ? <textarea aria-label="Persona draft" className="persona-editor mono" value={current} onChange={(event) => editor.setDraft(event.target.value)} disabled={editor.mode === "acquiring" || editor.mode === "saving"} autoFocus /> : <pre className="persona-content mono">{data.content || "—"}</pre>}
+    {active && <>
+      <input className="modules-input" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Reason for this document edit" />
+      <div className="modules-actions"><button className="btn-primary" onClick={() => void editor.save(reason)} disabled={editor.mode !== "editing" || !current.trim()}>{editor.mode === "saving" ? "Saving…" : "Save document"}</button><button className="btn-ghost" disabled={editor.mode === "saving"} onClick={editor.cancel}>Cancel</button></div>
+    </>}
+    {editor.mode === "recovering" && <section aria-label="Draft recovery"><p>Save is paused. Read the latest document, reconcile your draft, then acquire editing permission again.</p><button className="btn-ghost" onClick={() => void editor.readLatest()}>Read latest document</button>{editor.latest && <><pre className="persona-content mono">{editor.latest.content}</pre><button className="btn-primary" onClick={editor.reconcile}>Continue with reconciled draft</button></>}</section>}
+    {!active && <><button className="btn-ghost" disabled={data.edit_status?.held} onClick={editor.begin}>Edit document</button>{data.edit_status?.held && <p role="status">Another editor is active. Automated writes are paused.</p>}</>}
+    {active && <p role="status">{editor.mode === "editing" ? "Editing permission held; automated writes are paused." : editor.mode}</p>}
+    {editor.message && <p role="status" className="materials-empty">{editor.message}</p>}
+  </div>;
 }
 
 function PersonaHistory({ kind }: { kind: string }) {
-  const { data, loading, error, reload } = useApi<{ kind: string; items: PersonaHistoryEntry[] }>(`/v2/persona/history/${encodeURIComponent(kind)}`);
+  const { data, loading, error, reload } = useApi<{ kind: string; items: PersonaHistoryEntry[] }>(`/v2/persona/history/${encodeURIComponent(kind)}`, { poll: 2000 });
   const [revision, setRevision] = useState<number | null>(null);
   if (loading) return <p className="materials-empty">Loading history…</p>;
   if (error) return <InlineError message={error} onRetry={reload} />;
@@ -124,7 +110,7 @@ function HistoryDetail({ kind, revision }: { kind: string; revision: number }) {
   const { data, loading, error } = useApi<PersonaHistoryRevision>(`/v2/persona/history/${encodeURIComponent(kind)}/${revision}`);
   if (loading) return <p className="materials-empty">Loading revision…</p>;
   if (error || !data) return <p className="materials-empty error">{error ?? "Revision unavailable"}</p>;
-  return <div className="persona-history-detail"><div className="persona-meta-row"><span>rev {data.revision}</span><span>{data.actor} · base {data.base_revision}</span></div><pre className="persona-content mono">{data.content}</pre>{data.unified_diff && <pre className="persona-diff mono">{data.unified_diff}</pre>}</div>;
+  return <div className="persona-history-detail"><div className="persona-meta-row"><span>rev {data.entry.revision}</span><span>{data.entry.actor} · base {data.entry.base_revision}</span></div><pre className="persona-content mono">{data.content}</pre>{data.unified_diff && <pre className="persona-diff mono">{data.unified_diff}</pre>}</div>;
 }
 
 function ReviewQueue() {

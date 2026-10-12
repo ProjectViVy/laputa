@@ -1,16 +1,22 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { get, post, setActiveProfile } from "./client";
 
 export interface Profile { profile_id: string; display_name: string }
-interface Profiles { profiles: Profile[]; selected: string; select: (id: string) => void; reload: () => void }
-const Context = createContext<Profiles>({ profiles: [], selected: "", select: () => {}, reload: () => {} });
+interface Profiles { profiles: Profile[]; selected: string; select: (id: string) => void; reload: () => void; canNavigate: () => boolean; registerNavigationGuard: (guard: () => boolean) => () => void }
+const Context = createContext<Profiles>({ profiles: [], selected: "", select: () => {}, reload: () => {}, canNavigate: () => true, registerNavigationGuard: () => () => {} });
 export const useProfiles = () => useContext(Context);
 
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selected, setSelected] = useState("");
   const [tick, setTick] = useState(0);
-  const select = (id: string) => { setActiveProfile(id); localStorage.setItem("garden.profile", id); setSelected(id); };
+  const guard = useRef<(() => boolean) | null>(null);
+  const canNavigate = useCallback(() => guard.current?.() ?? true, []);
+  const registerNavigationGuard = useCallback((next: () => boolean) => {
+    guard.current = next;
+    return () => { if (guard.current === next) guard.current = null; };
+  }, []);
+  const select = (id: string) => { if (id === selected || !canNavigate()) return; setActiveProfile(id); localStorage.setItem("garden.profile", id); setSelected(id); };
   useEffect(() => {
     let active = true;
     get<Profile[]>("/v2/profiles").then((rows) => {
@@ -21,7 +27,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     }).catch(() => { if (active) { setProfiles([]); select(""); } });
     return () => { active = false; };
   }, [tick]);
-  return <Context.Provider value={{ profiles, selected, select, reload: () => setTick((value) => value + 1) }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ profiles, selected, select, canNavigate, registerNavigationGuard, reload: () => setTick((value) => value + 1) }}>{children}</Context.Provider>;
 }
 
 export function OwnerGate({ children }: { children: React.ReactNode }) {
