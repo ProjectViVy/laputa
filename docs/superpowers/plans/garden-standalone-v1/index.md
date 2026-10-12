@@ -1,19 +1,19 @@
 # Standalone Garden v1 — authoritative Epic/Story plan index
 
-**Date:** 2026-10-12 · **Status:** APPROVED SLICE IMPLEMENTED / READY FOR PARENT REVIEW — S08 AUTOMATION ACCEPTANCE PENDING
+**Date:** 2026-10-12 · **Status:** CONTROLLED-EDITING / NATIVE-PERSONA INCREMENT PLANNED AND SELF-REVIEWED; S14 READY FOR ORIGINAL EXECUTOR; RUNTIME DELIVERY PENDING
 
-Authoritative design: [specification for user review](../../specs/2026-10-12-garden-standalone-v1-design.md). Decision record: [ADR-0019](../../../architecture/0019-garden-standalone-v1.md). Research baseline: [Stage 1](../../../research/garden-standalone-v1.md), `76baea03e9913b8bfeb35c44cae0a66e4f5eed59`.
+Authoritative design: [specification](../../specs/2026-10-12-garden-standalone-v1-design.md). Decision record: [ADR-0019](../../../architecture/0019-garden-standalone-v1.md). Increment evidence: [controlled-editing research](../../../research/garden-standalone-v1-controlled-editing-research-2026-10-12.md), [exact host pins](../../../research/garden-host-pins-2026-10-12.md), [spec/plan review and handoff](controlled-editing-review.md). Runtime baseline is `3c4cfffe33d92ad1105ad31dec259c901cc24a4e` on `feat/garden-standalone-v1`.
 
-The initial owner development assignment authorized concrete Story planning and publication on `feat/garden-standalone-v1`, with runtime execution awaiting plan review. That gate was subsequently satisfied for S01/S02/S03/S08; the owner then authorized this native executor, S08 completion, one independent focused review and one lean fix pass. Q2/Q3 and cross-repository writes remain unauthorized. The 13 linked plans below now specify files, consumed/produced interfaces, focused tasks, verification and removal. The four unblocked plans were approved for execution; nine remain Blocked for the exact decisions/evidence listed below, with independent tasks separated where useful. Owner approved starting S01/S02/S03/S08 on 2026-10-12 13:13 UTC; Q2/Q3 and the blocked rows remain unresolved.
+The owner authorized continuing the Garden enhancement, detailed architecture, Supermanagement Epic/Story plans, review and documentation publication on this same branch. This planning session changes documents only. S01/S02/S03 and conservative S08 are already implemented; their historical evidence below remains intact. The original automatic dynamic-update requirement is retained and assigned to S14–S17 and revised S10, not satisfied by editor locks or manual file copying. S09 retains native memory completion; unrelated Q2/Q3 and cross-repository writes are not newly authorized.
 
-The preserved execution choice is one development session on GPT-6.1-SOL HIGH using `superpowers:executing-plans` after parent/owner review; do not ask to rechoose the model or create per-task implementer agents. This index is the sole owner of status and immediate dependency data; the graph and waves derive from the predecessor column. A plan being reviewable does not satisfy its unimplemented predecessors. Only the four reviewed, unblocked plans were executed, in predecessor order. Native tests now supply the evidence recorded below; real user host configuration/data transfer remain unauthorized.
+Preserve the original GPT-6.1 Sol High native development session using `superpowers:executing-plans`; do not rechoose model/method or dispatch per-task implementers. This index alone owns status and immediate dependencies. First execute **S14 → S15 → S16**, then S17 and S10 sequentially in that executor; S09 follows its exact memory SDK mapping gate. First actual automatic-host acceptance is S16, not S14/S15 alone. A ready plan is not runtime evidence or permission to modify real user host configurations.
 
 ## Scope reconciliation and independently accepted increments
 
 [Issue #8](https://github.com/ProjectViVy/laputa/issues/8), created before this task and missed in the first overlap audit, owns the lean Mentle private/shared-memory slice. The specification §1.3 records the correction and conflicts. This index no longer makes BML qualification, the new Recap format or optional subsystem rewrites prerequisites for that slice. Existing `ProfileID` stays the subject identifier; sharing uses named resource membership with read/read_write access. No issue text authorizes execution.
 
 - **M0 — lean private/shared slice:** S01–S03, including minimal reused UI/API for active profile, private/shared location, membership and removal. Use a working Mentle installation and existing scoped ACTMEM. It can be reviewed/accepted before S04–S13; no backend switch or automatic private publication.
-- **M1 — broader standalone management:** S04, S06–S13 add the separately requested continuity, supported Mentle ownership handoff, explicit facts/autonomy cleanup, four hosts and full wizard/UI. The graph does not block this path on S05. Any interim release must say R3 alternate-backend delivery and BML-backed attachment are pending.
+- **M1 — broader standalone management:** S04, S06–S17 add the separately requested continuity, supported Mentle ownership handoff, explicit facts/autonomy cleanup, four hosts and full wizard/UI. The graph does not block this path on S05. Any interim release must say R3 alternate-backend delivery and BML-backed attachment are pending.
 - **M2 — qualified alternate:** S05 delivers the real BML backend and verifies its applicable UI/client/attachment paths once those consumers exist. It is required for the broader backend goal, not M0. Q2 decides whether M1 and M2 must share a release date. No full-scope completion claim is possible while either remains incomplete.
 
 These are proposed acceptance boundaries, not approved release dates or reduced product scope. Full UI, opted-in host features, safe secrets and canonical VIVY identity remain required by the main task.
@@ -26,11 +26,12 @@ These are proposed acceptance boundaries, not approved release dates or reduced 
 | E2 — Continuity, backend choice and existing identity | Subject Recap, independently qualified BML alternate and safe existing-identity ownership | S04–S06 | D1, D4, D5, D7 |
 | E3 — Explicit experience and host integrations | Selected facts without autonomy, consented host bindings and four-host product support | S07–S10 | D3, D6–D10, D12 |
 | E4 — First launch and full management console | Restartable DeepSeek setup/upgrade plus actual state editing and permission/status UX | S11–S12 | D1, D2, D4, D5, D10 |
-| E5 — Integrated release evidence and clean break | All proposed acceptance boundaries validated, old executable paths removed and documented | [S13](S13.md) | D1–D12 |
+| E5 — Integrated release evidence and clean break | All proposed acceptance boundaries validated, old executable paths removed and documented | [S13](S13.md) | D1–D15 |
+| E6 — Controlled editing and automatic Persona delivery | Lease-aware human editing, fresh retry and actual native prompt updates | S14–S17; revised S10 supplies CLI delivery | D13–D15 |
 
 ## Story plans and immediate dependencies
 
-Readiness is recorded in the table after this dependency table. Acceptance descriptions express future outcomes, not reported passes. Requirement IDs and decision IDs refer to the authoritative specification. The logical DAG remains 13 nodes / 17 immediate edges / 7 waves; blockers are gates, not invented prerequisite edges.
+Readiness is recorded in the table after this dependency table. Acceptance descriptions express future outcomes, not reported passes. Requirement IDs and decision IDs refer to the authoritative specification. The logical DAG is 17 nodes / 23 immediate edges / 9 waves; blockers are gates, not invented prerequisite edges.
 
 | Story | Independently verifiable outcome and boundary | Immediate predecessors and supplied contracts | Requirements | Acceptance evidence sought |
 | --- | --- | --- | --- | --- |
@@ -41,12 +42,16 @@ Readiness is recorded in the table after this dependency table. Acceptance descr
 | [S05](S05.md) | Independent BML qualification over its existing module: explicit ProfileID mapping, canonical receipts and necessary management reads; no new BML implementation | S03: backend/binding conformance baseline | R2, R3, R10, R11 | Actual multi-profile one-DB adapter and explicit legacy mapping; conformance before selection. Validate supported consumer/attachment integration when available; broader R3 remains pending until this lane completes. |
 | [S06](S06.md) | Supported existing Mentle-backed VIVY/Garden client attachment and explicit local owner handoff; preserve actual identity/data and current Recap format | S03: bound memory service and Mentle contract | R1, R3, R10, R11 | Same authoritative persona/revisions, stopped prior writer, minimal local lock/config, safe interrupted handoff. BML-backed attachment is unavailable until qualified in S05; no silent conversion or dual owner. |
 | [S07](S07.md) | Selected evidence-to-fact and standalone autonomy removal; explicit selected shared writes only, no automatic publication or taint/declassification machinery | S03: governed mutations/lineage; S04: coordinated Recap/Work replacement | R8, R11, R12 | Private capture stays private; human-selected shared fact and operation-scoped source provenance work; shared DIVA receipts/Mission contracts survive justified cleanup. |
-| [S08](S08.md) | Common consented host binding/projection, conflict/backup, independent controls and saved/written/loaded status | S03: authenticated host-facing memory operations | R2, R6, R7, R10 | Inert discovery/install, separate controls, compare-before-write, revoke and queued-write recheck; no false loaded state. |
-| [S09](S09.md) | OpenClaw and Hermes native adapters using S08; selected capture/recall and persona sync with version-qualified limits | S08: common binding/projection/status contract | R6, R7, R8 | Both native adapters pass cold/new-session, recall, selected capture, disable/revoke and preservation cases; Hermes cached session distinguished. |
-| [S10](S10.md) | Claude Code and Codex CLI instruction-file + explicit MCP adapters; optional hook experiments separately labeled | S08: common binding/projection/status contract | R6, R7, R8 | Both CLIs preserve instructions and hierarchy, use scoped MCP, support explicit selected capture and revocation; hook experiments do not count as committed lifecycle acceptance. |
+| [S08](S08.md) | Conservative common binding/manual-file core; existing-file preservation and separate cleanup | S03: authenticated host operations | R2, R6, R7, R10 | No-clobber missing-file create; existing-file manual apply; revoke preserves user bytes; no false loaded. Native automation belongs to E6. |
+| [S09](S09.md) | Native memory recall/selected capture and combined OpenClaw/Hermes qualification in the same packages | S16: OpenClaw native Persona package; S17: Hermes native Persona package | R6, R7, R8, U7 | Exact memory SDK mapping, independent controls and actual selected capture/recall; no second plugin or Persona file writer. |
+| [S10](S10.md) | Claude Code/Codex native Persona command hooks plus existing explicit MCP capabilities | S15: bound native prompt and fresh retry/status | R6, R7, R8, U4–U7 | Both exact CLIs update next prompt, preserve instruction hierarchy/workspace, keep explicit selected memory and truthful status. |
 | [S11](S11.md) | DeepSeek-only persisted setup, private host secrets, create/attach/skip, optional hosts and safe upgrades; smallest writable model-less Mentle delta | S06: supported takeover/client/ownership checkpoints; S08: inert optional host setup | R3, R9, R10 | Resume/complete without repeated wizard, private credentials, key failure and backup recovery; BML choice/attachment honestly unavailable until qualification. |
 | [S12](S12.md) | Full human console/headless parity: real Persona/Recap/memory/history/lineage, shared-space membership, hosts and health; reuse existing pages | S07: fact/Recap and cleanup contracts; S09: native host status; S10: CLI host status; S11: setup/upgrade | R1, R2, R4, R5, R6, R8, R9 | Actual revisions/conflicts, read/read_write participants, source visibility, provider status and saved/written/loaded. Required UI remains complete even when optional agent graph/trace is unavailable. |
 | [S13](S13.md) | Integrated acceptance of delivered M1 surfaces and removal audit, with precise residual backend status; not an optional hardening project | S12: integrated management/host/setup surfaces | R1–R12 (R3 alternate acceptance remains with S05) | Focused spec §10 cases, supported local ownership and four hosts; reuse BML-first VIVY and owner Mentle-through-DIVA evidence. No full backend-choice claim without M2; preserve useful single-persona features. |
+| [S14](S14.md) | Controlled authority edit rights, all writer gates and live read-only UI | S03: shared owner/ProfileID and Persona API composition | U1, U2, U6, U7 | Old tabs cannot save/release new lease; all controlled writes conflict; draft/base stable; committed snapshot detects external drift. |
+| [S15](S15.md) | Native prompt coordinator, durable coalesced pending, fresh retry and minimal host UI | S08: binding/status and manual-file preservation; S14: guarded consistent Persona snapshot | U3, U5, U6, U7 | Latest committed pull, edit block, no stale retry, offline/restart, truthful offered state and independent revoke. |
+| [S16](S16.md) | OpenClaw native automatic Persona delivery | S15: bound native prompt contract | U4–U7 | Real pinned embedded prompt has newest revision next invocation without shared file writes. |
+| [S17](S17.md) | Hermes same-profile persistent-turn Persona delivery | S15: bound native prompt contract | U4–U7 | Real pinned persistent turn receives latest additive context; original SOUL/profile/history preserved; priority and retained history honest. |
 
 S03 removes memory bypasses when replacing them; S07 removes autonomy paths when disentangling them; S13 verifies removal rather than postponing deletion indefinitely. Each Story includes its necessary focused documentation/tests/packaging. No separate ceremonial “setup”, “write tests” or “update status” Stories are created.
 
@@ -62,8 +67,14 @@ flowchart TD
   S03 --> S07
   S04 --> S07
   S03 --> S08
-  S08 --> S09
-  S08 --> S10
+  S03 --> S14
+  S08 --> S15
+  S14 --> S15
+  S15 --> S16
+  S15 --> S17
+  S15 --> S10
+  S16 --> S09
+  S17 --> S09
   S06 --> S11
   S08 --> S11
   S07 --> S12
@@ -78,12 +89,14 @@ flowchart TD
 | 0 | [S01](S01.md) | Ownership/registry foundation |
 | 1 | [S02](S02.md) | Trusted identity and policy |
 | 2 | S03, S04 | Memory boundary and Recap contracts |
-| 3 | S05, S06, S07, S08 | Independent backend lane, Mentle attachment, facts/cleanup, host core |
-| 4 | S09, S10, S11 | Concrete hosts and setup/upgrade |
-| 5 | [S12](S12.md) | Full management integration |
-| 6 | [S13](S13.md) | Scoped integration acceptance and clean-break audit |
+| 3 | S05, S06, S07, S08, S14 | Independent backend, attachment/facts/common host core and edit authority |
+| 4 | S11, S15 | Setup and native projection coordinator |
+| 5 | S10, S16, S17 | Concrete CLI/OpenClaw/Hermes Persona adapters |
+| 6 | S09 | Native memory and combined host qualification |
+| 7 | [S12](S12.md) | Full management integration |
+| 8 | [S13](S13.md) | Scoped integration acceptance and clean-break audit |
 
-These are logical orderings, not authorization for parallel agents or an estimate. S05 is a separate branch of the DAG: its appearance in a wave does not make completion a barrier for the M1 path. Its final backend qualification must include consumer integration where offered; an adapter-only test pass is insufficient. UI layout exploration can occur earlier after design approval, but S12's end-to-end evidence consumes implemented predecessor contracts. File conflicts are separate: S03/S04/S07 touch `garden/agentapi` and server contracts; S01/S03/S06/S11 share composition/config; S08–S12 share console shell/API/types; S04/S06/S07 cross VIVY cognitive DTOs and shared DIVA effects. Sequence these edits or use isolated worktrees and agreed interface revisions after execution is authorized. Do not assume a DAG wave eliminates merge conflicts.
+These are logical orderings, not authorization for parallel agents or an estimate. S05 is a separate branch of the DAG: its appearance in a wave does not make completion a barrier for the M1 path. Its final backend qualification must include consumer integration where offered; an adapter-only test pass is insufficient. UI layout exploration can occur earlier after design approval, but S12's end-to-end evidence consumes implemented predecessor contracts. File conflicts are separate: S03/S04/S07 touch `garden/agentapi` and server contracts; S01/S03/S06/S11 share composition/config; S08–S17 share console shell/API/types; S04/S06/S07 cross VIVY cognitive DTOs and shared DIVA effects. Sequence these edits or use isolated worktrees and agreed interface revisions after execution is authorized. Do not assume a DAG wave eliminates merge conflicts.
 
 ## Review readiness and smallest decisions
 
@@ -96,14 +109,18 @@ These are logical orderings, not authorization for parallel agents or an estimat
 | S05 | Blocked | Reviewed/authorized BML provider-owned schema/public API and explicit legacy mapping on dedicated VIVY branch; final offered UI/client/setup consumers must qualify. Q2 does not block planning this lane. |
 | S06 | Blocked | Q1/Q5 initial supported local attachment/package + versioned other-machine export/import grammar; supported VIVY client/lock composition on authorized dedicated consumer branch. |
 | S07 | Blocked | S04/Q3 coordinated Work replacement; selected source-linked fact task independently reviewable without accepting Q3. |
-| S08 | Conservative core implemented and re-checked / automation acceptance pending | R4 resolved structurally: no destructive revoke or existing-file Apply, manual guidance and no-clobber creation. Final full/race and independent original 5/5 probe PASS; reviewer found no new code defect. Parent must accept narrowed existing-file automation or require qualified host CAS later. No native host/loaded claim. |
-| S09 | Blocked | X4 pinned OpenClaw/Hermes releases, exact SDK signatures and installed isolated-host evidence; four-host commitment unchanged. |
-| S10 | Blocked | X4 pinned Claude Code/Codex CLI floors and exact config/discovery syntax; files + explicit MCP stable, lifecycle hooks experimental. |
+| S08 | Conservative core implemented; original automation acceptance pending | R4 evidence remains valid. Existing shared-file Apply stays manual; the owner now requires actual automatic native delivery through E6 rather than accepting manual-only as full scope. |
+| S09 | Blocked for native memory code | S16/S17 predecessors; exact native memory SDK/result/selected-capture mappings must be recorded by S09 Task 1. Persona hook/version discovery is resolved. Actual combined host evidence still required. |
+| S10 | Waiting for S15; host acceptance gated | Bridge/package plan is concrete at Codex 0.162.1 and Claude 2.1.296. Exact binary/native loader and actual prompt evidence are Task 2 gates, especially closed Claude runtime. No scope migration allowed. |
 | S11 | Blocked | Q5 target OS/package/private-permission implementation and S06 attachment support; candidate DeepSeek model needs release/account validation, no new provider chooser. |
 | S12 | Blocked | Q3/S04 Recap contract and all required predecessor evidence; history/UI tasks independent in design but full Story cannot claim ready. |
 | S13 | Blocked | Integrated predecessor/host/package/Recap evidence; Q2 needed only for final release timing/completion claim. S05 qualification still required for full R3. |
+| S14 | Ready for original native executor | Spec/plan self-review complete; S03 contract is implemented. No routine parameter or product blocker. Refresh supported no-base API callers before removal. |
+| S15 | Waiting for S14 | S08 exists; S14 coherent committed snapshot/edit gate must land first. No new product decision or platform dependency. |
+| S16 | Waiting for S15; runtime qualification required | Source-pinned callback/package contract ready; exact isolated embedded runner and actual prompt capture required for acceptance. |
+| S17 | Waiting for S15; runtime qualification required | Source-pinned persistent-turn hook ready; real same-profile CLI/gateway evidence required. Additive user-context priority is explicit; no unapproved SOUL replacement. |
 
-Only two policy choices need early owner attention: **Q3** (recommend personal-only contribution/admission excluding shared/restricted sessions, still unapproved) and **Q2** (recommend independent Mentle delivery with BML qualification still required; full-release timing unapproved). Q2 does not stop independent development. Q1/Q5 become necessary before S06/S11: recommend owner-selected local Mentle takeover first, an explicit versioned transfer format for other machines, and one confirmed local OS/package with private host secret storage. Native version floors should be researched and recommended against actual available host builds before asking the owner to choose; do not ask four broad version questions now. Cross-repo writes are separate authorization, not implicit plan publication permission.
+Only two policy choices need early owner attention: **Q3** (recommend personal-only contribution/admission excluding shared/restricted sessions, still unapproved) and **Q2** (recommend independent Mentle delivery with BML qualification still required; full-release timing unapproved). Q2 does not stop independent development. Q1/Q5 become necessary before S06/S11: recommend owner-selected local Mentle takeover first, an explicit versioned transfer format for other machines, and one confirmed local OS/package with private host secret storage. Exact Persona qualification targets are now fixed in §7/evidence; unavailable runtime binaries are evidence gates, not a request for four broad version choices. Cross-repo writes are separate authorization, not implicit plan publication permission.
 
 ## Shared contract ownership and file coordination
 
@@ -118,11 +135,14 @@ Read the owning Interfaces block rather than inventing a duplicate contract file
 | [S05](S05.md) | Proposed provider-owned GardenStore API and thin BML mapping | Separate BML qualification lane; consumer acceptance uses S06/S11/S12 evidence when offered, not new DAG edges. |
 | [S06](S06.md) | AttachService checkpoints and RemoteClient, explicit supported VIVY client mode | S11; no local DB reopen in attached mode. |
 | [S07](S07.md) | SelectedExperience/FactDraft/SaveFact, optional operation-scoped SourceMutationBackend | S12; optional model drafting uses S11 Provider, manual save remains independent. |
-| [S08](S08.md) | FilePlan/HostStatus and compare/backup/loaded/revoke service | S09/S10/S11. |
+| [S08](S08.md) | FilePlan/HostStatus, no-clobber/manual cleanup and controls | S15/S11; shared-file preservation retained. |
+| [S14](S14.md) | EditLease/EditProof/EditorWrite/EditStatus and WithProjectionSnapshot | S15; existing Persona callers share the commit gate. |
+| [S15](S15.md) | NativeBindingConfig/NativePromptRequest/PromptProjection/RetryPreview and owner retry/status routes | S16/S17/S10; same DTOs and state semantics. |
+| S16/S17 | Native Persona plugin packages and exact scope/config | S09 extends the same packages for memory. |
 | [S11](S11.md) | State/SetupChoice/ProviderStatus/SecretStore and minimal optional generation port | S12; optional S07 drafting, no new dependency for manual facts. |
 | [S12](S12.md) | HistoryBackend/RevisionQuery/RevisionPage, actual owner console/API parity | S13; S05 offered full-history qualification consumes these semantics. |
 
-Sequence shared files within this one executor; a DAG wave is not a parallel edit mandate. S01/S03/S06/S11 share owner/main; S02/S03/S04/S07 share agentapi/server; S08–S12 share host APIs/UI; S03/S11/S12 share Mentle canonical/receipt files. Refresh source/diff before each task and preserve concurrent changes. Documentation initially used the selected checkout. Authorized runtime work then used the isolated linked worktree `/workspace/laputa-garden` on the same existing `feat/garden-standalone-v1` branch; `/workspace/laputa` runtime sources remain untouched. Preserve this worktree for subsequent authorized execution; no replacement branch or force-push.
+Sequence shared files within this one executor; a DAG wave is not a parallel edit mandate. S01/S03/S06/S11 share owner/main; S02/S03/S04/S07 share agentapi/server; S08–S17 share host APIs/UI; S03/S11/S12 share Mentle canonical/receipt files. Refresh source/diff before each task and preserve concurrent changes. Historical runtime work used `/workspace/laputa-garden`; the planning environment currently has `/workspace/laputa` on the same branch at the fixed baseline. The original executor must inspect its actual worktree/status and fast-forward to the published docs commit before editing, preserving any concurrent work. Do not recreate or assume a vanished worktree, replace the branch or force-push.
 
 ## External dependencies and owner gates
 
@@ -131,8 +151,8 @@ Sequence shared files within this one executor; a DAG wave is not a parallel edi
 | X1 | Laputa #1/#7/#8; spec §5 | S03 uses a working Mentle composition and checks representative retrieval. S11 needs the smallest writable no-embedding setup delta. Do not gate sharing on the full enhancement backlog or a speculative index rewrite. |
 | X2 | VIVY #57/#58 and accepted ADR-0018 | S04/S07: existing session/worker access, Q3-reviewed Recap admission/coverage and LIFE-first/CODE-negative tests in the existing unified pipeline; shared Work/DTO callers reconciled before removal. |
 | X3 | VIVY BML maintainers, existing `bml` module | S05: explicit ProfileID mapping, one-DB multi-profile storage, receipts and required reads. BML-backed attachment waits on qualification; Mentle attachment in S06 and M0 do not. |
-| X4 | Exact host releases and installed test environments | S09/S10: pin versions/API surfaces and prove committed matrix; experimental hooks may remain experimental. Unavailable host evidence remains blocked, never a pass. |
-| X5 | Owner review Q1–Q5 in spec | Implementation-plan review is satisfied for S01/S02/S03/S08 only; the bounded execution/review/fix pass is recorded below. Q2/Q3 remain unresolved. Q1/Q5 block concrete attachment/packaging/secret implementation in S06/S11; Q4 four-host matrix is preserved, only exact stable/experimental version floors block S09/S10. Do not re-ask settled product scope or gate independent Stories on unrelated decisions. |
+| X4 | Pinned source and installed test environments | S16/S17/S10: exact targets and Persona signatures fixed in host-pins; Task 2 actual runtime/loader/context evidence remains mandatory. S09 separately pins memory SDK and selected-capture mappings. No untested version range. |
+| X5 | Owner continuation plus Q1–Q5 | Controlled editing/native Persona enhancement and design/plan publication are authorized; first implementation handoff S14 goes to the original session. Q2/Q3 and attachment/package Q1/Q5 remain separate. Real user configuration/migration is not authorized here. Do not re-ask TTL or settled execution method. |
 
 ## Requirement coverage
 
@@ -142,16 +162,26 @@ Sequence shared files within this one executor; a DAG wave is not a parallel edi
 | R2 | S02, S03, S04, S05, S08, S12 | [S13](S13.md) |
 | R3 | S03, S05, S06, S11 | S05 alternate qualification; S13 reports delivered baseline and any residual gap |
 | R4 | S02, S04, S12 | [S13](S13.md) |
-| R5 | S03, S04, S12 | [S13](S13.md) |
+| R5 | S03, S04, S12, S14, S15 | [S13](S13.md) |
 | R6 | S02, S08, S09, S10, S12 | [S13](S13.md) |
-| R7 | S08, S09, S10 | [S13](S13.md) |
+| R7 | S08, S09, S10, S15, S16, S17 | [S13](S13.md) |
 | R8 | S04, S07, S09, S10, S12 | [S13](S13.md) |
 | R9 | S11, S12 | [S13](S13.md) |
 | R10 | S01, S05, S06, S08, S11 | [S13](S13.md) |
 | R11 | S03, S04, S05, S06, S07 | [S13](S13.md) |
 | R12 | S01, S03, S07 | [S13](S13.md) |
 
-## Evidence and current state
+## Current increment review and handoff
+
+[Spec/plan review](controlled-editing-review.md) maps U1–U7 and records corrections, contract consistency, DAG checks and remaining blockers. It is a planner self-review, not an independent runtime review. Supplemental Supermanagement reference resources were requested but unavailable; its main SKILL.md plus Superpowers brainstorming/writing-plans/verification guidance were used.
+
+Current source pins: Laputa 3c4cfffe; OpenClaw b8952d4 (2026.10.2); Hermes 71d34ba (0.21.7); Codex 092d3ac (0.162.1); Claude Code public release 2301018 (2.1.296), closed runtime unqualified. No runtime source, test, host config or dependency installation is changed by this planning increment.
+
+First batch is S14 → S15 → S16, then S17 and S10 in the same executor. S14 has no missing prerequisite; all later plans must wait for their predecessor contracts and record runtime evidence. No auto-update completion claim until an actual qualified host receives the new Persona without manual copy. Full four-host/native-memory commitment remains in S09/S10/S16/S17 and S13 integration.
+
+## Historical evidence before the controlled-editing increment
+
+The following records preserve their original source snapshots/results; references to 13 plans, old stable/experimental hook gates or native-CAS-only remedies describe that earlier stage. Current §7, the tables above and the increment review supersede those active planning assumptions without changing any historical PASS/FAIL.
 
 Planning baseline verified against remote `feat/garden-standalone-v1` head `3f14f8f4135790591e746d78058314ca9a46551b`; local runtime remains main baseline `f44ba00eb6ab5aa6ab9a2f5c09868373e36679f5`. VIVY local source inspected at `65b561f6f8189dc36dd29120a6f8a5f20b7071a6`; DIVA source at `0a64d1ce152440f1f63d4224a155c4616d2aff5b`. Issue #8 fetched read-only and reconciled, no tracker changes. Refresh cross-repo heads before any later authorized edits; these are inspection pins, not current-host/runtime certification.
 

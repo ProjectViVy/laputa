@@ -1,6 +1,6 @@
 # ADR-0019: Standalone Garden v1 proposal
 
-**Status:** proposed decisions; planning authorized — Story-plan review pending; no runtime implementation authorized
+**Status:** standalone baseline partly implemented; controlled-editing/native-Persona enhancement designed and self-reviewed for authorized continuation; runtime increment pending; Q2/Q3 open
 **Date:** 2026-10-12
 
 The authoritative proposal is [Standalone Garden v1 — architecture specification](../superpowers/specs/2026-10-12-garden-standalone-v1-design.md). Its §9 owns the decision/deprecation map; its §10 owns the owner questions. The [proposed Epic/Story index](../superpowers/plans/garden-standalone-v1/index.md) owns dependencies and status. This ADR is a status/pointer record, not a competing specification.
@@ -13,4 +13,6 @@ Owner decisions remain explicit: broader backend release timing (Q2) and restric
 
 Preserve ADR-0012 Persona/Frozen Core/WORLD boundaries, ADR-0014 Mentle canonical authority, ADR-0016 modular library ownership, and ADR-0018 selected VIVY Recap policy. If approved, this proposal refines single-profile authentication/composition, backend-selection restrictions, active Pulse/Work consumers, standalone evolution/console composition and host activation assumptions only as enumerated in the specification. It does not silently change existing VIVY or DIVA backend defaults or historical acceptance results.
 
-Current accepted contracts continue to govern shipped behavior. The owner development assignment now authorizes concrete Story planning and publication on the existing branch; the index links 13 plans and owns their Ready-for-review/Blocked state. No Story is Ready for runtime implementation. Q2/Q3 remain open; parent/owner plan review precedes the preserved native development-session execution method. This status update changes no runtime contract or historical outcome.
+Current accepted contracts and historical runtime evidence remain scoped as recorded in the authoritative index. S01/S02/S03 and conservative S08 exist at 3c4cfffe33d92ad1105ad31dec259c901cc24a4e; the latter does not complete original automatic updating. The latest owner continuation selects specification §7 / D13–D15: lightweight per-object edit rights, revision-safe authority commits, coalesced fresh retry and qualified native prompt contribution. It preserves shared-file no-clobber/manual cleanup, Frozen Core semantics, existing host profiles/history/workspaces and independent memory controls.
+
+The index now owns 17 Story plans. S14 is the first executable handoff, followed by S15 and S16, in the original GPT-6.1 Sol High native development session; no new per-task agent workflow. Hermes/Codex native Persona interfaces have pinned-source evidence, while actual host qualification remains pending. Q2/Q3 and unrelated attachment/package gates remain open. This update authorizes no real user host configuration, migration, PR, merge or deployment. See the linked increment review for the explicit planner self-review and residuals.

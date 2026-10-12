@@ -18,6 +18,7 @@ Read ADR-0018 together with ADR-0012 before implementing any Laputa, Persona, AC
 
 | ADR | Status | Scope |
 | --- | --- | --- |
+| 0019 | Baseline partly implemented; controlled-editing/native-Persona increment planned and self-reviewed; runtime pending | Standalone Garden; D13–D15 local edit rights, fresh retry and actual native host updates; index owns Story readiness |
 | 0018 | Accepted direction; implementation pending | VIVY unified context, subject-level free-form Recap, revision-aware human control, targeted clear, deferred tools and capability-aware backend ownership |
 | 0017 | Proposed change record; v2 implementation recorded | Existing Mission/Frozen Core v2, scoped ACTMEM and backend/strategy deltas; selected ACTMEM policy refined by 0018 |
 | 0012 | Accepted; ACTMEM policy refined by 0018 | Garden-Laputa contract: seven Markdown authority files, `ACTMEM.MD`, tool-only WORLD and baseline ACTMEM exclusion (selected policy refined by 0018), EvoMap ownership of capability artifacts, deletion-first implementation |
