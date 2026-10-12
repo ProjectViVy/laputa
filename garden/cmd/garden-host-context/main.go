@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -138,6 +139,12 @@ func run(ctx context.Context, in io.Reader, out, diagnostics io.Writer, cfg Conf
 	if homeErr != nil || actualHomeErr != nil || transcriptErr != nil || approvedHome != actualHome || !filepath.IsAbs(event.TranscriptPath) || !strings.HasPrefix(transcriptDir+string(os.PathSeparator), approvedHome+string(os.PathSeparator)) {
 		return omit("unsupported_scope")
 	}
+	// Claude2.1.296 exposes the same not-yet-created transcript path in fresh
+	// persistent and --no-session-persistence hooks. Check the owning native
+	// process; file existence would reject the first valid persistent turn.
+	if cfg.HostKind == "claude-code" && !persistentClaude(ctx, cfg.HostExecutable, event.SessionID) {
+		return omit("unsupported_scope")
+	}
 	endpoint, err := url.Parse(cfg.Endpoint)
 	if err != nil || endpoint.Scheme != "http" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" || endpoint.Path != "" && endpoint.Path != "/" || endpoint.Hostname() != "127.0.0.1" && endpoint.Hostname() != "::1" && endpoint.Hostname() != "localhost" {
 		return omit("unsupported_endpoint")
@@ -229,6 +236,71 @@ func validSession(value string) bool {
 		}
 	}
 	return true
+}
+
+func persistentClaude(ctx context.Context, executable, session string) bool {
+	nativePID, err := strconv.Atoi(os.Getenv("CLAUDE_PID"))
+	if err != nil || nativePID <= 1 || os.Getenv("CLAUDE_CODE_SESSION_ID") != session {
+		return false
+	}
+	expected, err := os.Stat(executable)
+	if err != nil {
+		return false
+	}
+	pid := os.Getppid()
+	for depth := 0; depth < 8 && pid > 1 && ctx.Err() == nil; depth++ {
+		base := "/proc/" + strconv.Itoa(pid)
+		info, err := os.Stat(base)
+		if err != nil || info.Sys().(*syscall.Stat_t).Uid != uint32(os.Geteuid()) {
+			return false
+		}
+		if pid == nativePID {
+			actual, err := os.Stat(base + "/exe")
+			if err != nil || !os.SameFile(expected, actual) {
+				return false
+			}
+			args, err := procBytes(base+"/cmdline", 64*1024)
+			if err != nil || ctx.Err() != nil {
+				return false
+			}
+			for _, arg := range bytes.Split(args, []byte{0}) {
+				if string(arg) == "--no-session-persistence" {
+					return false
+				}
+			}
+			return len(args) > 0
+		}
+		status, err := procBytes(base+"/stat", 4096)
+		if err != nil {
+			return false
+		}
+		end := bytes.LastIndexByte(status, ')')
+		if end < 0 {
+			return false
+		}
+		fields := strings.Fields(string(status[end+1:]))
+		if len(fields) < 2 {
+			return false
+		}
+		pid, err = strconv.Atoi(fields[1])
+		if err != nil {
+			return false
+		}
+	}
+	return false
+}
+
+func procBytes(path string, limit int64) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	raw, err := io.ReadAll(io.LimitReader(file, limit+1))
+	if err != nil || int64(len(raw)) > limit {
+		return nil, errors.New("native process metadata unavailable")
+	}
+	return raw, nil
 }
 
 func canonicalDirWithError(path string, err error) (string, error) {
