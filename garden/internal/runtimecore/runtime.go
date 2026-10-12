@@ -34,6 +34,7 @@ type Config struct {
 	StateDB           string
 	ProfileID         string
 	RequireLocalModel bool
+	CatalogOnly       bool
 	// Backends injects scope-bound memory backends keyed by their
 	// scope/v1 encoding (contracts.md section 6). When present for a scope,
 	// the injected backend wins over a Mentle adapter minted from the same
@@ -130,11 +131,14 @@ func open(ctx context.Context, cfg Config, authority bool) (_ *Garden, err error
 	if err != nil {
 		return nil, err
 	}
+	if cfg.CatalogOnly && cfg.RequireLocalModel {
+		return nil, errors.New("catalog mode cannot require embedding model")
+	}
 	if !available && cfg.RequireLocalModel {
 		return nil, fmt.Errorf("runtimecore: required local model missing under %q", cfg.ModelsDir)
 	}
 	lexicalOnly := false
-	if !available {
+	if !available && !cfg.CatalogOnly {
 		canonical := filepath.Join(cfg.PalacePath, "canonical.sqlite3")
 		info, statErr := os.Stat(canonical)
 		switch {
@@ -161,7 +165,11 @@ func open(ctx context.Context, cfg Config, authority bool) (_ *Garden, err error
 		}
 		g.Actmem = actmem.New(cfg.PersonaDir)
 	}
-	if available || lexicalOnly {
+	if cfg.CatalogOnly {
+		if g.Mentle, err = facade.OpenCatalogService(ctx, cfg.PalacePath); err != nil {
+			return nil, err
+		}
+	} else if available || lexicalOnly {
 		m := &facade.Service{}
 		if err = m.Init(ctx, facade.Options{PalacePath: cfg.PalacePath, ModelsDir: cfg.ModelsDir, RequireLocalModel: !lexicalOnly, LexicalOnly: lexicalOnly}); err != nil {
 			_ = m.Close()

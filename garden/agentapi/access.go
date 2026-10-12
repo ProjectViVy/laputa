@@ -208,5 +208,5 @@ func (s *Service) checkSelectedCards(ctx context.Context, b Binding, q EvidenceR
 }
 
 func (c *Client) newService() *Service {
-	return &Service{runtime: c.runtime, installation: c.installation, bindingID: c.bindingID}
+	return &Service{runtime: c.runtime, installation: c.installation, bindingID: c.bindingID, principal: c.principal}
 }

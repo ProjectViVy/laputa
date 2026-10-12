@@ -258,6 +258,7 @@ func (r *MutationReceipt) UnmarshalJSON(data []byte) error {
 // CardPage is a bounded card page; the cursor is opaque and bound to the
 // scope and query.
 type CardPage struct {
+	Truncated  bool         `json:"truncated,omitempty"`
 	Items      []MemoryCard `json:"items"`
 	NextCursor string       `json:"next_cursor"`
 }

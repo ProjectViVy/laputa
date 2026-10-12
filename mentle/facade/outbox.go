@@ -380,6 +380,12 @@ func (s *Service) applyIndexJob(ctx context.Context, memoryID string) error {
 			_ = s.Catalog.failIndexJob(ctx, job, err)
 			return err
 		}
+		current, readErr := s.GetMemory(ctx, job.MemoryID)
+		if readErr != nil {
+			_ = s.Catalog.failIndexJob(ctx, job, readErr)
+			return readErr
+		}
+		meta["scope"] = current.Scope
 		meta["canonical_id"] = job.MemoryID
 		meta["canonical_version"] = fmt.Sprint(job.CanonicalVersion)
 		physicalID := fmt.Sprintf("%s@v%d", job.MemoryID, job.CanonicalVersion)
@@ -527,6 +533,7 @@ func (s *Service) readCanonicalSnapshot(ctx context.Context) (canonicalSnapshot,
 				metadata[key] = text
 			}
 		}
+		metadata["scope"] = memory.Scope
 		metadata["canonical_id"] = memory.ID
 		metadata["canonical_version"] = fmt.Sprint(memory.Version)
 		snapshot.Drawers = append(snapshot.Drawers, search.Drawer{

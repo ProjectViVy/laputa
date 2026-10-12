@@ -97,7 +97,7 @@ func (a *Adapter) mutateCreate(ctx context.Context, operationID, payloadDigest s
 }
 
 func (a *Adapter) Capabilities() memory.Capabilities {
-	return memory.Capabilities{Search: true, Expand: true, Mutate: !a.svc.IsReadOnly(), MutationLookup: true, Vector: !a.svc.IsReadOnly()}
+	return memory.Capabilities{Search: true, Expand: true, Mutate: !a.svc.IsReadOnly(), MutationLookup: true, Vector: a.svc.Embedder != nil && !a.svc.IsReadOnly()}
 }
 
 // Search returns cards whose decoded scope is in the admitted read union.
@@ -125,7 +125,11 @@ func (a *Adapter) Search(ctx context.Context, req memory.AuthorizedSearch) (memo
 	}
 	out := memory.CardPage{Items: make([]memory.MemoryCard, 0, limit)}
 	for pageNumber := 0; pageNumber < 11; pageNumber++ {
-		page, err := a.svc.SearchCards(ctx, facade.CardQuery{Text: req.Query, Collection: req.Collection, Limit: 100, Cursor: inner})
+		encodedScopes := []string{}
+		for _, scope := range req.Scopes {
+			encodedScopes = append(encodedScopes, memory.EncodeScope(scope))
+		}
+		page, err := a.svc.SearchCards(ctx, facade.CardQuery{Text: req.Query, Scopes: encodedScopes, Collection: req.Collection, Limit: 100, Cursor: inner})
 		if err != nil {
 			return memory.CardPage{}, err
 		}

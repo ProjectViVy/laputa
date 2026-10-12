@@ -19,6 +19,7 @@ type Service struct {
 	runtime      *runtimecore.Garden
 	installation *Installation
 	bindingID    string
+	principal    Principal
 }
 
 func NewService(runtime *runtimecore.Garden) *Service { return &Service{runtime: runtime} }
@@ -81,6 +82,7 @@ func (s *Service) recall(ctx context.Context, binding Binding, principal Princip
 		return ContextView{}, failure("unavailable", "fast recall unavailable")
 	}
 	fast := *s.runtime.FastRecall
+	fast.Searcher = &authorizedCardSearcher{s: s, b: binding, p: principal}
 	if s.runtime.InstallationOwned() {
 		key := s.bindingID
 		if key == "" {

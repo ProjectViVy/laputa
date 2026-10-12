@@ -84,10 +84,12 @@ type DeleteMemoryRequest struct {
 }
 
 type ListMemoryOptions struct {
-	Limit  int
-	Cursor string
-	Status string
-	Kind   string
+	Scopes     []string
+	Collection string
+	Limit      int
+	Cursor     string
+	Status     string
+	Kind       string
 }
 
 type MemoryPage struct {
@@ -670,6 +672,16 @@ func (s *Service) ListMemories(ctx context.Context, opts ListMemoryOptions) (Mem
 	}
 	args := []any{opts.Status}
 	where := ` WHERE status=?`
+	if len(opts.Scopes) > 0 {
+		where += ` AND scope IN (` + strings.TrimSuffix(strings.Repeat("?,", len(opts.Scopes)), ",") + `)`
+		for _, scope := range opts.Scopes {
+			args = append(args, scope)
+		}
+	}
+	if opts.Collection != "" {
+		where += ` AND COALESCE(NULLIF(json_extract(metadata_json,'$.collection'),''),'knowledge')=?`
+		args = append(args, opts.Collection)
+	}
 	if opts.Kind != "" {
 		where += ` AND kind=?`
 		args = append(args, opts.Kind)

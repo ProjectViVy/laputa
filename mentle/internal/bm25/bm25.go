@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 	"sync"
+	"unicode"
 )
 
 // Default BM25 parameters.
@@ -224,22 +225,38 @@ func (idx *Index) Search(query string, limit int) []ScoredDoc {
 func tokenize(text string) []string {
 	text = strings.ToLower(text)
 	var tokens []string
-	var current strings.Builder
-
-	for _, r := range text {
-		if isTokenChar(r) {
-			current.WriteRune(r)
-		} else {
-			if current.Len() > 0 {
-				tokens = append(tokens, current.String())
-				current.Reset()
-			}
+	var latin strings.Builder
+	var han []rune
+	flushLatin := func() {
+		if latin.Len() > 0 {
+			tokens = append(tokens, latin.String())
+			latin.Reset()
 		}
 	}
-	if current.Len() > 0 {
-		tokens = append(tokens, current.String())
+	flushHan := func() {
+		if len(han) == 1 {
+			tokens = append(tokens, string(han))
+		} else {
+			for i := 0; i+1 < len(han); i++ {
+				tokens = append(tokens, string(han[i:i+2]))
+			}
+		}
+		han = nil
 	}
-
+	for _, r := range text {
+		if unicode.Is(unicode.Han, r) {
+			flushLatin()
+			han = append(han, r)
+		} else if isTokenChar(r) {
+			flushHan()
+			latin.WriteRune(r)
+		} else {
+			flushLatin()
+			flushHan()
+		}
+	}
+	flushLatin()
+	flushHan()
 	return tokens
 }
 

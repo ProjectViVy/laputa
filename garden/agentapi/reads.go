@@ -60,6 +60,7 @@ type CardSearch struct {
 	Cursor     string `json:"cursor,omitempty"`
 }
 type CardPage struct {
+	Truncated  bool         `json:"truncated,omitempty"`
 	Cards      []MemoryCard `json:"cards"`
 	NextCursor *string      `json:"next_cursor,omitempty"`
 }
@@ -153,7 +154,7 @@ func (s *Service) SearchCards(ctx context.Context, principal Principal, binding 
 	if err != nil {
 		return CardPage{}, materialError(err)
 	}
-	out := CardPage{Cards: page.Items}
+	out := CardPage{Cards: page.Items, Truncated: page.Truncated}
 	if page.NextCursor != "" {
 		out.NextCursor = &page.NextCursor
 	}
@@ -196,6 +197,13 @@ func (s *Service) ReadEvidence(ctx context.Context, principal Principal, binding
 // the trusted scope. Scope is always derived from the host binding, never
 // from request fields.
 func (s *Service) memoryBackend(binding Binding) (memory.Backend, []evolution.Scope, error) {
+	if s.installation != nil {
+		access, err := s.resolve(context.Background(), binding, OpSearch, "")
+		if err != nil {
+			return nil, nil, err
+		}
+		return s.accessBackend(binding, s.principal, MemoryTarget{}), access.ReadScopes, nil
+	}
 	trusted, err := binding.TrustedScope()
 	if err != nil {
 		return nil, nil, err
@@ -222,16 +230,22 @@ func (s *Service) ListCollections(ctx context.Context, principal Principal, bind
 	if err := s.check(binding, principal, OpSearch); err != nil {
 		return nil, err
 	}
-	if s.runtime.Mentle == nil {
-		return nil, failure("unavailable", "Mentle unavailable")
+	backend, scopes, err := s.memoryBackend(binding)
+	if err != nil {
+		return nil, err
 	}
-	items, err := s.runtime.Mentle.ListCollections(ctx)
+	management, ok := backend.(memory.ManagementBackend)
+	if !ok {
+		return nil, failure("unavailable", "collection reads unavailable")
+	}
+	items, err := management.Collections(ctx, scopes)
 	if err != nil {
 		return nil, materialError(err)
 	}
+
 	result := make([]CollectionInfo, 0, len(items))
 	for _, item := range items {
-		result = append(result, CollectionInfo{Name: item.Name, Count: item.Count})
+		result = append(result, CollectionInfo{Name: item.ID, Count: item.Count})
 	}
 	return result, nil
 }

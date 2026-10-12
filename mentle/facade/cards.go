@@ -6,6 +6,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -31,6 +32,7 @@ type MemoryCard struct {
 type CardQuery struct {
 	Text       string   `json:"text"`
 	Scope      string   `json:"scope,omitempty"`
+	Scopes     []string `json:"scopes,omitempty"`
 	Collection string   `json:"collection,omitempty"`
 	Status     []string `json:"status,omitempty"`
 	Limit      int      `json:"limit,omitempty"`
@@ -77,7 +79,19 @@ func (s *Service) SearchCards(ctx context.Context, q CardQuery) (CardPage, error
 	if windowEnd > maxCardSearchResults+1 {
 		windowEnd = maxCardSearchResults + 1
 	}
-	results, err := s.Hybrid.SearchScored(ctx, q.Text, "", "", windowEnd*4)
+	filter := map[string]any{}
+	if len(q.Scopes) == 1 {
+		filter["scope"] = q.Scopes[0]
+	} else if len(q.Scopes) > 0 {
+		allowed := []any{}
+		for _, scope := range q.Scopes {
+			allowed = append(allowed, scope)
+		}
+		filter["scope"] = map[string]any{"$in": allowed}
+	} else if q.Scope != "" {
+		filter["scope"] = q.Scope
+	}
+	results, err := s.Hybrid.SearchScoredFiltered(ctx, q.Text, filter, windowEnd*4)
 	if err != nil {
 		return CardPage{}, err
 	}
@@ -107,7 +121,7 @@ func (s *Service) SearchCards(ctx context.Context, q CardQuery) (CardPage, error
 		if memory.SupersededBy != nil {
 			continue
 		}
-		if q.Scope != "" && memory.Scope != q.Scope {
+		if (len(q.Scopes) > 0 && !containsScope(q.Scopes, memory.Scope)) || (q.Scope != "" && memory.Scope != q.Scope) {
 			continue
 		}
 		collection := memory.Collection
@@ -207,4 +221,42 @@ func (s *Service) ListCollections(ctx context.Context) ([]CollectionInfo, error)
 		return collections[i].Name < collections[j].Name
 	})
 	return collections, nil
+}
+
+func containsScope(scopes []string, want string) bool {
+	for _, s := range scopes {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
+// ScopedCollections counts live canonical rows before disclosure, independent
+// of the global derived graph. Empty scopes never mean all data here.
+func (s *Service) ScopedCollections(ctx context.Context, scopes []string) ([]CollectionInfo, error) {
+	if s.Catalog == nil {
+		return nil, ErrUnavailable
+	}
+	if len(scopes) == 0 {
+		return nil, errors.New("collection scopes required")
+	}
+	args := []any{}
+	for _, scope := range scopes {
+		args = append(args, scope)
+	}
+	rows, err := s.Catalog.db.QueryContext(ctx, `SELECT COALESCE(NULLIF(json_extract(metadata_json,'$.collection'),''),'knowledge'),COUNT(*) FROM memories WHERE status='active' AND superseded_by IS NULL AND (valid_to IS NULL OR julianday(valid_to)>=julianday('now')) AND scope IN (`+strings.TrimSuffix(strings.Repeat("?,", len(scopes)), ",")+`) GROUP BY 1 ORDER BY 1`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []CollectionInfo{}
+	for rows.Next() {
+		var row CollectionInfo
+		if err = rows.Scan(&row.Name, &row.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
 }

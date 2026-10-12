@@ -2,6 +2,8 @@ package agentapi
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
 	"strings"
 
@@ -12,6 +14,7 @@ import (
 type InstallationConfig struct {
 	Home, StateDB, PalacePath, ModelsDir, BackendID, DestinationID string
 	RequireLocalModel                                              bool
+	CatalogOnly                                                    bool
 }
 type Profile = registry.Profile
 type ProfileRegistration = registry.ProfileRegistration
@@ -20,6 +23,7 @@ type ClientConfig struct {
 	Principal                      Principal
 }
 type Installation struct {
+	cursorKey                [32]byte
 	owner                    *runtimecore.Owner
 	backendID, destinationID string
 }
@@ -31,7 +35,7 @@ func OpenInstallation(ctx context.Context, cfg InstallationConfig) (*Installatio
 	if cfg.DestinationID != "" && cfg.DestinationID != BackendMentle {
 		return nil, failure("invalid_binding", "Mentle destination must match configured writer")
 	}
-	owner, err := runtimecore.OpenOwner(ctx, runtimecore.OwnerConfig{Home: cfg.Home, Config: runtimecore.Config{PalacePath: cfg.PalacePath, ModelsDir: cfg.ModelsDir, StateDB: cfg.StateDB, RequireLocalModel: cfg.RequireLocalModel}})
+	owner, err := runtimecore.OpenOwner(ctx, runtimecore.OwnerConfig{Home: cfg.Home, Config: runtimecore.Config{PalacePath: cfg.PalacePath, ModelsDir: cfg.ModelsDir, StateDB: cfg.StateDB, RequireLocalModel: cfg.RequireLocalModel, CatalogOnly: cfg.CatalogOnly}})
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +45,7 @@ func OpenInstallation(ctx context.Context, cfg InstallationConfig) (*Installatio
 // NewInstallation adapts the application's already-open owner; it never opens
 // another backend or exports a storage handle through the domain API.
 func NewInstallation(owner *runtimecore.Owner) *Installation {
-	return &Installation{owner: owner, backendID: BackendMentle, destinationID: BackendMentle}
+	return &Installation{owner: owner, backendID: BackendMentle, destinationID: BackendMentle, cursorKey: sha256.Sum256([]byte(rand.Text()))}
 }
 func (i *Installation) Close() error {
 	if i == nil || i.owner == nil {

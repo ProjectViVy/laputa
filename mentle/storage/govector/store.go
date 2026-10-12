@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/DotNetAge/govector/core"
@@ -124,6 +125,25 @@ func (s *Store) Search(query []float32, limit int, filter map[string]any) ([]Sea
 		results = applyNinFilter(results, filter)
 	}
 
+	// HNSW uses post-filtered approximate neighbors. A sparse exact subject
+	// can disappear behind foreign neighbors. On underfill, reuse the existing
+	// canonical point filter and score its admitted points without a new index.
+	if _, exactScope := filter["scope"].(string); exactScope && len(results) < limit {
+		scoped, err := s.collection.GetPointsByFilter(cf)
+		if err != nil {
+			return nil, err
+		}
+		results = make([]SearchResult, 0, len(scoped))
+		for _, p := range scoped {
+			results = append(results, SearchResult{ID: p.ID, Score: core.CalculateDistance(core.Cosine, query, p.Vector), Payload: p.Payload})
+		}
+		sort.Slice(results, func(i, j int) bool {
+			if results[i].Score != results[j].Score {
+				return results[i].Score > results[j].Score
+			}
+			return results[i].ID < results[j].ID
+		})
+	}
 	// Trim to requested limit.
 	if len(results) > limit {
 		results = results[:limit]

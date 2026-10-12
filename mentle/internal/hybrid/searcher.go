@@ -81,14 +81,20 @@ func (s *Searcher) Search(ctx context.Context, query string, wing, room string, 
 // SearchScored performs hybrid search and retains RRF score provenance.
 // With no embedder it searches only the BM25 projection and returns BM25 scores.
 func (s *Searcher) SearchScored(ctx context.Context, query string, wing, room string, nResults int) ([]ScoredDrawer, error) {
+	filter := map[string]any{}
+	if wing != "" {
+		filter["wing"] = wing
+	}
+	if room != "" {
+		filter["room"] = room
+	}
+	return s.SearchScoredFiltered(ctx, query, filter, nResults)
+}
+
+// SearchScoredFiltered reuses existing exact/$in payload filters on both
+// channels before truncation. Canonical validation still follows in facade.
+func (s *Searcher) SearchScoredFiltered(ctx context.Context, query string, filter map[string]any, nResults int) ([]ScoredDrawer, error) {
 	if s.embedder == nil {
-		filter := map[string]any{}
-		if wing != "" {
-			filter["wing"] = wing
-		}
-		if room != "" {
-			filter["room"] = room
-		}
 		// Filter before limiting so out-of-scope matches cannot crowd out
 		// valid lexical matches. This path never touches the vector store.
 		matches := s.filterBM25Results(s.BM25Search(query, 0), filter)
@@ -110,26 +116,18 @@ func (s *Searcher) SearchScored(ctx context.Context, query string, wing, room st
 		return nil, err
 	}
 
-	filter := map[string]any{}
-	if wing != "" {
-		filter["wing"] = wing
-	}
-	if room != "" {
-		filter["room"] = room
-	}
-
 	vectorResults, err := s.store.Search(vector, nResults*3, filter) // Fetch more for fusion.
 	if err != nil {
 		return nil, err
 	}
 
 	// 2. BM25 search (post-filter by wing/room).
-	bm25Results := s.BM25Search(query, nResults*3)
+	bm25Results := s.filterBM25Results(s.BM25Search(query, 0), filter)
+	if nResults > 0 && len(bm25Results) > nResults*3 {
+		bm25Results = bm25Results[:nResults*3]
+	}
 
 	// 3. Apply BM25 filters (wing/room) if specified.
-	if wing != "" || room != "" {
-		bm25Results = s.filterBM25Results(bm25Results, filter)
-	}
 
 	// 4. Fuse scores using Reciprocal Rank Fusion (RRF).
 	fused := s.fuseScores(vectorResults, bm25Results, nResults)

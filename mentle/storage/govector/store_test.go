@@ -1,6 +1,7 @@
 package govector
 
 import (
+	"fmt"
 	"os"
 	"testing"
 )
@@ -422,5 +423,25 @@ func TestStore_RebuildAtomicallyLeavesCurrentArtifactOnStageFailure(t *testing.T
 	}
 	if len(results) != before {
 		t.Fatalf("current search changed after stage failure: got=%d want=%d", len(results), before)
+	}
+}
+
+func TestScopedVectorCandidateNotCrowdedByForeignPoints(t *testing.T) {
+	store, err := NewStore(t.TempDir()+"/vectors.db", 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	for i := 0; i < 110; i++ {
+		if err = store.Add(fmt.Sprintf("foreign-%d", i), []float32{1, 0, 0, 0}, map[string]any{"scope": "foreign"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = store.Add("shared", []float32{0.9, 0.1, 0, 0}, map[string]any{"scope": "shared"}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.Search([]float32{1, 0, 0, 0}, 20, map[string]any{"scope": "shared"})
+	if err != nil || len(got) != 1 || got[0].ID != "shared" {
+		t.Fatalf("%+v %v", got, err)
 	}
 }
