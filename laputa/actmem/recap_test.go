@@ -306,6 +306,11 @@ func TestIssue58LegacyWriterRejectsV3(t *testing.T) {
 	}
 }
 
+// issue58Files snapshots the owner-visible ACTMem content that must not change.
+// The lifetime owner lock is ownership metadata without a content contract:
+// Windows holds it under an exclusive byte-range lock for the whole owner
+// lifetime, so reading it is neither possible nor meaningful. Excluding it keeps
+// the durable-content assertion identical on every platform.
 func issue58Files(t *testing.T, root string) map[string]string {
 	t.Helper()
 	out := map[string]string{}
@@ -314,6 +319,9 @@ func issue58Files(t *testing.T, root string) map[string]string {
 			return err
 		}
 		if !d.IsDir() {
+			if d.Name() == ".owner.lock" {
+				return nil
+			}
 			raw, e := os.ReadFile(path)
 			if e != nil {
 				return e
