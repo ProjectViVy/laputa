@@ -1,8 +1,10 @@
 package actmem
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"os"
 	"reflect"
 	"strings"
 
@@ -87,6 +89,8 @@ func prepareCaptured(entries []evolution.Entry) ([]evolution.Entry, error) {
 
 // LookupCaptured rejoins exact native entries in head or recorded capsules.
 // Missing entries alone never prove that an effect did not happen.
+// Under a validated v3 owner only legacy archives are read: Revision is zero
+// because there is no current legacy head revision. C1 revisions are unrelated.
 func (s *Store) LookupCaptured(entries []evolution.Entry) (evolution.ActivityResult, bool, error) {
 	pair, err := prepareCaptured(entries)
 	if err != nil {
@@ -94,21 +98,39 @@ func (s *Store) LookupCaptured(entries []evolution.Entry) (evolution.ActivityRes
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	h, err := s.load()
-	if err != nil {
-		return evolution.ActivityResult{}, false, err
+	if s.recapUnknown {
+		return evolution.ActivityResult{}, false, newError("recap_commit_unknown", "reopen ACTMEM before reading retained capture outcomes", nil)
 	}
-	return s.lookupCaptured(h, pair, true)
+	h, err := s.load()
+	archiveOnly := false
+	if err != nil {
+		// A generic load failure is not a policy signal. Validate the actual v3
+		// chain with the existing owner parser before reading archive evidence.
+		raw, readErr := os.ReadFile(s.HeadPath())
+		if readErr != nil || !declaresV3Schema(string(raw)) {
+			return evolution.ActivityResult{}, false, err
+		}
+		selected, decodeErr := decodeRecap(raw)
+		if decodeErr != nil {
+			return evolution.ActivityResult{}, false, decodeErr
+		}
+		if _, chainErr := s.recapChain(context.Background(), selected.Binding, false); chainErr != nil {
+			return evolution.ActivityResult{}, false, chainErr
+		}
+		h = emptyHead()
+		archiveOnly = true
+	}
+	return s.lookupCaptured(h, pair, true, archiveOnly)
 }
 
-func (s *Store) lookupCaptured(h head, pair []evolution.Entry, includeArchive bool) (evolution.ActivityResult, bool, error) {
+func (s *Store) lookupCaptured(h head, pair []evolution.Entry, includeArchive, strictArchive bool) (evolution.ActivityResult, bool, error) {
 	if !h.classified() {
 		return evolution.ActivityResult{}, false, newError("actmem_unclassified_head", "unclassified ACTMEM refuses receipt lookup", nil)
 	}
 	candidates := h.entries()
 	// Archive scanning belongs to recovery, never the fresh append path.
 	if includeArchive {
-		capsules, err := s.sessionCapsules(pair[0].SessionID)
+		capsules, err := s.readSessionCapsules(pair[0].SessionID, strictArchive)
 		if err != nil {
 			return evolution.ActivityResult{}, false, err
 		}
@@ -157,7 +179,7 @@ func (s *Store) AppendCaptured(entries []evolution.Entry, before AppendSnapshot)
 	if err != nil {
 		return evolution.ActivityResult{}, err
 	}
-	replay, found, err := s.lookupCaptured(h, pair, false)
+	replay, found, err := s.lookupCaptured(h, pair, false, false)
 	if err != nil || found {
 		return replay, err
 	}

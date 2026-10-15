@@ -316,6 +316,10 @@ type sessionCapsule struct {
 
 // sessionCapsules reads this session's well-formed fold capsules.
 func (s *Store) sessionCapsules(sessionKey string) ([]sessionCapsule, error) {
+	return s.readSessionCapsules(sessionKey, false)
+}
+
+func (s *Store) readSessionCapsules(sessionKey string, strict bool) ([]sessionCapsule, error) {
 	entries, err := os.ReadDir(s.CapsulesDir())
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
@@ -333,6 +337,9 @@ func (s *Store) sessionCapsules(sessionKey string) ([]sessionCapsule, error) {
 			return nil, newError("actmem_io_error", "cannot read capsule", err)
 		}
 		capsule, err := parseFoldCapsule(entry.Name(), string(raw))
+		if err != nil && strict {
+			return nil, err
+		}
 		if err != nil || capsule.sessionKey != sessionKey {
 			continue // foreign or legacy capsules are not fold records
 		}

@@ -200,6 +200,7 @@ func Open(ctx context.Context, cfg Config) (_ *Garden, err error) {
 	g.Ingest.Actmem = g.Actmem
 	g.Ingest.Spool = g.TransientSpool
 	g.Ingest.ProfileID = cfg.ProfileID
+	g.Ingest.RecapBinding = g.RecapBinding
 	if !lexicalOnly && g.Mentle != nil {
 		if drained, drainErr := g.Ingest.DrainSpool(ctx); drainErr != nil {
 			return nil, fmt.Errorf("spool drain: %w", drainErr)
