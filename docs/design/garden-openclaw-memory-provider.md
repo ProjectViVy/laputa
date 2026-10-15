@@ -1,5 +1,7 @@
 # Garden × OpenClaw：Memory 接入方案（v2，MCP 范式）
 
+> **2026-10-11 policy supersession:** This integration/design baseline does not establish the new Recap UI or context policy. The selected policy requires one subject-level free-form Recap, revision-aware human control and deferred tools; inventory capture/Work/evolution consumers before changing them. Current merged integration evidence is indexed separately. See [ADR-0018](../architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 - 状态：**已实施（Phase 1 最小闭环完成并验证）**
 - 日期：2026-08-18（v3：Phase 1 已落地）
 - 范围：把 Garden（MemoryOS）做成 OpenClaw agent 的记忆后端，让 agent 的记忆存取落到 Garden 的 Persona / Mentle evidence / Recall 之上

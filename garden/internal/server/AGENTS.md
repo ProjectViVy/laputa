@@ -2,6 +2,8 @@
 
 # garden/internal/server — Domain HTTP Adapters
 
+> **2026-10-11 policy supersession:** WORLD remains tool-only. ACTMEM context/schema/tool assumptions below are the baseline; selected VIVY subject-Recap policy overrides only those assumptions. Preserve existing Frozen Core immutability and Mission/Persona authorization. See [ADR-0018](../../../docs/architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 This package owns HTTP mechanics and composition of domain handlers. Business mutation rules remain in Persona, ACTMEM, Mentle Facade, Garden runtime and EvoMap services.
 
 ## Target contract
@@ -21,7 +23,7 @@ At atomic cutover, remove `/v2/persona/files`, `/v2/persona/requests`, `/v2/gove
 - Capability tokens establish `read`, `user`, `agent` or `operator`; `X-Garden-Actor` is audit metadata only.
 - Handlers call policy/domain services, never raw file writers, Searcher mutation, vector stores or raw SQLite handles.
 - Errors use the stable envelope and codes in the API contract without leaking token or filesystem details.
-- WORLD content loads only through an explicit Persona document read. ACTMEM loads only through explicit ACTMEM calls.
+- WORLD content loads only through an explicit Persona document read. Baseline ACTMEM routes retain explicit call semantics. Selected Recap projection and targeted clear need planned revision-aware API compatibility; this task adds no endpoint.
 - Missing/stub probes are unavailable, not healthy.
 - Shared route wiring in `server.go` is an integration lock under the GOAL runbook.
 
@@ -32,6 +34,6 @@ cd garden
 GOSUMDB=off go test ./internal/server/...
 ```
 
-Contract tests cover success DTOs, malformed/unknown fields, principal denial, domain errors, old-route absence and structural WORLD/ACTMEM omission.
+Contract tests cover success DTOs, malformed/unknown fields, principal denial, domain errors, old-route absence and structural WORLD omission and baseline ACTMEM omission; selected-policy tests must separately prove bounded admission and clear invalidation.
 
 Parent reference: `../AGENTS.md`

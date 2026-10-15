@@ -1,32 +1,37 @@
 # Garden Documentation
 
-> **Current architecture:** [ADR-0012: Laputa Markdown Clean Break](./architecture/0012-laputa-markdown-clean-break.md)
+> **Selected context policy:** [ADR-0018](./architecture/0018-vivy-unified-context-and-recap-policy.md), accepted owner direction with implementation pending.
+> **Current evidence and open gates:** [2026-10-11 alignment inventory](./dev/memory-policy-alignment-2026-10-11.md).
+> **Preserved authority architecture:** [ADR-0012: Laputa Markdown Clean Break](./architecture/0012-laputa-markdown-clean-break.md)
 > **Status:** architecture and GOAL execution contract accepted; implementation readiness = PASS; Waves 0–3 complete
 
 This directory is the canonical entry point for Garden MemoryOS documentation.
 
 ## Read First
 
-1. [ADR-0012: Laputa Markdown Clean Break](./architecture/0012-laputa-markdown-clean-break.md) — authority files, ACTMEM, context lanes, EvoMap boundary, deletions, and implementation gate.
-2. [ADR-0013: Laputa Clean-Break Implementation Architecture](./architecture/0013-laputa-clean-break-implementation-architecture.md) — replacement packages, deletion order, API boundary, Console workspaces, and acceptance matrix.
-3. [ADR-0014: Mentle Canonical Authority](./architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md) — canonical SQLite, transactional index outbox, disposable indexes and safe rebuild.
-4. [ADR-0016: Embeddable Laputa Libraries and Modular Monolith](./architecture/0016-laputa-embeddable-modular-monolith.md) — three reusable libraries plus one application; refines Vivy transport decision.
-5. [Laputa modular-monolith execution baseline](./bmad/laputa-modular-monolith-2026-09/) — ownership, dependency waves and conformance gates under ADR-0016.
+1. [ADR-0018: VIVY Unified Context and Subject Recap Policy](./architecture/0018-vivy-unified-context-and-recap-policy.md) — current policy scope, targeted deletion, deferred tools, lifecycle and backend boundaries.
+2. [ADR-0012: Laputa Markdown Clean Break](./architecture/0012-laputa-markdown-clean-break.md) — authority files, ACTMEM, context lanes, EvoMap boundary, deletions, and implementation gate.
+3. [ADR-0013: Laputa Clean-Break Implementation Architecture](./architecture/0013-laputa-clean-break-implementation-architecture.md) — replacement packages, deletion order, API boundary, Console workspaces, and acceptance matrix.
+4. [ADR-0014: Mentle Canonical Authority](./architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md) — canonical SQLite, transactional index outbox, disposable indexes and safe rebuild.
+5. [ADR-0016: Embeddable Laputa Libraries and Modular Monolith](./architecture/0016-laputa-embeddable-modular-monolith.md) — three reusable libraries plus one application; refines Vivy transport decision.
+6. [Laputa modular-monolith execution baseline](./bmad/laputa-modular-monolith-2026-09/) — ownership, dependency waves and conformance gates under ADR-0016.
    [Vivy in-process handoff](./bmad/laputa-modular-monolith-2026-09/vivy-handoff.md) — importable local Go API, host lifecycle mapping, offline modes and outstanding Vivy-side work.
-6. [ADR-0015: Laputa External Agent Contract](./architecture/0015-laputa-external-agent-contract.md) — external `laputa-agent/1` wire profile, refined by ADR-0016.
-7. [Laputa External Agent SDK package](./bmad/laputa-external-agent-sdk-2026-09/) — historical REST-first execution baseline; replan under ADR-0016 before further integration.
-8. [Garden Authority & Recovery planning package](./bmad/garden-authority-recovery-2026-09/) — completed clean-break PRD, API contract, Epics, test inventory, TODOLIST and GOAL execution runbook.
-9. [Console Frontend Pre-Design](./design/garden-memoryos-console-frontend-pre-design.md) — four-workspace information architecture, data/state rules, UI migration, and acceptance criteria.
-10. [ADR-0007: EvoMap Mailbox](./architecture/0007-evomap-mailbox.md) — durable mailbox and privacy-state semantics, constrained by ADR-0012.
-11. [ADR-0010: EvoMap Hub Transport](./architecture/0010-evomap-hub-transport-provider.md) — Hub transport and publication gates, constrained by ADR-0012.
-12. [ADR-0006: Semantic Ingestion](./architecture/0006-semantic-ingestion-and-obsidian-adapter.md) — raw-first evidence boundary.
-13. [ADR-0011: Recoverable Indexing and Evidence Contract](./architecture/0011-recoverable-indexing-and-evidence-contract.md) — proposed evidence/recovery work, refined by ADR-0014.
+7. [ADR-0015: Laputa External Agent Contract](./architecture/0015-laputa-external-agent-contract.md) — external `laputa-agent/1` wire profile, refined by ADR-0016.
+8. [Laputa External Agent SDK package](./bmad/laputa-external-agent-sdk-2026-09/) — historical REST-first execution baseline; replan under ADR-0016 before further integration.
+9. [Garden Authority & Recovery planning package](./bmad/garden-authority-recovery-2026-09/) — completed clean-break PRD, API contract, Epics, test inventory, TODOLIST and GOAL execution runbook.
+10. [Console Frontend Pre-Design](./design/garden-memoryos-console-frontend-pre-design.md) — four-workspace information architecture, data/state rules, UI migration, and acceptance criteria.
+11. [ADR-0007: EvoMap Mailbox](./architecture/0007-evomap-mailbox.md) — durable mailbox and privacy-state semantics, constrained by ADR-0012.
+12. [ADR-0010: EvoMap Hub Transport](./architecture/0010-evomap-hub-transport-provider.md) — Hub transport and publication gates, constrained by ADR-0012.
+13. [ADR-0006: Semantic Ingestion](./architecture/0006-semantic-ingestion-and-obsidian-adapter.md) — raw-first evidence boundary.
+14. [ADR-0011: Recoverable Indexing and Evidence Contract](./architecture/0011-recoverable-indexing-and-evidence-contract.md) — proposed evidence/recovery work, refined by ADR-0014.
 
 ## Active Documents
 
 | Document | Purpose | Status |
 | --- | --- | --- |
-| [ADR-0012: Laputa Markdown Clean Break](./architecture/0012-laputa-markdown-clean-break.md) | Current Garden-Laputa product contract: seven Markdown authority files, `ACTMEM.MD`, tool-only WORLD/ACTMEM, EvoMap capability ownership, clean-break deletion rules | accepted |
+| [ADR-0018: VIVY Unified Context and Subject Recap Policy](./architecture/0018-vivy-unified-context-and-recap-policy.md) | Selected VIVY foundation; LIFE pilot; one subject Recap, human UI, CAS/conflicts, deferred tools, scope/budget ownership | accepted direction; implementation pending |
+| [ADR-0017: Cognitive Contract Deltas](./architecture/0017-diva-cognitive-contract-deltas.md) | Existing Mission/Frozen Core v2, backend and scoped ACTMEM record; active ACTMEM policy refined by ADR-0018 | proposed record; implementation evidence recorded |
+| [ADR-0012: Laputa Markdown Clean Break](./architecture/0012-laputa-markdown-clean-break.md) | Preserved Garden-Laputa authority contract: Markdown authority files, `ACTMEM.MD`, WORLD exclusion and baseline ACTMEM policy refined by ADR-0018, EvoMap capability ownership, clean-break deletion rules | accepted |
 | [ADR-0013: Laputa Clean-Break Implementation Architecture](./architecture/0013-laputa-clean-break-implementation-architecture.md) | Accepted implementation design: Markdown store, Persona review/history, ACTMEM tools, Frozen Core, deletion order, HTTP and Console replacement | accepted design |
 | [ADR-0014: Mentle Canonical Authority](./architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md) | Canonical SQLite authority, transactional index outbox, rebuildable derived indexes and non-destructive repair | accepted |
 | [ADR-0016: Embeddable Laputa Libraries and Modular Monolith](./architecture/0016-laputa-embeddable-modular-monolith.md) | Importable Laputa/Mentle/Garden domain stack and one Laputa application; in-process Vivy option with shared conformance | accepted direction; incremental implementation |
@@ -50,4 +55,4 @@ This directory is the canonical entry point for Garden MemoryOS documentation.
 
 ## Rule
 
-No active document may introduce or recommend a JSON personality descriptor, `01-05` authority-section model, `MEMORY.MD`/`memory_md`, automatic WORLD or ACTMEM ContextView projection, a generic Persona governance workflow, or any legacy fallback. Those concepts exist only in the archives.
+No active document may introduce or recommend a JSON personality descriptor, `01-05` authority-section model, `MEMORY.MD`/`memory_md`, automatic WORLD projection or ACTMEM admission outside the selected ADR-0018 policy, a generic Persona governance workflow, or any legacy fallback. Those concepts exist only in the archives.

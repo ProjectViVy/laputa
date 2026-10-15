@@ -1,5 +1,7 @@
 # Shared implementation contracts
 
+> **2026-10-11 policy supersession:** The Pulse/Recap/Work, tool-only ACTMEM and fixed-cap/timer contract below is the prior cognitive baseline. Preserve its receipts, scope, Mission/Dream fences and recorded results; replan selected-policy Recap and compatibility through the existing context policy. See [ADR-0018](../../../architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 Contract revision: `diva-cognitive/v1-review-1`. Owner: S01. Consumers: S02–S09. These are proposed implementation contracts, not already exported APIs. Changes update this file and every affected Story before execution. Architecture requirements R1–R11 remain authoritative; this file makes their transport/storage details concrete.
 
 ## 1. Identity, scope and admission

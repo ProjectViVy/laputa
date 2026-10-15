@@ -1,5 +1,7 @@
 # Laputa modular monolith — execution baseline
 
+> **2026-10-11 policy supersession:** This integration/design baseline does not establish the new Recap UI or context policy. The selected policy requires one subject-level free-form Recap, revision-aware human control and deferred tools; inventory capture/Work/evolution consumers before changing them. Current merged integration evidence is indexed separately. See [ADR-0018](../../architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 **Status:** implementation underway; local embedded consumer works, cross-transport/release gates open
 **Authority:** [ADR-0016](../../architecture/0016-laputa-embeddable-modular-monolith.md), ADR-0012–0014. The earlier [REST-first SDK package](../laputa-external-agent-sdk-2026-09/) remains historical work and must be reconciled by owned hunks; it is not evidence of a shipped embedded backend.
 

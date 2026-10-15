@@ -1,5 +1,7 @@
 # Laputa External Agent SDK — 子代理 TODOLIST
 
+> **2026-10-11 policy supersession:** This frozen execution/API/acceptance baseline retains its original scope. Its ACTMEM tool-only, structured-head and fixed-budget assumptions must be replanned for the selected VIVY policy; existing interfaces remain until reviewed implementation changes. See [ADR-0018](../../architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 **项目：** Laputa External Agent SDK (`laputa-agent/1`)  
 **方法：** BMAD project-sized  
 **当前状态：** `execution / Wave 0 gate in progress / CONCERNS`  

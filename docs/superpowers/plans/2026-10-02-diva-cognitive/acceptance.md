@@ -1,5 +1,7 @@
 # DIVA cognitive integration — acceptance evidence (S09)
 
+> **2026-10-11 policy supersession:** The Pulse/Recap/Work, tool-only ACTMEM and fixed-cap/timer contract below is the prior cognitive baseline. Preserve its receipts, scope, Mission/Dream fences and recorded results; replan selected-policy Recap and compatibility through the existing context policy. See [ADR-0018](../../../architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 Date: 2026-10-02. Source pins: laputa monorepo lane `feat/diva-cognitive` (see git log; merged to local main as `f639e36`), agent-vivy `401f38eb`, INOFY `71e2c9b`, agent-diva `d96e396d` (reference only, unchanged).
 
 Verification commands and results — all executed on the pinned revisions:

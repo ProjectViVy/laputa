@@ -6,13 +6,14 @@
 
 ## Read order
 
-1. `architecture/0012-laputa-markdown-clean-break.md`
-2. `architecture/0013-laputa-clean-break-implementation-architecture.md`
-3. `architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md`
-4. `bmad/garden-authority-recovery-2026-09/ARCHITECTURE-SPINE.md`
-5. `bmad/garden-authority-recovery-2026-09/api-contract.md`
-6. `bmad/garden-authority-recovery-2026-09/GOAL-EXECUTION-RUNBOOK.md`
-7. The owning Epic, test inventory and Story implementation record.
+1. `architecture/0018-vivy-unified-context-and-recap-policy.md` (selected policy; implementation pending)
+2. `architecture/0012-laputa-markdown-clean-break.md`
+3. `architecture/0013-laputa-clean-break-implementation-architecture.md`
+4. `architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md`
+5. `bmad/garden-authority-recovery-2026-09/ARCHITECTURE-SPINE.md`
+6. `bmad/garden-authority-recovery-2026-09/api-contract.md`
+7. `bmad/garden-authority-recovery-2026-09/GOAL-EXECUTION-RUNBOOK.md`
+8. The owning Epic, test inventory and Story implementation record.
 
 ## Ownership
 
@@ -24,11 +25,12 @@
 
 ## Rules
 
-- ADR-0012 controls Persona, ACTMEM, Frozen Core, WORLD and EvoMap boundaries.
+- ADR-0012 controls preserved Persona, Frozen Core, WORLD and EvoMap boundaries; ADR-0018 supersedes selected ACTMEM context/schema/tool assumptions. ADR-0017 records the existing Mission v2 implementation.
 - ADR-0014 controls Mentle authority and recovery: canonical SQLite is authoritative; `index_jobs` is the transactional outbox; vectors/BM25 are derived.
 - New architecture decisions require an ADR. Story execution detail belongs in BMAD Epic/implementation records.
 - Every active legacy behavior is classified Keep, Cut, Deferred or Drop. Do not silently preserve an old route, DTO, fixture or fallback.
-- Do not add JSON Persona authority, `memory_md`, automatic WORLD/ACTMEM context, generic Persona Governance, WAL-as-canonical recovery or optional backend work.
+- Do not add JSON Persona authority, `memory_md`, automatic WORLD context, ACTMEM outside the explicitly selected ADR-0018 policy, generic Persona Governance, WAL-as-canonical recovery or optional backend work.
+- Preserve historical evidence and pass/fail records; add scoped supersession notices and index links instead of rewriting outcomes.
 - Internal links are relative, dates are ISO 8601, and status words must agree across the ADR index, BMAD readiness and sprint status.
 
 ## Documentation verification

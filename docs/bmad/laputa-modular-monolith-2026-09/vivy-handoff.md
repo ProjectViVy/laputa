@@ -1,5 +1,7 @@
 # Vivy 接入交接（本地库已可消费；Vivy 尚未集成）
 
+> **2026-10-11 policy supersession:** This integration/design baseline does not establish the new Recap UI or context policy. The selected policy requires one subject-level free-form Recap, revision-aware human control and deferred tools; inventory capture/Work/evolution consumers before changing them. Current merged integration evidence is indexed separately. See [ADR-0018](../../architecture/0018-vivy-unified-context-and-recap-policy.md). Original design, interface and verification records below remain evidence of their recorded snapshots; this notice does not change their pass/fail results or claim the new policy is implemented.
+
 ## 边界与现状
 
 - 本分支 `feat/laputa-modular-monolith` 只修改 Laputa/Garden/Mentle 与独立 Go 消费夹具；**不修改 Vivy、不 push、不发布模块**。远端 Issue #1 和旧 SDK 工作树不在此分支交付范围。
