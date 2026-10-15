@@ -153,7 +153,7 @@ func (s *Store) AppendCaptured(entries []evolution.Entry, before AppendSnapshot)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	h, err := s.load()
+	h, err := s.loadForMutation()
 	if err != nil {
 		return evolution.ActivityResult{}, err
 	}

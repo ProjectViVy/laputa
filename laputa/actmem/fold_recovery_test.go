@@ -28,6 +28,7 @@ func appendRing(t *testing.T, store *Store, section evolution.EntrySection, sess
 // entries into a deterministic capsule and removes them from the head.
 func TestFoldSessionArchivesAndRemoves(t *testing.T) {
 	store := New(t.TempDir())
+	t.Cleanup(func() { _ = store.Close() })
 	appendRing(t, store, evolution.SectionPulse, "s-1", "one")
 	appendRing(t, store, evolution.SectionPulse, "s-2", "other session")
 	appendRing(t, store, evolution.SectionRecap, "s-1", "two")
@@ -72,6 +73,7 @@ func TestFoldSessionArchivesAndRemoves(t *testing.T) {
 // without data loss. Entries appended meanwhile are never consumed.
 func TestFoldCrashRecovery(t *testing.T) {
 	store := New(t.TempDir())
+	t.Cleanup(func() { _ = store.Close() })
 	appendRing(t, store, evolution.SectionPulse, "s-1", "crashable")
 	store.crashBeforeHeadCommit = true
 	if _, err := store.FoldSession("s-1"); err == nil {
@@ -105,6 +107,7 @@ func TestFoldCrashRecovery(t *testing.T) {
 func TestFoldMismatchedCapsuleConflicts(t *testing.T) {
 	temp := t.TempDir()
 	store := New(temp)
+	t.Cleanup(func() { _ = store.Close() })
 	appendRing(t, store, evolution.SectionPulse, "s-1", "real body")
 	// Pre-seed the capsule slot the fold would claim with foreign bytes.
 	doc, _ := store.Read()
@@ -132,6 +135,7 @@ func TestFoldMismatchedCapsuleConflicts(t *testing.T) {
 
 func TestFoldCapturedProvenanceRemainsReadable(t *testing.T) {
 	store := New(t.TempDir())
+	t.Cleanup(func() { _ = store.Close() })
 	session := "sess_actual_synthetic_12345678"
 	scope := evolution.Scope{SubjectID: "profile", Kind: evolution.ScopePersonal}
 	sources := []evolution.SourceRef{{SourceID: "garden.ingest", RecordID: "1", Scope: scope}}
@@ -169,6 +173,7 @@ func TestFoldCapturedProvenanceRemainsReadable(t *testing.T) {
 
 func TestFoldOversizeMetadataRefusesBeforeRemovingSources(t *testing.T) {
 	store := New(t.TempDir())
+	t.Cleanup(func() { _ = store.Close() })
 	_, err := store.AppendEntry(evolution.Entry{Section: evolution.SectionPulse, Scope: evolution.Scope{SubjectID: "profile", Kind: evolution.ScopePersonal}, SessionID: "oversize", EventID: strings.Repeat("x", 2000), Body: "keep this source"})
 	if err != nil {
 		t.Fatal(err)

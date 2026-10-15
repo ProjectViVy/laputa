@@ -19,6 +19,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"github.com/gofrs/flock"
 	"gopkg.in/yaml.v3"
 )
 
@@ -141,14 +142,16 @@ type QueryResult struct {
 
 // Store is one profile's independent <profile>/actmem authority.
 //
-// Concurrency contract: the mutex makes operations atomic within one
-// process. A second process writer remains unsupported — another process
-// holding the same directory could interleave atomic file writes and
-// produce divergent heads; run one Store owner per profile directory.
+// Mutations share one directory-scoped OS owner for the Store lifetime.
 type Store struct {
-	root  string
-	mu    sync.Mutex
-	clock func() time.Time
+	root         string
+	pathMu       sync.RWMutex
+	owner        *flock.Flock
+	closed       bool
+	recapUnknown bool
+	recapFault   func(string) error // crash/durability boundary injection; tests only
+	mu           sync.Mutex
+	clock        func() time.Time
 	// crashBeforeHeadCommit is a test hook simulating a crash between the
 	// archive write and the head commit of a fold.
 	crashBeforeHeadCommit bool
@@ -163,11 +166,17 @@ func New(configDir string) *Store {
 	return &Store{root: filepath.Join(configDir, "actmem")}
 }
 
-func Open(configDir string) (*Store, error) { return New(configDir), nil }
+func Open(configDir string) (*Store, error) {
+	s := New(configDir)
+	if err := s.acquireOwner(); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
 
-func (s *Store) Root() string        { return s.root }
-func (s *Store) HeadPath() string    { return filepath.Join(s.root, ACTMEMFileName) }
-func (s *Store) CapsulesDir() string { return filepath.Join(s.root, "capsules") }
+func (s *Store) Root() string        { s.pathMu.RLock(); defer s.pathMu.RUnlock(); return s.root }
+func (s *Store) HeadPath() string    { return filepath.Join(s.Root(), ACTMEMFileName) }
+func (s *Store) CapsulesDir() string { return filepath.Join(s.Root(), "capsules") }
 
 // SetClock installs a deterministic clock for tests.
 func (s *Store) SetClock(clock func() time.Time) { s.clock = clock }
@@ -261,6 +270,9 @@ func (s *Store) ReadCapsule(name string) (CapsuleDocument, error) {
 func (s *Store) DeleteCapsule(name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, err := s.loadForMutation(); err != nil {
+		return err
+	}
 	if _, err := s.ReadCapsule(name); err != nil {
 		return err
 	}

@@ -22,6 +22,7 @@ func personalScope() evolution.Scope {
 func TestSystemAppendEntry(t *testing.T) {
 	temp := t.TempDir()
 	store := New(temp)
+	t.Cleanup(func() { _ = store.Close() })
 	store.SetClock(func() time.Time { return time.Date(2026, 10, 2, 10, 0, 0, 0, time.UTC) })
 	result, err := store.AppendEntry(evolution.Entry{
 		Section:   evolution.SectionPulse,
@@ -56,6 +57,7 @@ func TestSystemAppendEntry(t *testing.T) {
 // the ring is not a delivery ledger.
 func TestSystemAppendDedupesEventID(t *testing.T) {
 	store := New(t.TempDir())
+	t.Cleanup(func() { _ = store.Close() })
 	first := evolution.Entry{Section: evolution.SectionPulse, Scope: personalScope(), SessionID: "s-1", EventID: "ev-1", Body: "x"}
 	if _, err := store.AppendEntry(first); err != nil {
 		t.Fatal(err)
@@ -73,6 +75,7 @@ func TestSystemAppendDedupesEventID(t *testing.T) {
 // entries, never the newest.
 func TestRingEvictsOldest(t *testing.T) {
 	store := New(t.TempDir())
+	t.Cleanup(func() { _ = store.Close() })
 	body := strings.Repeat("y", 300)
 	for i := 0; i < 7; i++ {
 		if _, err := store.AppendEntry(evolution.Entry{Section: evolution.SectionPulse, Scope: personalScope(), SessionID: "s", Body: body}); err != nil {
@@ -101,6 +104,7 @@ func TestRingEvictsOldest(t *testing.T) {
 // workspaces' entries.
 func TestWorkPatchLifecycle(t *testing.T) {
 	store := New(t.TempDir())
+	t.Cleanup(func() { _ = store.Close() })
 	// Seed a ws-y work entry + a ws-x pulse.
 	if _, err := store.AppendEntry(evolution.Entry{Section: evolution.SectionPulse, Scope: wsScope("ws-x"), SessionID: "s", Body: "x pulse"}); err != nil {
 		t.Fatal(err)
@@ -169,6 +173,7 @@ func TestWorkPatchLifecycle(t *testing.T) {
 // rejected without deleting other entries; bytes+revision preserved.
 func TestWorkOverflowRejects(t *testing.T) {
 	store := New(t.TempDir())
+	t.Cleanup(func() { _ = store.Close() })
 	big := strings.Repeat("z", 1200)
 	if _, err := store.ApplyWorkPatch(personalScope(), evolution.WorkPatch{Changes: []evolution.WorkChange{
 		{Kind: evolution.WorkChangeAdd, Field: evolution.FieldOpen, Body: big},
@@ -193,6 +198,7 @@ func TestWorkOverflowRejects(t *testing.T) {
 func TestOwnerSave(t *testing.T) {
 	temp := t.TempDir()
 	store := New(temp)
+	t.Cleanup(func() { _ = store.Close() })
 	valid := readFixture(t, "v2_two_scopes.md")
 	result, err := store.Save(valid, 0)
 	if err != nil {
@@ -219,6 +225,7 @@ func TestOwnerSave(t *testing.T) {
 func TestScopedOpsRejectLegacyHead(t *testing.T) {
 	temp := t.TempDir()
 	store := New(temp)
+	t.Cleanup(func() { _ = store.Close() })
 	writeHead(t, store, readFixture(t, "v1_legacy.md"))
 	if _, err := store.AppendEntry(evolution.Entry{Section: evolution.SectionPulse, Scope: personalScope(), Body: "x"}); err == nil {
 		t.Fatal("append on unclassified head")

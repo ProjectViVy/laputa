@@ -23,6 +23,7 @@ func readFixture(t *testing.T, name string) string {
 func TestV2GrammarRoundTrip(t *testing.T) {
 	temp := t.TempDir()
 	store := New(temp)
+	t.Cleanup(func() { _ = store.Close() })
 	writeHead(t, store, readFixture(t, "v2_multiline.md"))
 	document, err := store.Read()
 	if err != nil {
@@ -57,6 +58,7 @@ func TestV2GrammarRoundTrip(t *testing.T) {
 func TestLegacyHeadIsUnclassified(t *testing.T) {
 	temp := t.TempDir()
 	store := New(temp)
+	t.Cleanup(func() { _ = store.Close() })
 	writeHead(t, store, readFixture(t, "v1_legacy.md"))
 	document, err := store.Read()
 	if err != nil {
@@ -82,6 +84,7 @@ func TestLegacyHeadIsUnclassified(t *testing.T) {
 func TestScopedProjectionIsolatesScope(t *testing.T) {
 	temp := t.TempDir()
 	store := New(temp)
+	t.Cleanup(func() { _ = store.Close() })
 	writeHead(t, store, readFixture(t, "v2_two_scopes.md"))
 
 	wx := evolution.Scope{SubjectID: "sub", Kind: evolution.ScopeWorkspace, WorkspaceID: "ws-x"}
@@ -114,6 +117,7 @@ func TestScopedProjectionIsolatesScope(t *testing.T) {
 func TestInvalidV2Rejected(t *testing.T) {
 	temp := t.TempDir()
 	store := New(temp)
+	t.Cleanup(func() { _ = store.Close() })
 	writeHead(t, store, readFixture(t, "invalid_orphan_meta.md"))
 	if _, err := store.Read(); err == nil {
 		t.Fatal("orphan header metadata accepted")

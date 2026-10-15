@@ -9,6 +9,7 @@ import (
 
 func TestReadScopedEnforcesAggregateBodyBudget(t *testing.T) {
 	store := New(t.TempDir())
+	t.Cleanup(func() { _ = store.Close() })
 	for i, section := range []evolution.EntrySection{evolution.SectionPulse, evolution.SectionRecap} {
 		if _, err := store.AppendEntry(evolution.Entry{Section: section, Scope: personalScope(), Body: strings.Repeat("长", 20), EventID: string(rune('a' + i))}); err != nil {
 			t.Fatal(err)
@@ -31,6 +32,7 @@ func TestReadScopedEnforcesAggregateBodyBudget(t *testing.T) {
 
 func TestReadScopedDefaultBudgetIsBounded(t *testing.T) {
 	store := New(t.TempDir())
+	t.Cleanup(func() { _ = store.Close() })
 	if _, err := store.ApplyWorkPatch(personalScope(), evolution.WorkPatch{BaseRevision: 0, Changes: []evolution.WorkChange{{Kind: evolution.WorkChangeAdd, Field: evolution.FieldGoal, Body: strings.Repeat("x", 1201)}}}); err != nil {
 		t.Fatal(err)
 	}

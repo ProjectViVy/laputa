@@ -15,9 +15,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Spec section 5.1 write operations on the v2 head. One in-process writer
-// serializes everything under s.mu; a second writer process is unsupported
-// and must not open the same authority directory for mutation.
+// Spec section 5.1 write operations on the v2 head share the lifetime OS owner
+// with Recap and refuse a v3 authority before writing any file.
 
 // AppendEntry is the system append: the host supplies a fully-scoped ring
 // entry; the store allocates the id, stamps occurred_at, dedupes a retained
@@ -25,7 +24,7 @@ import (
 func (s *Store) AppendEntry(entry evolution.Entry) (evolution.ActivityResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	h, err := s.load()
+	h, err := s.loadForMutation()
 	if err != nil {
 		return evolution.ActivityResult{}, err
 	}
@@ -83,7 +82,7 @@ func (s *Store) ApplyWorkPatch(caller evolution.Scope, patch evolution.WorkPatch
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	h, err := s.load()
+	h, err := s.loadForMutation()
 	if err != nil {
 		return evolution.ActivityResult{}, err
 	}
@@ -170,7 +169,7 @@ func (s *Store) ApplyWorkPatch(caller evolution.Scope, patch evolution.WorkPatch
 func (s *Store) Save(markdown string, baseRevision uint64) (evolution.ActivityResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	h, err := s.load()
+	h, err := s.loadForMutation()
 	if err != nil {
 		return evolution.ActivityResult{}, err
 	}
@@ -211,7 +210,7 @@ func (s *Store) FoldSession(sessionKey string) ([]CapsuleSummary, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	h, err := s.load()
+	h, err := s.loadForMutation()
 	if err != nil {
 		return nil, err
 	}
