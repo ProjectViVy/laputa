@@ -334,6 +334,21 @@ func TestReflectionOutputExactlyOneBranch(t *testing.T) {
 	}
 }
 
+func TestReflectionOutputAcceptsLocalSkillProposal(t *testing.T) {
+	wire := `{"candidates":[{"kind":"skill_proposal","skill_proposal":{"operation":"update","skill_name":"release-notes","base_hash":"abc123","proposed_content":"# Release notes","rationale":"The same release workflow recurred.","sources":[{"source_id":"activity","record_id":"event-1","revision":1,"scope":{"subject_id":"profile_1","kind":"personal"}}]}}],"no_change_reason":""}`
+	out, err := evolution.DecodeReflectionOutput([]byte(wire))
+	if err != nil {
+		t.Fatalf("local Skill candidate rejected: %v", err)
+	}
+	if got := out.Candidates[0].Kind; got != evolution.KindSkillProposal {
+		t.Fatalf("kind = %q", got)
+	}
+	invalid := `{"candidates":[{"kind":"skill_proposal","skill_proposal":{"operation":"update","skill_name":"release-notes","proposed_content":"# Release notes","rationale":"reason"}}],"no_change_reason":""}`
+	if _, err := evolution.DecodeReflectionOutput([]byte(invalid)); err == nil {
+		t.Fatal("update without a base hash or evidence was accepted")
+	}
+}
+
 // TestPersonaKindNumbersUnmoved guards the storage intenum while v2 named
 // kinds land beside it. Mission is a new v2 slot, not a renumbered int.
 func TestPersonaKindNumbersUnmoved(t *testing.T) {
