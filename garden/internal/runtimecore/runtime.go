@@ -145,8 +145,14 @@ func Open(ctx context.Context, cfg Config) (_ *Garden, err error) {
 	if g.Persona, err = persona.Open(cfg.PersonaDir); err != nil {
 		return nil, fmt.Errorf("persona: %w", err)
 	}
-	g.Actmem = actmem.New(cfg.PersonaDir)
-	if cfg.ResolveRecapBinding != nil {
+	if cfg.ResolveRecapBinding == nil {
+		g.Actmem = actmem.New(cfg.PersonaDir)
+	} else {
+		// The trusted binding observes the same already-owned canonical root used
+		// by ingestion and C1. A lazy alias must not change after registration.
+		if g.Actmem, err = actmem.Open(cfg.PersonaDir); err != nil {
+			return nil, fmt.Errorf("actmem owner: %w", err)
+		}
 		g.RecapBinding, err = cfg.ResolveRecapBinding(ctx, g.Actmem.Root())
 		if err != nil {
 			return nil, fmt.Errorf("recap binding: %w", err)

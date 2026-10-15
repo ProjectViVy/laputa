@@ -48,9 +48,19 @@ func TestIssue58RecapFailureBoundaries(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer reopened.Close()
+			confirmations := 0
+			reopened.recapFault = func(point string) error {
+				if point == "recovery_after_directory_sync" {
+					confirmations++
+				}
+				return nil
+			}
 			got, found, err := reopened.LookupRecapOperation(context.Background(), issue58Binding, "attempt")
 			if err != nil || found != afterReplace {
 				t.Fatalf("operation resolution: %+v %v %v", got, found, err)
+			}
+			if confirmations != 1 {
+				t.Fatalf("reopened receipt bypassed recovery barrier: %d", confirmations)
 			}
 			current, err := reopened.ReadRecap(context.Background(), issue58Binding)
 			if err != nil {
@@ -130,9 +140,19 @@ func TestIssue58RecapProcessCrashBoundaries(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer reopened.Close()
+			confirmations := 0
+			reopened.recapFault = func(point string) error {
+				if point == "recovery_after_directory_sync" {
+					confirmations++
+				}
+				return nil
+			}
 			got, err := reopened.ReadRecap(context.Background(), issue58Binding)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if confirmations != 1 {
+				t.Fatalf("crash recovery bypassed durability barrier: %d", confirmations)
 			}
 			afterReplace := boundary == "after_replace" || boundary == "before_directory_sync" || boundary == "after_directory_sync"
 			revision := uint64(1)

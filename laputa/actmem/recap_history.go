@@ -13,9 +13,54 @@ func (s *Store) recapRevisionPath(head RecapHead) string {
 	return filepath.Join(s.Root(), "recap-history", fmt.Sprintf("%020d-%s.md", head.Revision, head.Digest))
 }
 
-// recapChain follows only digests reachable from ACTMEM.MD. An orphan revision
+// recapChain serves authoritative C1 state only after the same exclusive owner
+// validates and confirms its selected namespace. The unknown bit is deliberately
+// not cleared by observation: an uncertain live owner must Close/reopen.
+func (s *Store) recapChain(ctx context.Context, binding RecapBinding, allowUninitialized bool) ([]RecapHead, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if !validRecapBinding(binding) {
+		return nil, newError("recap_scope_denied", "subject and domain are required", nil)
+	}
+	if err := s.acquireOwner(); err != nil {
+		return nil, err
+	}
+	if s.recapUnknown {
+		return nil, newError("recap_commit_unknown", "reopen ACTMEM and durably recover before resolving operation identity", nil)
+	}
+	history, err := s.readRecapChain(ctx, binding)
+	if err != nil {
+		return nil, err
+	}
+	selectedDigest := ""
+	if len(history) > 0 {
+		selectedDigest = history[0].Digest
+	}
+	if s.recapConfirmed && s.recapConfirmedDigest == selectedDigest {
+		return history, nil
+	}
+	if len(history) == 0 && !recapSupportsAbsenceConfirmation {
+		// Win32 lacks our required qualified absence barrier. Permit only an
+		// uninitialized current view or publication of an actual requested initial
+		// head; never turn a bare missing name into a negative operation receipt.
+		if allowUninitialized {
+			return history, nil
+		}
+		return nil, newError("recap_commit_unknown", "missing Recap head cannot establish durable negative resolution on this platform", nil)
+	}
+	if err := s.recoverRecap(ctx, binding, history); err != nil {
+		s.recapUnknown = true
+		return nil, newError("recap_commit_unknown", "Recap recovery durability is unconfirmed; reopen and retry recovery", err)
+	}
+	s.recapConfirmed = true
+	s.recapConfirmedDigest = selectedDigest
+	return history, nil
+}
+
+// readRecapChain follows only digests reachable from ACTMEM.MD. An orphan revision
 // is never discovered, returned, replayed, or promoted, including after restart.
-func (s *Store) recapChain(ctx context.Context, binding RecapBinding) ([]RecapHead, error) {
+func (s *Store) readRecapChain(ctx context.Context, binding RecapBinding) ([]RecapHead, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

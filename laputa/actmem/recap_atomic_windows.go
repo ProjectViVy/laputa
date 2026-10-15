@@ -4,6 +4,10 @@ package actmem
 
 import "golang.org/x/sys/windows"
 
+// A no-op directory sync is never an absence acknowledgement. Only an actual
+// successful write-through head publication yields a receipt on Windows.
+const recapSupportsAbsenceConfirmation = false
+
 func recapMove(from, to string, flags uint32) error {
 	source, err := windows.UTF16PtrFromString(from)
 	if err != nil {

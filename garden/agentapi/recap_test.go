@@ -289,9 +289,16 @@ func TestIssue58RecapFacadeOwnerErrors(t *testing.T) {
 	assertCode(t, err, "recap_operation_conflict")
 	_, err = recap.CommitRecap(ctx, actmem.RecapCommit{BaseRevision: 1, OperationID: "gap", Cause: "summary", Sources: actmem.SourceRange{After: 8, Through: 9, Digest: "host"}})
 	assertCode(t, err, "recap_invalid_range")
-	_, competing := openRecap(t, cfg)
-	_, err = competing.CommitRecap(ctx, actmem.RecapCommit{BaseRevision: 1, OperationID: "contender", Cause: "edit", Text: "other owner"})
-	assertCode(t, err, "recap_owner_busy")
+	// Armed construction pins the owner before binding or ingestion, so a
+	// competitor must be rejected before it can obtain a bound facade.
+	competing, err := Open(ctx, cfg)
+	if competing != nil {
+		_ = competing.Close()
+		t.Fatal("competing armed owner constructed a client")
+	}
+	if actmem.CodeOf(err) != "recap_owner_busy" {
+		t.Fatalf("armed construction lost owner error: %v", err)
+	}
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
 	_, err = recap.ReadRecap(canceled)

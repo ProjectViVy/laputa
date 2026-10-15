@@ -4,6 +4,8 @@ package actmem
 
 import "os"
 
+const recapSupportsAbsenceConfirmation = true
+
 func recapReplace(from, to string) error { return os.Rename(from, to) }
 
 // The exclusive hard link cannot overwrite an immutable revision. Its staging

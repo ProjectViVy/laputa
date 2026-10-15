@@ -144,14 +144,16 @@ type QueryResult struct {
 //
 // Mutations share one directory-scoped OS owner for the Store lifetime.
 type Store struct {
-	root         string
-	pathMu       sync.RWMutex
-	owner        *flock.Flock
-	closed       bool
-	recapUnknown bool
-	recapFault   func(string) error // crash/durability boundary injection; tests only
-	mu           sync.Mutex
-	clock        func() time.Time
+	root                 string
+	pathMu               sync.RWMutex
+	owner                *flock.Flock
+	closed               bool
+	recapConfirmed       bool
+	recapConfirmedDigest string
+	recapUnknown         bool
+	recapFault           func(string) error // crash/durability boundary injection; tests only
+	mu                   sync.Mutex
+	clock                func() time.Time
 	// crashBeforeHeadCommit is a test hook simulating a crash between the
 	// archive write and the head commit of a fold.
 	crashBeforeHeadCommit bool
@@ -161,7 +163,8 @@ type Store struct {
 type ActmemStore = Store
 
 // New creates a store without touching the filesystem. Reads of a missing
-// head return the canonical empty document and do not create directories.
+// legacy head return the canonical empty document and do not create directories.
+// Authoritative C1 operations acquire ownership and confirm recovery on first use.
 func New(configDir string) *Store {
 	return &Store{root: filepath.Join(configDir, "actmem")}
 }

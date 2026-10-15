@@ -42,11 +42,12 @@ type RecapCommit struct {
 }
 
 // ReadRecap returns one atomic view of committed text and coverage. An empty
-// legacy directory is represented by revision zero without changing its files.
+// legacy directory is represented by revision zero. On Windows, zero means
+// uninitialized current state, not a durable receipt or negative operation result.
 func (s *Store) ReadRecap(ctx context.Context, binding RecapBinding) (RecapHead, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	history, err := s.recapChain(ctx, binding)
+	history, err := s.recapChain(ctx, binding, true)
 	if err != nil {
 		return RecapHead{}, err
 	}
@@ -59,7 +60,7 @@ func (s *Store) ReadRecap(ctx context.Context, binding RecapBinding) (RecapHead,
 func (s *Store) LookupRecapOperation(ctx context.Context, binding RecapBinding, operationID string) (RecapHead, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	history, err := s.recapChain(ctx, binding)
+	history, err := s.recapChain(ctx, binding, false)
 	if err != nil {
 		return RecapHead{}, false, err
 	}
@@ -79,7 +80,7 @@ func (s *Store) ListRecapHistory(ctx context.Context, binding RecapBinding, befo
 	if limit < 1 {
 		return nil, recapUnavailable("history limit must be positive", nil)
 	}
-	history, err := s.recapChain(ctx, binding)
+	history, err := s.recapChain(ctx, binding, false)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +100,7 @@ func (s *Store) ListRecapHistory(ctx context.Context, binding RecapBinding, befo
 func (s *Store) ReadRecapRevision(ctx context.Context, binding RecapBinding, revision uint64) (RecapHead, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	history, err := s.recapChain(ctx, binding)
+	history, err := s.recapChain(ctx, binding, false)
 	if err != nil {
 		return RecapHead{}, err
 	}
@@ -132,7 +133,7 @@ func (s *Store) CommitRecap(ctx context.Context, request RecapCommit) (RecapHead
 	if s.recapUnknown {
 		return RecapHead{}, newError("recap_commit_unknown", "reopen ACTMEM and resolve the attempted operation", nil)
 	}
-	history, err := s.recapChain(ctx, request.Binding)
+	history, err := s.recapChain(ctx, request.Binding, true)
 	if err != nil {
 		return RecapHead{}, err
 	}

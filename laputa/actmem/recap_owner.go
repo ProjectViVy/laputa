@@ -8,7 +8,8 @@ import (
 )
 
 // acquireOwner is called under mu (or before an Open Store is published).
-// New stays filesystem-free; its first mutation acquires the same lifetime lock.
+// New stays filesystem-free; its first mutation or authoritative C1 operation
+// acquires the same lifetime lock. Legacy reads remain observational.
 func (s *Store) acquireOwner() error {
 	if s.closed {
 		return newError("recap_unavailable", "ACTMEM owner is closed", nil)
