@@ -15,8 +15,9 @@ import (
 // RecapBinding is supplied by the trusted host, never inferred from text.
 type RecapBinding struct{ SubjectID, DomainID string }
 
-// SourceRange describes a complete contiguous range verified by the host. Digest
-// is opaque: this owner has no access to the original interaction evidence.
+// SourceRange describes a complete contiguous range verified by the host, or a
+// coverage-preserving reconcile receipt when After == Through. Digest is opaque:
+// this owner has no access to the original interaction evidence.
 type SourceRange struct {
 	After, Through uint64
 	Digest         string
@@ -182,6 +183,10 @@ func (s *Store) nextRecap(current RecapHead, request RecapCommit, history []Reca
 			return invalid()
 		}
 		next.CoveredThrough = request.Sources.Through
+	case "reconcile":
+		if request.RestoredFrom != 0 || request.Sources.After != current.CoveredThrough || request.Sources.Through != current.CoveredThrough || strings.TrimSpace(request.Sources.Digest) == "" {
+			return invalid()
+		}
 	case "edit", "clear", "restore":
 		if request.Sources != (SourceRange{}) {
 			return invalid()

@@ -62,6 +62,10 @@ func decodeRecap(raw []byte) (RecapHead, error) {
 		if head.Sources.Through <= head.Sources.After || strings.TrimSpace(head.Sources.Digest) == "" || head.CoveredThrough != head.Sources.Through || head.RestoredFrom != 0 {
 			return fail("invalid summary metadata", nil)
 		}
+	case "reconcile":
+		if head.Sources.After != head.CoveredThrough || head.Sources.Through != head.CoveredThrough || strings.TrimSpace(head.Sources.Digest) == "" || head.RestoredFrom != 0 {
+			return fail("invalid reconcile metadata", nil)
+		}
 	case "edit", "clear", "restore":
 		if head.Sources != (SourceRange{}) {
 			return fail("unexpected Recap source range", nil)

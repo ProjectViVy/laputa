@@ -176,6 +176,9 @@ func validateRecapTransition(previous, current RecapHead) error {
 	} else if current.CoveredThrough != previous.CoveredThrough {
 		return fail()
 	}
+	if current.Cause == "reconcile" && (current.Sources.After != previous.CoveredThrough || current.Sources.Through != previous.CoveredThrough) {
+		return fail()
+	}
 	request := RecapCommit{Binding: current.Binding, BaseRevision: previous.Revision, OperationID: current.OperationID, Text: current.Text, Cause: current.Cause, Sources: current.Sources, RestoredFrom: current.RestoredFrom}
 	if current.Cause == "restore" {
 		request.Text = ""
