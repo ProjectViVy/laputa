@@ -119,6 +119,12 @@ func decodeActivity(raw string) (activityIntent, error) {
 		return activityIntent{ActivityProjection: ActivityProjection{Status: "not_requested"}}, nil
 	}
 	var intent activityIntent
+	// The shared decoder checks unknown/duplicate fields, but its More check
+	// does not reject an extra root closing delimiter. Validate the entire
+	// document before any recovery/fence path may trust this durable metadata.
+	if !json.Valid([]byte(raw)) {
+		return intent, errors.New("invalid captured activity JSON document")
+	}
 	if err := evolution.DecodeStrictJSON([]byte(raw), &intent); err != nil {
 		return intent, err
 	}
@@ -129,6 +135,22 @@ func decodeActivity(raw string) (activityIntent, error) {
 	}
 	if intent.Schema != "garden.capture-activity/v1" {
 		return intent, errors.New("unknown captured activity intent schema")
+	}
+	if intent.Status == "applying" || intent.Status == "unknown" {
+		// Value decoding maps both absent and null revision to zero. Zero is a
+		// legitimate original first-append snapshot only when explicitly stored.
+		// Reject incomplete metadata without normalizing/resaving its evidence.
+		var original struct {
+			Before *struct {
+				Revision *uint64 `json:"revision"`
+			} `json:"before"`
+		}
+		if err := json.Unmarshal([]byte(raw), &original); err != nil {
+			return intent, err
+		}
+		if original.Before == nil || original.Before.Revision == nil {
+			return intent, errors.New("captured activity original snapshot revision is required")
+		}
 	}
 	if c := intent.LegacyConsumer; c != nil {
 		if c.State != "policy_closed" || c.Reason != "recap_v3" || c.Binding.SubjectID == "" || c.Binding.DomainID == "" || c.PolicyRevision == 0 || !validSnapshotHash(c.PolicyDigest) {
