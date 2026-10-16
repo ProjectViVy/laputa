@@ -106,6 +106,11 @@ func TestIssue58RecoveryReopenMustConfirmExactReceipt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := s.Close(); err != nil {
+			t.Errorf("close initial recovery owner: %v", err)
+		}
+	})
 	request, visible := issue58Unknown(t, s)
 	expectedFiles := issue58Files(t, s.Root())
 	if err := s.Close(); err != nil {
@@ -116,6 +121,11 @@ func TestIssue58RecoveryReopenMustConfirmExactReceipt(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		t.Cleanup(func() {
+			if err := recovering.Close(); err != nil {
+				t.Errorf("close recovering owner: %v", err)
+			}
+		})
 		called := false
 		recovering.recapFault = func(point string) error {
 			if point == "recovery_before_replace" {
@@ -136,7 +146,11 @@ func TestIssue58RecoveryReopenMustConfirmExactReceipt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer recovered.Close()
+	t.Cleanup(func() {
+		if err := recovered.Close(); err != nil {
+			t.Errorf("close recovered owner: %v", err)
+		}
+	})
 	var barriers []string
 	recovered.recapFault = func(point string) error { barriers = append(barriers, point); return nil }
 	receipt, err := recovered.CommitRecap(context.Background(), request)

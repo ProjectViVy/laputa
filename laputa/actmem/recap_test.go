@@ -306,6 +306,28 @@ func TestIssue58LegacyWriterRejectsV3(t *testing.T) {
 	}
 }
 
+func TestIssue58FileSnapshotPreservesDataAndLockMetadata(t *testing.T) {
+	s := issue58Store(t)
+	if err := os.MkdirAll(filepath.Join(s.Root(), "nested"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{"data.md": "exact owner data\r\n", filepath.Join("nested", ".owner.lock"): "ordinary nested file bytes"} {
+		if err := os.WriteFile(filepath.Join(s.Root(), name), []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files := issue58Files(t, s.Root())
+	if files[".owner.lock"] != "[coordination: regular file]" {
+		t.Fatal("root coordination entry must preserve presence/type without reading locked bytes")
+	}
+	if files["data.md"] != "exact owner data\r\n" || files[filepath.Join("nested", ".owner.lock")] != "ordinary nested file bytes" {
+		t.Fatal("snapshot lost exact data or widened the root-lock exception")
+	}
+	if len(files) != 3 {
+		t.Fatalf("snapshot omitted or invented files: %+v", files)
+	}
+}
+
 func issue58Files(t *testing.T, root string) map[string]string {
 	t.Helper()
 	out := map[string]string{}
@@ -313,12 +335,28 @@ func issue58Files(t *testing.T, root string) map[string]string {
 		if err != nil {
 			return err
 		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		if rel == ".owner.lock" {
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			if !info.Mode().IsRegular() {
+				return fmt.Errorf("owner coordination entry is not a regular file: %s", path)
+			}
+			// The Windows owner deliberately locks this coordination file's bytes.
+			// Retain its presence/type; every other data/history byte stays exact.
+			out[rel] = "[coordination: regular file]"
+			return nil
+		}
 		if !d.IsDir() {
 			raw, e := os.ReadFile(path)
 			if e != nil {
 				return e
 			}
-			rel, _ := filepath.Rel(root, path)
 			out[rel] = string(raw)
 		}
 		return nil
