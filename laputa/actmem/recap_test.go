@@ -319,7 +319,10 @@ func issue58Files(t *testing.T, root string) map[string]string {
 			return err
 		}
 		if !d.IsDir() {
-			if d.Name() == ".owner.lock" {
+			if path == filepath.Join(root, ".owner.lock") {
+				// Preserve presence/type evidence without reading the exclusively
+				// locked bytes. Same-named nested files remain ordinary data.
+				out[".owner.lock"] = "coordination:" + d.Type().String()
 				return nil
 			}
 			raw, e := os.ReadFile(path)
