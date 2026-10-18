@@ -63,16 +63,19 @@ type Service struct {
 	Spool    *activity.TransientSpool
 	// ProfileID binds ingestions to the host profile's subject scope; set
 	// by composition before Start.
-	ProfileID  string
-	queue      chan string
-	mu         sync.Mutex
-	started    bool
-	closed     bool
-	ctx        context.Context
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
-	activityMu sync.Mutex // serializes projection and session archive
-	workerID   string
+	ProfileID string
+	// RecapBinding is the trusted complete-domain policy resolved by composition,
+	// independent of the legacy ProfileID and installed before Start.
+	RecapBinding actmem.RecapBinding
+	queue        chan string
+	mu           sync.Mutex
+	started      bool
+	closed       bool
+	ctx          context.Context
+	cancel       context.CancelFunc
+	wg           sync.WaitGroup
+	activityMu   sync.Mutex // serializes projection and session archive
+	workerID     string
 }
 
 type MemoryWriter interface {
@@ -135,23 +138,19 @@ func (s *Service) Start() error {
 	if s.started {
 		return nil
 	}
-	rows, err := s.db.Query(`SELECT ingestion_id FROM ingestions WHERE status IN ('accepted','running','spooled') OR (activity_json<>'' AND json_extract(activity_json,'$.status')<>'applied') ORDER BY rowid`)
+	rows, err := s.activityRows(s.ctx, "")
 	if err != nil {
 		return err
 	}
 	var pending []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			rows.Close()
+	for _, row := range rows {
+		activityPending, err := s.needsLegacyActivity(s.ctx, row.intent)
+		if err != nil {
 			return err
 		}
-		pending = append(pending, id)
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return err
+		if row.status == "accepted" || row.status == "running" || row.status == "spooled" || activityPending {
+			pending = append(pending, row.id)
+		}
 	}
 	s.started = true
 	s.wg.Add(1)
@@ -284,14 +283,22 @@ func (s *Service) Window(ctx context.Context, workspace string, after, through u
 // HighWatermark returns the highest committed ledger sequence for the
 // workspace; zero means nothing captured yet.
 func (s *Service) HighWatermark(ctx context.Context, workspace string) (uint64, error) {
-	var seq sql.NullInt64
-	if err := s.db.QueryRowContext(ctx, `SELECT MAX(rowid) FROM ingestions WHERE workspace=? AND rowid<COALESCE((SELECT MIN(rowid) FROM ingestions WHERE workspace=? AND activity_json<>'' AND COALESCE(json_extract(activity_json,'$.status'),'unknown')<>'applied'),9223372036854775807)`, workspace, workspace).Scan(&seq); err != nil {
+	rows, err := s.activityRows(ctx, "WHERE workspace=?", workspace)
+	if err != nil {
 		return 0, err
 	}
-	if !seq.Valid {
-		return 0, nil
+	var high uint64
+	for _, row := range rows {
+		pending, err := s.needsLegacyActivity(ctx, row.intent)
+		if err != nil {
+			return 0, err
+		}
+		if pending {
+			break
+		}
+		high = row.seq
 	}
-	return uint64(seq.Int64), nil
+	return high, nil
 }
 
 func (s *Service) Get(ctx context.Context, id string) (Status, error) {

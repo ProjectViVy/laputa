@@ -137,6 +137,7 @@ func TestStoreV1AdmissionRequiresRenewal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer store.Close()
 	ctx := context.Background()
 
 	// Seed a legacy v1-shaped row: numeric sections, no schema_version.

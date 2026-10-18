@@ -8,11 +8,18 @@ import (
 
 	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
 	"github.com/ProjectViVy/laputa/garden/memory"
+	"github.com/ProjectViVy/laputa/laputa/actmem"
 )
 
 // Config contains explicit host-owned paths and trusted identity. Callers can
 // bind a session later, but cannot replace the configured principal or actor.
 type Config struct {
+	// ResolveRecapBinding is an optional trusted host grant for the complete
+	// subject sharing domain. It receives the existing Store.Root before any
+	// ingestion starts. Nil disables Recap without changing legacy behavior.
+	// The host owns durable subject/path registration; ProfileID is never used.
+	ResolveRecapBinding func(context.Context, string) (actmem.RecapBinding, error)
+
 	PersonaDir        string
 	PalacePath        string
 	ModelsDir         string
@@ -77,7 +84,7 @@ func Open(ctx context.Context, cfg Config) (*Client, error) {
 	core, err := runtimecore.Open(ctx, runtimecore.Config{
 		PersonaDir: cfg.PersonaDir, PalacePath: cfg.PalacePath, ModelsDir: cfg.ModelsDir,
 		StateDB: cfg.StateDB, ProfileID: cfg.ProfileID, RequireLocalModel: cfg.RequireLocalModel,
-		Backends: cfg.Backends,
+		Backends: cfg.Backends, ResolveRecapBinding: cfg.ResolveRecapBinding,
 	})
 	if err != nil {
 		return nil, err

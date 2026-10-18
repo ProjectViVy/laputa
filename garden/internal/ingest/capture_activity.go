@@ -3,11 +3,12 @@ package ingest
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
-	"io"
+	"math"
 	"strings"
 	"time"
 
@@ -25,10 +26,21 @@ type CaptureActivity struct {
 // ActivityProjection contains operation receipts, never a second copy of the
 // authoritative Markdown entries. Read their bodies only through ACTMEM.
 type ActivityProjection struct {
-	Status   string   `json:"status"`
-	Revision uint64   `json:"revision,omitempty"`
-	Entries  []string `json:"entries,omitempty"`
-	Error    string   `json:"error,omitempty"`
+	Status         string                     `json:"status"`
+	Revision       uint64                     `json:"revision,omitempty"`
+	Entries        []string                   `json:"entries,omitempty"`
+	Error          string                     `json:"error,omitempty"`
+	LegacyConsumer *LegacyConsumerDisposition `json:"legacy_consumer,omitempty"`
+}
+
+// LegacyConsumerDisposition closes only the incompatible consumer. The original
+// effect Status/Before/source/receipt remain independent, including uncertainty.
+type LegacyConsumerDisposition struct {
+	State          string              `json:"state"`
+	Reason         string              `json:"reason"`
+	Binding        actmem.RecapBinding `json:"binding"`
+	PolicyRevision uint64              `json:"policy_revision"`
+	PolicyDigest   string              `json:"policy_digest"`
 }
 
 type activityIntent struct {
@@ -98,28 +110,54 @@ func (s *Service) loadActivity(ctx context.Context, id string) (activityIntent, 
 	if err != nil {
 		return activityIntent{}, 0, "", "", "", err
 	}
+	intent, err := decodeActivity(raw)
+	return intent, seq, session, event, workspace, err
+}
+
+func decodeActivity(raw string) (activityIntent, error) {
 	if raw == "" {
-		return activityIntent{ActivityProjection: ActivityProjection{Status: "not_requested"}}, seq, session, event, workspace, nil
+		return activityIntent{ActivityProjection: ActivityProjection{Status: "not_requested"}}, nil
 	}
 	var intent activityIntent
-	decoder := json.NewDecoder(strings.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&intent); err != nil {
-		return intent, 0, "", "", "", err
+	// The shared decoder checks unknown/duplicate fields, but its More check
+	// does not reject an extra root closing delimiter. Validate the entire
+	// document before any recovery/fence path may trust this durable metadata.
+	if !json.Valid([]byte(raw)) {
+		return intent, errors.New("invalid captured activity JSON document")
 	}
-	var trailing any
-	if err := decoder.Decode(&trailing); err != io.EOF {
-		return intent, 0, "", "", "", errors.New("trailing captured activity intent data")
+	if err := evolution.DecodeStrictJSON([]byte(raw), &intent); err != nil {
+		return intent, err
 	}
 	switch intent.Status {
 	case "pending", "applying", "applied", "unknown":
 	default:
-		return intent, 0, "", "", "", errors.New("invalid captured activity status")
+		return intent, errors.New("invalid captured activity status")
 	}
 	if intent.Schema != "garden.capture-activity/v1" {
-		return intent, 0, "", "", "", errors.New("unknown captured activity intent schema")
+		return intent, errors.New("unknown captured activity intent schema")
 	}
-	return intent, seq, session, event, workspace, nil
+	if intent.Status == "applying" || intent.Status == "unknown" {
+		// Value decoding maps both absent and null revision to zero. Zero is a
+		// legitimate original first-append snapshot only when explicitly stored.
+		// Reject incomplete metadata without normalizing/resaving its evidence.
+		var original struct {
+			Before *struct {
+				Revision *uint64 `json:"revision"`
+			} `json:"before"`
+		}
+		if err := json.Unmarshal([]byte(raw), &original); err != nil {
+			return intent, err
+		}
+		if original.Before == nil || original.Before.Revision == nil {
+			return intent, errors.New("captured activity original snapshot revision is required")
+		}
+	}
+	if c := intent.LegacyConsumer; c != nil {
+		if c.State != "policy_closed" || c.Reason != "recap_v3" || c.Binding.SubjectID == "" || c.Binding.DomainID == "" || c.PolicyRevision == 0 || !validSnapshotHash(c.PolicyDigest) {
+			return intent, errors.New("invalid legacy consumer disposition")
+		}
+	}
+	return intent, nil
 }
 
 func (s *Service) saveActivity(ctx context.Context, id string, intent activityIntent) error {
@@ -181,7 +219,20 @@ func (s *Service) projectActivity(ctx context.Context, id string) error {
 	if s.Actmem == nil {
 		return errors.New("native ACTMEM projection unavailable")
 	}
+	if intent.LegacyConsumer != nil {
+		_, err := s.needsLegacyActivity(ctx, intent)
+		return err
+	}
 	pair := s.projectedPair(intent, seq, session, event, workspace)
+	// A healthy legacy snapshot retains the existing path. Only an incompatible
+	// path consults the trusted positive C1 policy; generic errors never skip.
+	if _, err := s.Actmem.AppendSnapshot(); err != nil {
+		closed, closeErr := s.closeLegacyConsumer(ctx, id, intent, pair)
+		if closed || closeErr != nil {
+			return closeErr
+		}
+		return err
+	}
 	if intent.Status == "applying" || intent.Status == "unknown" {
 		result, found, err := s.Actmem.LookupCaptured(pair)
 		if err != nil {
@@ -234,6 +285,9 @@ func (s *Service) projectActivity(ctx context.Context, id string) error {
 			}
 			continue // explicit no-effect CAS rejection
 		}
+		if closed, closeErr := s.closeLegacyConsumer(ctx, id, intent, pair); closed || closeErr != nil {
+			return closeErr
+		}
 		intent.Status = "unknown"
 		intent.Error = actmem.CodeOf(err)
 		receiptCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
@@ -252,26 +306,19 @@ func (s *Service) projectActivity(ctx context.Context, id string) error {
 func (s *Service) drainActivity(ctx context.Context) error {
 	s.activityMu.Lock()
 	defer s.activityMu.Unlock()
-	rows, err := s.db.QueryContext(ctx, `SELECT ingestion_id FROM ingestions WHERE activity_json<>'' AND json_extract(activity_json,'$.status')<>'applied' ORDER BY rowid`)
+	rows, err := s.activityRows(ctx, "WHERE activity_json<>''")
 	if err != nil {
 		return err
 	}
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			_ = rows.Close()
+	for _, row := range rows {
+		pending, err := s.needsLegacyActivity(ctx, row.intent)
+		if err != nil {
 			return err
 		}
-		ids = append(ids, id)
-	}
-	err = rows.Err()
-	_ = rows.Close()
-	if err != nil {
-		return err
-	}
-	for _, id := range ids {
-		if err := s.projectActivity(ctx, id); err != nil {
+		if !pending {
+			continue
+		}
+		if err := s.projectActivity(ctx, row.id); err != nil {
 			return err
 		}
 	}
@@ -284,32 +331,125 @@ func (s *Service) ArchiveSession(ctx context.Context, session string) error {
 	if s.Actmem == nil {
 		return errors.New("native ACTMEM archive unavailable")
 	}
-	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		s.activityMu.Lock()
-		var pending int
-		err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM ingestions WHERE session_id=? AND activity_json<>'' AND COALESCE(json_extract(activity_json,'$.status'),'unknown')<>'applied'`, session).Scan(&pending)
-		if err == nil && pending == 0 {
-			_, err = s.Actmem.FoldSession(session)
-		}
-		s.activityMu.Unlock()
+	s.activityMu.Lock()
+	defer s.activityMu.Unlock()
+	rows, err := s.activityRows(ctx, "WHERE session_id=?", session)
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		pending, err := s.needsLegacyActivity(ctx, row.intent)
 		if err != nil {
 			return err
 		}
-		if pending == 0 {
-			return nil
-		}
-		timer := time.NewTimer(25 * time.Millisecond)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
-		case <-s.ctx.Done():
-			timer.Stop()
-			return s.ctx.Err()
-		case <-timer.C:
+		if pending {
+			if err := s.projectActivity(ctx, row.id); err != nil {
+				return err
+			}
 		}
 	}
+	if _, err := s.Actmem.AppendSnapshot(); err != nil {
+		head, policyErr := s.legacyPolicy(ctx)
+		if policyErr != nil {
+			return policyErr
+		}
+		if head.Revision > 0 {
+			return nil
+		} // Policy no-op; no capsule/fold is claimed.
+		return err
+	}
+	_, err = s.Actmem.FoldSession(session)
+	return err
+}
+
+func validSnapshotHash(value string) bool {
+	raw, err := hex.DecodeString(value)
+	return err == nil && len(raw) == 32 && value == hex.EncodeToString(raw)
+}
+
+func (s *Service) legacyPolicy(ctx context.Context) (actmem.RecapHead, error) {
+	if s.Actmem == nil || s.RecapBinding == (actmem.RecapBinding{}) {
+		return actmem.RecapHead{}, nil
+	}
+	head, err := s.Actmem.ReadRecap(ctx, s.RecapBinding)
+	if actmem.CodeOf(err) == "recap_legacy_nonempty" {
+		return actmem.RecapHead{}, nil
+	}
+	return head, err
+}
+
+func (s *Service) closeLegacyConsumer(ctx context.Context, id string, intent activityIntent, pair []evolution.Entry) (bool, error) {
+	head, err := s.legacyPolicy(ctx)
+	if err != nil || head.Revision == 0 {
+		return false, err
+	}
+	if (intent.Status == "applying" || intent.Status == "unknown") && validSnapshotHash(intent.Before.SHA256) && intent.Before.Revision < math.MaxUint64 {
+		result, found, lookupErr := s.Actmem.LookupCaptured(pair)
+		if lookupErr == nil && found {
+			return true, s.finishActivity(ctx, id, intent, result)
+		}
+		if lookupErr != nil && actmem.CodeOf(lookupErr) != "actmem_capture_conflict" && actmem.CodeOf(lookupErr) != "actmem_recovery_required" {
+			return false, lookupErr
+		}
+		// Missing/partial/conflicting proof never establishes a negative effect.
+		// Close only the consumer and retain every original uncertainty field.
+	}
+	intent.LegacyConsumer = &LegacyConsumerDisposition{State: "policy_closed", Reason: "recap_v3", Binding: head.Binding, PolicyRevision: head.Revision, PolicyDigest: head.Digest}
+	return true, s.saveActivity(ctx, id, intent)
+}
+
+func (s *Service) needsLegacyActivity(ctx context.Context, intent activityIntent) (bool, error) {
+	if intent.Status == "not_requested" || intent.Status == "applied" {
+		return false, nil
+	}
+	c := intent.LegacyConsumer
+	if c == nil {
+		return true, nil
+	}
+	head, err := s.legacyPolicy(ctx)
+	if err != nil {
+		return true, err
+	}
+	if head.Revision == 0 || c.Binding != head.Binding {
+		return true, errors.New("legacy consumer policy is not confirmed by the current owner")
+	}
+	proof, err := s.Actmem.ReadRecapRevision(ctx, s.RecapBinding, c.PolicyRevision)
+	if err != nil {
+		return true, err
+	}
+	if proof.Digest != c.PolicyDigest {
+		return true, errors.New("legacy consumer policy proof differs")
+	}
+	return false, nil
+}
+
+type activityRow struct {
+	id, status string
+	seq        uint64
+	intent     activityIntent
+}
+
+// Read one ordered SQLite snapshot, release rows, then enter owner IO. Strict
+// native decoding and needsLegacyActivity are shared by every recovery/fence path;
+// SQL JSON shortcuts cannot hide malformed or unknown consumer dispositions.
+func (s *Service) activityRows(ctx context.Context, where string, args ...any) ([]activityRow, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT rowid,ingestion_id,status,activity_json FROM ingestions `+where+` ORDER BY rowid`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []activityRow
+	for rows.Next() {
+		var row activityRow
+		var raw string
+		if err := rows.Scan(&row.seq, &row.id, &row.status, &raw); err != nil {
+			return nil, err
+		}
+		row.intent, err = decodeActivity(raw)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
 }

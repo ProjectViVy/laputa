@@ -245,6 +245,11 @@ func TestActivityEndpoints(t *testing.T) {
 func TestActmemReadWriteAndExplicitOnlyRoutes(t *testing.T) {
 	dir := t.TempDir()
 	store := actmem.New(dir)
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("close ACTMEM owner: %v", err)
+		}
+	})
 	srv := testServer()
 	srv.Actmem = store
 	srv.Capabilities = CapabilityConfig{UserToken: "user-secret", AgentToken: "agent-secret"}

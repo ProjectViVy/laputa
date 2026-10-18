@@ -53,6 +53,11 @@ func newConformanceFixture(t *testing.T) *conformanceFixture {
 		t.Fatal(err)
 	}
 	activity := actmem.New(filepath.Join(dir, "activity"))
+	t.Cleanup(func() {
+		if err := activity.Close(); err != nil {
+			t.Errorf("close ACTMEM owner: %v", err)
+		}
+	})
 	if _, err := activity.AppendEntry(evolution.Entry{Section: evolution.SectionPulse, Scope: evolution.Scope{SubjectID: "profile_1", Kind: evolution.ScopePersonal}, SessionID: "session-conformance", Body: conformanceActmem}); err != nil {
 		t.Fatal(err)
 	}

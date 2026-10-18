@@ -12,6 +12,7 @@ import (
 func TestMissingHeadIsEmptyWithoutCreatingDirectories(t *testing.T) {
 	temp := t.TempDir()
 	store := New(temp)
+	t.Cleanup(func() { _ = store.Close() })
 	document, err := store.Read()
 	if err != nil {
 		t.Fatal(err)
@@ -28,6 +29,7 @@ func TestAppendCASAndRestart(t *testing.T) {
 	temp := t.TempDir()
 	clock := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
 	store := New(temp)
+	t.Cleanup(func() { _ = store.Close() })
 	store.SetClock(func() time.Time { return clock })
 	first, err := store.AppendEntry(evolution.Entry{Section: evolution.SectionPulse, Scope: evolution.Scope{SubjectID: "sub", Kind: evolution.ScopePersonal}, SessionID: "gui:one", Body: "hello"})
 	if err != nil {
@@ -36,7 +38,11 @@ func TestAppendCASAndRestart(t *testing.T) {
 	if !first.Changed || first.Revision != 1 {
 		t.Fatalf("first = %#v", first)
 	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
 	restarted := New(temp)
+	t.Cleanup(func() { _ = restarted.Close() })
 	document, err := restarted.Read()
 	if err != nil || document.Revision != 1 || !strings.Contains(document.Pulse, "hello") {
 		t.Fatalf("restart = %#v, %v", document, err)
@@ -49,6 +55,7 @@ func TestAppendCASAndRestart(t *testing.T) {
 func TestCapsuleLifecycle(t *testing.T) {
 	temp := t.TempDir()
 	store := New(temp)
+	t.Cleanup(func() { _ = store.Close() })
 	if _, err := store.AppendEntry(evolution.Entry{Section: evolution.SectionPulse, Scope: evolution.Scope{SubjectID: "sub", Kind: evolution.ScopeWorkspace, WorkspaceID: "w"}, SessionID: "s-1", Body: "folded line"}); err != nil {
 		t.Fatal(err)
 	}
@@ -80,6 +87,7 @@ func TestCapsuleLifecycle(t *testing.T) {
 
 func TestQueryRespectsScope(t *testing.T) {
 	store := New(t.TempDir())
+	t.Cleanup(func() { _ = store.Close() })
 	for _, e := range []evolution.Entry{
 		{Section: evolution.SectionPulse, Scope: evolution.Scope{SubjectID: "sub", Kind: evolution.ScopeWorkspace, WorkspaceID: "ws-x"}, SessionID: "s", Body: "x scoped needle"},
 		{Section: evolution.SectionPulse, Scope: evolution.Scope{SubjectID: "sub", Kind: evolution.ScopeWorkspace, WorkspaceID: "ws-y"}, SessionID: "s", Body: "y scoped needle"},

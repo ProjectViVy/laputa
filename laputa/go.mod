@@ -5,6 +5,7 @@ go 1.26.4
 require (
 	github.com/ProjectViVy/inofy v0.0.0-20260930141905-71e2c9bbe47d
 	github.com/cloudwego/eino v0.9.13
+	github.com/gofrs/flock v0.13.0
 	github.com/rivo/uniseg v0.4.7
 	golang.org/x/text v0.37.0
 	gopkg.in/yaml.v3 v3.0.1

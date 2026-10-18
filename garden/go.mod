@@ -70,4 +70,5 @@ require (
 replace (
 	github.com/ProjectViVy/laputa/laputa => ../laputa
 	github.com/ProjectViVy/laputa/mentle => ../mentle
+	github.com/google/renameio => ./third_party/renameio
 )
