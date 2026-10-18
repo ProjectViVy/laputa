@@ -14,8 +14,51 @@ const (
 	KindMemoryMutation     EffectKind = "memory_mutation"
 	KindPersonaRequest     EffectKind = "persona_request"
 	KindCapabilityProposal EffectKind = "capability_proposal"
+	KindSkillProposal      EffectKind = "skill_proposal"
 	KindReflectionNote     EffectKind = "reflection_note"
 )
+
+// SkillProposalOperation selects a local VIVY Skill create or update review.
+type SkillProposalOperation string
+
+const (
+	SkillProposalCreate SkillProposalOperation = "create"
+	SkillProposalUpdate SkillProposalOperation = "update"
+)
+
+// SkillProposalPayload is a candidate for VIVY's local Skill authority. It
+// carries no permission to write; the host stages it for explicit review.
+type SkillProposalPayload struct {
+	Operation       SkillProposalOperation `json:"operation"`
+	SkillName       string                 `json:"skill_name"`
+	BaseHash        string                 `json:"base_hash,omitempty"`
+	ProposedContent string                 `json:"proposed_content"`
+	Rationale       string                 `json:"rationale"`
+	Sources         []SourceRef            `json:"sources"`
+}
+
+// Validate enforces update-first identity and evidence requirements.
+func (p *SkillProposalPayload) Validate() error {
+	if p.SkillName == "" || p.ProposedContent == "" || p.Rationale == "" {
+		return invalidSchema("skill_proposal name, content and rationale required")
+	}
+	switch p.Operation {
+	case SkillProposalCreate:
+		if p.BaseHash != "" {
+			return invalidSchema("skill_proposal create cannot carry a base hash")
+		}
+	case SkillProposalUpdate:
+		if p.BaseHash == "" {
+			return invalidSchema("skill_proposal update requires a base hash")
+		}
+	default:
+		return invalidSchema("unknown skill_proposal operation %q", p.Operation)
+	}
+	if len(p.Sources) == 0 {
+		return invalidSchema("skill_proposal requires source evidence")
+	}
+	return validateSources(p.Sources)
+}
 
 // MutationOperation is the closed memory-mutation vocabulary.
 type MutationOperation string
@@ -148,6 +191,7 @@ type effectPayloads struct {
 	MemoryMutation     *MemoryMutationPayload     `json:"memory_mutation,omitempty"`
 	PersonaRequest     *PersonaRequestPayload     `json:"persona_request,omitempty"`
 	CapabilityProposal *CapabilityProposalPayload `json:"capability_proposal,omitempty"`
+	SkillProposal      *SkillProposalPayload      `json:"skill_proposal,omitempty"`
 	ReflectionNote     *ReflectionNotePayload     `json:"reflection_note,omitempty"`
 }
 
@@ -170,6 +214,10 @@ func (p *effectPayloads) Payload() any {
 		if p.CapabilityProposal != nil {
 			return p.CapabilityProposal
 		}
+	case KindSkillProposal:
+		if p.SkillProposal != nil {
+			return p.SkillProposal
+		}
 	case KindReflectionNote:
 		if p.ReflectionNote != nil {
 			return p.ReflectionNote
@@ -180,13 +228,13 @@ func (p *effectPayloads) Payload() any {
 
 func (p *effectPayloads) validate() error {
 	present := 0
-	for _, set := range []bool{p.WorkPatch != nil, p.MemoryMutation != nil, p.PersonaRequest != nil, p.CapabilityProposal != nil, p.ReflectionNote != nil} {
+	for _, set := range []bool{p.WorkPatch != nil, p.MemoryMutation != nil, p.PersonaRequest != nil, p.CapabilityProposal != nil, p.SkillProposal != nil, p.ReflectionNote != nil} {
 		if set {
 			present++
 		}
 	}
 	switch p.Kind {
-	case KindWorkPatch, KindMemoryMutation, KindPersonaRequest, KindCapabilityProposal, KindReflectionNote:
+	case KindWorkPatch, KindMemoryMutation, KindPersonaRequest, KindCapabilityProposal, KindSkillProposal, KindReflectionNote:
 	default:
 		return invalidSchema("unknown effect kind %q", p.Kind)
 	}
@@ -205,6 +253,8 @@ func (p *effectPayloads) validate() error {
 	case *PersonaRequestPayload:
 		return payload.Validate()
 	case *CapabilityProposalPayload:
+		return payload.Validate()
+	case *SkillProposalPayload:
 		return payload.Validate()
 	case *ReflectionNotePayload:
 		return payload.Validate()
@@ -230,6 +280,7 @@ type effectWire struct {
 	MemoryMutation     *MemoryMutationPayload     `json:"memory_mutation,omitempty"`
 	PersonaRequest     *PersonaRequestPayload     `json:"persona_request,omitempty"`
 	CapabilityProposal *CapabilityProposalPayload `json:"capability_proposal,omitempty"`
+	SkillProposal      *SkillProposalPayload      `json:"skill_proposal,omitempty"`
 	ReflectionNote     *ReflectionNotePayload     `json:"reflection_note,omitempty"`
 }
 
@@ -263,6 +314,7 @@ func DecodeEffect(data []byte) (Effect, error) {
 			MemoryMutation:     w.MemoryMutation,
 			PersonaRequest:     w.PersonaRequest,
 			CapabilityProposal: w.CapabilityProposal,
+			SkillProposal:      w.SkillProposal,
 			ReflectionNote:     w.ReflectionNote,
 		},
 	}
@@ -282,6 +334,7 @@ func (e Effect) MarshalJSON() ([]byte, error) {
 		MemoryMutation:     e.MemoryMutation,
 		PersonaRequest:     e.PersonaRequest,
 		CapabilityProposal: e.CapabilityProposal,
+		SkillProposal:      e.SkillProposal,
 		ReflectionNote:     e.ReflectionNote,
 	})
 }
@@ -300,6 +353,8 @@ func NewEffect(operationID string, kind EffectKind, payload any, scope Scope, de
 		e.PersonaRequest = p
 	case *CapabilityProposalPayload:
 		e.CapabilityProposal = p
+	case *SkillProposalPayload:
+		e.SkillProposal = p
 	case *ReflectionNotePayload:
 		e.ReflectionNote = p
 	default:

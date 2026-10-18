@@ -30,7 +30,11 @@ func (f *fakeDomain) Apply(_ context.Context, e evolution.Effect) (evolution.Eff
 	if r, ok := f.applyOut[e.OperationID]; ok {
 		return r, nil
 	}
-	return evolution.EffectReceipt{OperationID: e.OperationID, PayloadDigest: e.PayloadDigest, Status: evolution.StatusApplied, Revision: 1}, nil
+	status := evolution.StatusApplied
+	if e.Kind == evolution.KindSkillProposal {
+		status = evolution.StatusSubmitted
+	}
+	return evolution.EffectReceipt{OperationID: e.OperationID, PayloadDigest: e.PayloadDigest, Status: status, Revision: 1}, nil
 }
 
 func (f *fakeDomain) Lookup(_ context.Context, opID string) (evolution.EffectReceipt, error) {
@@ -41,17 +45,33 @@ func (f *fakeDomain) Lookup(_ context.Context, opID string) (evolution.EffectRec
 }
 
 type fakeModel struct {
-	calls   []evolution.ModelStage
-	replies map[evolution.ModelStage]json.RawMessage
+	calls    []evolution.ModelStage
+	requests []evolution.ModelRequest
+	replies  map[evolution.ModelStage]json.RawMessage
 }
 
 func (f *fakeModel) Infer(_ context.Context, req evolution.ModelRequest) (evolution.ModelReply, error) {
 	f.calls = append(f.calls, req.Stage)
+	f.requests = append(f.requests, req)
 	out, ok := f.replies[req.Stage]
 	if !ok {
 		out = json.RawMessage(`{}`)
 	}
 	return evolution.ModelReply{OutputJSON: out}, nil
+}
+
+type fakeSkillSource struct {
+	*fakeDomain
+	items []evolution.LocalSkillSummary
+	docs  map[string]evolution.LocalSkillDocument
+}
+
+func (f *fakeSkillSource) ListLocalSkills(context.Context) ([]evolution.LocalSkillSummary, error) {
+	return f.items, nil
+}
+
+func (f *fakeSkillSource) ReadLocalSkill(_ context.Context, name string) (evolution.LocalSkillDocument, error) {
+	return f.docs[name], nil
 }
 
 // --- helpers ---
@@ -191,6 +211,50 @@ func TestStrategyRoutesTypedEffectsInOrder(t *testing.T) {
 	}
 	if out.Status != OutcomeApplied && out.Status != OutcomeSubmitted {
 		t.Fatalf("status = %q", out.Status)
+	}
+}
+
+func TestStrategyReadsMatchedLocalSkillBeforeReflectingProposal(t *testing.T) {
+	source := evolution.SourceRef{SourceID: "activity", RecordID: "r1", Revision: 1, Scope: evolution.Scope{SubjectID: "profile_1", Kind: evolution.ScopePersonal}}
+	doc := evolution.LocalSkillDocument{Name: "release-notes", Hash: "base-1", Content: "# Release notes\n\nRecord user-facing changes."}
+	d := &fakeSkillSource{
+		fakeDomain: &fakeDomain{batch: testBatch()},
+		items:      []evolution.LocalSkillSummary{{Name: doc.Name, Description: "Write project release notes.", Hash: doc.Hash}},
+		docs:       map[string]evolution.LocalSkillDocument{doc.Name: doc},
+	}
+	selectReply, _ := json.Marshal(map[string]string{"skill_name": doc.Name})
+	noChangePatch := json.RawMessage(`{"base_revision":5,"changes":[]}`)
+	proposal, _ := json.Marshal(map[string]any{
+		"kind": "skill_proposal",
+		"skill_proposal": map[string]any{
+			"operation": "update", "skill_name": doc.Name, "base_hash": doc.Hash,
+			"proposed_content": "# Release notes\\n\\nRecord user-facing changes and group them by version.",
+			"rationale":        "The same release task recurred.", "sources": []evolution.SourceRef{source},
+		},
+	})
+	m := &fakeModel{replies: map[evolution.ModelStage]json.RawMessage{
+		evolution.StageReconcile:   noChangePatch,
+		evolution.StageSkillSelect: selectReply,
+		evolution.StageReflect:     reflectReply(proposal),
+	}}
+	out, err := New(d, m).Run(context.Background(), testInput(), "op-skill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d.applied) != 1 || d.applied[0].Kind != evolution.KindSkillProposal {
+		t.Fatalf("effects = %#v", d.applied)
+	}
+	if len(m.requests) < 3 || m.requests[1].Stage != evolution.StageSkillSelect || m.requests[2].Stage != evolution.StageReflect {
+		t.Fatalf("inference stages = %#v", m.calls)
+	}
+	var reflectionInput struct {
+		SelectedSkill evolution.LocalSkillDocument `json:"selected_skill"`
+	}
+	if err := json.Unmarshal(m.requests[2].InputJSON, &reflectionInput); err != nil || reflectionInput.SelectedSkill.Content != doc.Content {
+		t.Fatalf("selected Skill was not read into reflection input: %+v, %v", reflectionInput, err)
+	}
+	if len(out.Receipts) != 1 || out.Receipts[0].Status != evolution.StatusSubmitted {
+		t.Fatalf("skill proposal outcome = %+v, want submitted for human review", out.Receipts)
 	}
 }
 
