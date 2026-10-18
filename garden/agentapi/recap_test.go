@@ -25,9 +25,14 @@ func recapConfig(t *testing.T) Config {
 	t.Helper()
 	cfg := clientConfig(t)
 	cfg.Principal = PrincipalUser
+	canonicalParent, err := filepath.EvalSymlinks(filepath.Dir(cfg.PersonaDir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantRoot := filepath.Join(canonicalParent, filepath.Base(cfg.PersonaDir), "actmem")
 	cfg.ResolveRecapBinding = func(_ context.Context, root string) (actmem.RecapBinding, error) {
-		if root != filepath.Join(cfg.PersonaDir, "actmem") {
-			t.Fatalf("resolver root=%q", root)
+		if root != wantRoot {
+			t.Errorf("resolver root=%q want=%q", root, wantRoot)
 		}
 		return actmem.RecapBinding{SubjectID: "organism-uuid", DomainID: "shared-personal-v1"}, nil
 	}

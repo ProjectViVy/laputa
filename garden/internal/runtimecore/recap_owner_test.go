@@ -84,8 +84,11 @@ func TestIssue58RecapArmedOpenFailureReleasesOwner(t *testing.T) {
 			cfg := testConfig(t)
 			want := errors.New("binding registry failed")
 			cfg.ResolveRecapBinding = func(_ context.Context, root string) (actmem.RecapBinding, error) {
-				if root != filepath.Join(cfg.PersonaDir, "actmem") {
-					t.Errorf("unexpected owner root %q", root)
+				wantRoot, err := filepath.EvalSymlinks(filepath.Join(cfg.PersonaDir, "actmem"))
+				if err != nil {
+					t.Errorf("resolve expected owner root: %v", err)
+				} else if root != wantRoot {
+					t.Errorf("unexpected owner root %q want %q", root, wantRoot)
 				}
 				competitor, err := actmem.Open(cfg.PersonaDir)
 				if competitor != nil {

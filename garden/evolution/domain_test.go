@@ -150,6 +150,13 @@ func newDomain(t *testing.T, deps Deps) *Domain {
 	if deps.Dir == "" {
 		deps.Dir = t.TempDir()
 	}
+	if deps.Actmem != nil {
+		t.Cleanup(func() {
+			if err := deps.Actmem.Close(); err != nil {
+				t.Errorf("close ACTMEM owner: %v", err)
+			}
+		})
+	}
 	d, err := NewDomain(deps)
 	if err != nil {
 		t.Fatal(err)

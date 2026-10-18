@@ -2,6 +2,7 @@ package actmem
 
 import (
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -105,5 +106,18 @@ func TestCapturedPairRefusesPartialLegacyEffect(t *testing.T) {
 	}
 	if _, found, err := store.LookupCaptured(pair); found || CodeOf(err) != "actmem_recovery_required" {
 		t.Fatalf("partial pair disguised as receipt: %v %v", found, err)
+	}
+}
+
+func TestReadSessionCapsulesRejectsNonDirectoryPath(t *testing.T) {
+	store := New(filepath.Join(t.TempDir(), "persona"))
+	if err := os.MkdirAll(store.Root(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(store.CapsulesDir(), []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.readSessionCapsules("s-1", false); CodeOf(err) != "actmem_io_error" {
+		t.Fatalf("non-directory archive path was treated as absent: %v", err)
 	}
 }

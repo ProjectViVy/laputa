@@ -320,9 +320,14 @@ func (s *Store) sessionCapsules(sessionKey string) ([]sessionCapsule, error) {
 }
 
 func (s *Store) readSessionCapsules(sessionKey string, strict bool) ([]sessionCapsule, error) {
-	entries, err := os.ReadDir(s.CapsulesDir())
+	capsulesDir := s.CapsulesDir()
+	entries, err := os.ReadDir(capsulesDir)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
+		if _, statErr := os.Stat(capsulesDir); errors.Is(statErr, os.ErrNotExist) {
+			return nil, nil
+		} else if statErr != nil {
+			return nil, newError("actmem_io_error", "cannot inspect capsules directory", statErr)
+		}
 	}
 	if err != nil {
 		return nil, newError("actmem_io_error", "cannot list capsules", err)

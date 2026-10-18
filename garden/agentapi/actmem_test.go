@@ -13,9 +13,19 @@ import (
 
 func seedEntry(t *testing.T, a *actmem.Store, section evolution.EntrySection, scope evolution.Scope, sessionID, body string) {
 	t.Helper()
+	closeTestActmem(t, a)
 	if _, err := a.AppendEntry(evolution.Entry{Section: section, Scope: scope, SessionID: sessionID, Body: body}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func closeTestActmem(t *testing.T, a *actmem.Store) {
+	t.Helper()
+	t.Cleanup(func() {
+		if err := a.Close(); err != nil {
+			t.Errorf("close ACTMEM owner: %v", err)
+		}
+	})
 }
 
 func personalScope(subject string) evolution.Scope {
@@ -73,6 +83,7 @@ func TestReadActivityOnUnclassifiedHeadReturnsEmpty(t *testing.T) {
 
 func TestApplyWorkPatchScoped(t *testing.T) {
 	a := actmem.New(t.TempDir())
+	closeTestActmem(t, a)
 	s := NewService(&runtimecore.Garden{ProfileID: "default", Actmem: a})
 	bound := Binding{ProfileID: "default", AgentID: "agent-1", Platform: "vivy", SessionID: "s-1", WorkspaceID: "ws-a"}
 	result, err := s.ApplyWorkPatch(context.Background(), PrincipalAgent, bound, WorkPatch{
@@ -105,6 +116,7 @@ func TestApplyWorkPatchScoped(t *testing.T) {
 
 func TestAppendActivityDedupesEventID(t *testing.T) {
 	a := actmem.New(t.TempDir())
+	closeTestActmem(t, a)
 	s := NewService(&runtimecore.Garden{ProfileID: "default", Actmem: a})
 	entry := Entry{Section: evolution.SectionPulse, Scope: personalScope("default"), SessionID: "s-1", EventID: "evt-1", Body: "once"}
 	first, err := s.AppendActivity(context.Background(), PrincipalAgent, binding(), entry)
