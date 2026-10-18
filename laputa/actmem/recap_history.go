@@ -50,6 +50,13 @@ func (s *Store) recapChain(ctx context.Context, binding RecapBinding, allowUnini
 		return nil, newError("recap_commit_unknown", "missing Recap head cannot establish durable negative resolution on this platform", nil)
 	}
 	if err := s.recoverRecap(ctx, binding, history); err != nil {
+		// A canceled or expired context stops recovery before any head
+		// replacement is attempted (publishRecapHead marks the owner unknown
+		// itself once a replacement starts). Nothing is uncertain, so the next
+		// call simply recovers again instead of wedging the owner until reopen.
+		if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, ctxErr) {
+			return nil, err
+		}
 		s.recapUnknown = true
 		return nil, newError("recap_commit_unknown", "Recap recovery durability is unconfirmed; reopen and retry recovery", err)
 	}
