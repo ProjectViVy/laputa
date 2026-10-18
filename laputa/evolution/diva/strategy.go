@@ -381,11 +381,11 @@ func referencesEvidence(refs []evolution.SourceRef, batch *evolution.EvidenceBat
 		}
 	}
 	for _, ref := range refs {
-		if _, ok := valid[ref]; ok {
-			return true
+		if _, ok := valid[ref]; !ok {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 // effects routes candidates in stable order. Each operation ID is the

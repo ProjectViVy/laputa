@@ -258,6 +258,17 @@ func TestStrategyReadsMatchedLocalSkillBeforeReflectingProposal(t *testing.T) {
 	}
 }
 
+func TestSkillProposalRejectsPartiallyUnadmittedSources(t *testing.T) {
+	valid := evolution.SourceRef{SourceID: "activity", RecordID: "r1", Revision: 1,
+		Scope: evolution.Scope{SubjectID: "profile_1", Kind: evolution.ScopePersonal}}
+	forged := evolution.SourceRef{SourceID: "activity", RecordID: "outside-window", Revision: 99,
+		Scope: evolution.Scope{SubjectID: "profile_1", Kind: evolution.ScopePersonal}}
+	batch := testBatch()
+	if referencesEvidence([]evolution.SourceRef{valid, forged}, &batch) {
+		t.Fatal("source list containing a reference outside the admitted batch was accepted")
+	}
+}
+
 func TestStrategyRejectsForbiddenAndInvalidOutput(t *testing.T) {
 	for _, raw := range []json.RawMessage{
 		json.RawMessage(`{"candidates":[{"kind":"mission_write","mission_write":{"body":"x"}}]}`),
