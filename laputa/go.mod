@@ -7,6 +7,7 @@ require (
 	github.com/cloudwego/eino v0.9.13
 	github.com/gofrs/flock v0.13.0
 	github.com/rivo/uniseg v0.4.7
+	golang.org/x/sys v0.37.0
 	golang.org/x/text v0.37.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -41,6 +42,5 @@ require (
 	golang.org/x/arch v0.11.0 // indirect
 	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1 // indirect
-	golang.org/x/sys v0.37.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
