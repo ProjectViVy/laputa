@@ -2,6 +2,7 @@ package actmem
 
 import (
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -20,6 +21,7 @@ func capturePair() []evolution.Entry {
 func TestCapturedPairCommitsOneRevisionAndRejoinsArchive(t *testing.T) {
 	dir := t.TempDir()
 	store := New(dir)
+	t.Cleanup(func() { _ = store.Close() })
 	pair := capturePair()
 	before, err := store.AppendSnapshot()
 	if err != nil {
@@ -36,7 +38,11 @@ func TestCapturedPairCommitsOneRevisionAndRejoinsArchive(t *testing.T) {
 	if _, err := store.FoldSession("s-1"); err != nil {
 		t.Fatal(err)
 	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
 	reopened := New(dir)
+	t.Cleanup(func() { _ = reopened.Close() })
 	recovered, found, err := reopened.LookupCaptured(pair)
 	if err != nil || !found || !reflect.DeepEqual(recovered.Entries, result.Entries) {
 		t.Fatalf("archive receipt lookup: %+v %v %v", recovered, found, err)
@@ -49,6 +55,7 @@ func TestCapturedPairCommitsOneRevisionAndRejoinsArchive(t *testing.T) {
 
 func TestCapturedPairRejectsSecondBodyBeforeAnyWrite(t *testing.T) {
 	store := New(t.TempDir())
+	t.Cleanup(func() { _ = store.Close() })
 	before, err := store.AppendSnapshot()
 	if err != nil {
 		t.Fatal(err)
@@ -65,6 +72,7 @@ func TestCapturedPairRejectsSecondBodyBeforeAnyWrite(t *testing.T) {
 
 func TestCapturedPairFencesStaleHeadAndChangedPayload(t *testing.T) {
 	store := New(t.TempDir())
+	t.Cleanup(func() { _ = store.Close() })
 	before, err := store.AppendSnapshot()
 	if err != nil {
 		t.Fatal(err)
@@ -91,11 +99,25 @@ func TestCapturedPairFencesStaleHeadAndChangedPayload(t *testing.T) {
 
 func TestCapturedPairRefusesPartialLegacyEffect(t *testing.T) {
 	store := New(t.TempDir())
+	t.Cleanup(func() { _ = store.Close() })
 	pair := capturePair()
 	if _, err := store.AppendEntry(pair[0]); err != nil {
 		t.Fatal(err)
 	}
 	if _, found, err := store.LookupCaptured(pair); found || CodeOf(err) != "actmem_recovery_required" {
 		t.Fatalf("partial pair disguised as receipt: %v %v", found, err)
+	}
+}
+
+func TestReadSessionCapsulesRejectsNonDirectoryPath(t *testing.T) {
+	store := New(filepath.Join(t.TempDir(), "persona"))
+	if err := os.MkdirAll(store.Root(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(store.CapsulesDir(), []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.readSessionCapsules("s-1", false); CodeOf(err) != "actmem_io_error" {
+		t.Fatalf("non-directory archive path was treated as absent: %v", err)
 	}
 }

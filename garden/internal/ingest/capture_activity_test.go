@@ -28,7 +28,16 @@ func openActivityIngest(t *testing.T, dir string) *Service {
 	}
 	svc.ProfileID = "profile"
 	svc.Actmem = actmem.New(filepath.Join(dir, "persona"))
-	t.Cleanup(func() { _ = svc.Close() })
+	t.Cleanup(func() {
+		if err := svc.Close(); err != nil {
+			t.Errorf("close ingest service: %v", err)
+		}
+		if svc.Actmem != nil {
+			if err := svc.Actmem.Close(); err != nil {
+				t.Errorf("close ACTMEM owner: %v", err)
+			}
+		}
+	})
 	return svc
 }
 
@@ -205,6 +214,9 @@ func TestCaptureActivityOriginalIntentRecovery(t *testing.T) {
 				}
 			}
 			if err := svc.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if err := svc.Actmem.Close(); err != nil {
 				t.Fatal(err)
 			}
 			reopened := openActivityIngest(t, dir)

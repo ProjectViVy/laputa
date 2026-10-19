@@ -32,6 +32,9 @@ type head struct {
 // the legacy parser and is marked unclassified rather than silently
 // upgraded.
 func loadHead(raw string) (head, error) {
+	if declaresV3Schema(raw) {
+		return head{}, newError("recap_unavailable", "v3 ACTMEM requires Recap owner methods; legacy operations are unavailable", nil)
+	}
 	if !utf8.ValidString(raw) {
 		return head{}, newError("actmem_malformed", "ACTMEM is not valid UTF-8", nil)
 	}

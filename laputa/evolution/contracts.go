@@ -32,6 +32,7 @@ const (
 	ErrActmemFormat           Code = "actmem_format_error"
 	ErrBackendUnavailable     Code = "backend_unavailable"
 	ErrCapabilityUnavailable  Code = "capability_unavailable"
+	ErrBudgetExceeded         Code = "budget_exceeded"
 	ErrRecoveryRequired       Code = "recovery_required"
 )
 
@@ -472,10 +473,34 @@ type EvidenceBatch struct {
 type ModelStage string
 
 const (
-	StagePrepare   ModelStage = "prepare"
-	StageReconcile ModelStage = "reconcile"
-	StageReflect   ModelStage = "reflect"
+	StagePrepare     ModelStage = "prepare"
+	StageReconcile   ModelStage = "reconcile"
+	StageSkillSelect ModelStage = "skill_select"
+	StageReflect     ModelStage = "reflect"
 )
+
+// LocalSkillSummary is the bounded index row DIVA may use to select a
+// writable local Skill. The host filters ownership before returning it.
+type LocalSkillSummary struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Hash        string `json:"hash"`
+}
+
+// LocalSkillDocument is a single host-read Skill selected for reflection.
+type LocalSkillDocument struct {
+	Name    string `json:"name"`
+	Hash    string `json:"hash"`
+	Content string `json:"content"`
+}
+
+// LocalSkillSource is an optional host capability used only by local Skill
+// evolution. It is deliberately separate from Domain so other hosts can
+// continue to use DIVA without exposing local Skill authority.
+type LocalSkillSource interface {
+	ListLocalSkills(ctx context.Context) ([]LocalSkillSummary, error)
+	ReadLocalSkill(ctx context.Context, name string) (LocalSkillDocument, error)
+}
 
 // ModelRequest is the bounded model call envelope.
 type ModelRequest struct {

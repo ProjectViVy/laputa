@@ -15,9 +15,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Spec section 5.1 write operations on the v2 head. One in-process writer
-// serializes everything under s.mu; a second writer process is unsupported
-// and must not open the same authority directory for mutation.
+// Spec section 5.1 write operations on the v2 head share the lifetime OS owner
+// with Recap and refuse a v3 authority before writing any file.
 
 // AppendEntry is the system append: the host supplies a fully-scoped ring
 // entry; the store allocates the id, stamps occurred_at, dedupes a retained
@@ -25,7 +24,7 @@ import (
 func (s *Store) AppendEntry(entry evolution.Entry) (evolution.ActivityResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	h, err := s.load()
+	h, err := s.loadForMutation()
 	if err != nil {
 		return evolution.ActivityResult{}, err
 	}
@@ -83,7 +82,7 @@ func (s *Store) ApplyWorkPatch(caller evolution.Scope, patch evolution.WorkPatch
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	h, err := s.load()
+	h, err := s.loadForMutation()
 	if err != nil {
 		return evolution.ActivityResult{}, err
 	}
@@ -170,7 +169,7 @@ func (s *Store) ApplyWorkPatch(caller evolution.Scope, patch evolution.WorkPatch
 func (s *Store) Save(markdown string, baseRevision uint64) (evolution.ActivityResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	h, err := s.load()
+	h, err := s.loadForMutation()
 	if err != nil {
 		return evolution.ActivityResult{}, err
 	}
@@ -211,7 +210,7 @@ func (s *Store) FoldSession(sessionKey string) ([]CapsuleSummary, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	h, err := s.load()
+	h, err := s.loadForMutation()
 	if err != nil {
 		return nil, err
 	}
@@ -317,9 +316,18 @@ type sessionCapsule struct {
 
 // sessionCapsules reads this session's well-formed fold capsules.
 func (s *Store) sessionCapsules(sessionKey string) ([]sessionCapsule, error) {
-	entries, err := os.ReadDir(s.CapsulesDir())
+	return s.readSessionCapsules(sessionKey, false)
+}
+
+func (s *Store) readSessionCapsules(sessionKey string, strict bool) ([]sessionCapsule, error) {
+	capsulesDir := s.CapsulesDir()
+	entries, err := os.ReadDir(capsulesDir)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
+		if _, statErr := os.Stat(capsulesDir); errors.Is(statErr, os.ErrNotExist) {
+			return nil, nil
+		} else if statErr != nil {
+			return nil, newError("actmem_io_error", "cannot inspect capsules directory", statErr)
+		}
 	}
 	if err != nil {
 		return nil, newError("actmem_io_error", "cannot list capsules", err)
@@ -334,6 +342,9 @@ func (s *Store) sessionCapsules(sessionKey string) ([]sessionCapsule, error) {
 			return nil, newError("actmem_io_error", "cannot read capsule", err)
 		}
 		capsule, err := parseFoldCapsule(entry.Name(), string(raw))
+		if err != nil && strict {
+			return nil, err
+		}
 		if err != nil || capsule.sessionKey != sessionKey {
 			continue // foreign or legacy capsules are not fold records
 		}

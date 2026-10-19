@@ -46,14 +46,17 @@ type Outcome struct {
 // strategy wire format, not a shared contract: only the node IDs and
 // semantics are frozen, and every decode is strict.
 type chainDoc struct {
-	Input            evolution.Input           `json:"input"`
-	Batch            *evolution.EvidenceBatch  `json:"batch"`
-	ReconcileReceipt *evolution.EffectReceipt  `json:"reconcile_receipt,omitempty"`
-	Candidates       []evolution.Candidate     `json:"candidates,omitempty"`
-	NoChangeReason   string                    `json:"no_change_reason,omitempty"`
-	Receipts         []evolution.EffectReceipt `json:"receipts,omitempty"`
-	Stopped          bool                      `json:"stopped,omitempty"`
-	StopReason       string                    `json:"stop_reason,omitempty"`
+	Input                evolution.Input               `json:"input"`
+	Batch                *evolution.EvidenceBatch      `json:"batch"`
+	AvailableSkills      []evolution.LocalSkillSummary `json:"available_skills,omitempty"`
+	SelectedSkill        *evolution.LocalSkillDocument `json:"selected_skill,omitempty"`
+	SkillSourceAvailable bool                          `json:"skill_source_available,omitempty"`
+	ReconcileReceipt     *evolution.EffectReceipt      `json:"reconcile_receipt,omitempty"`
+	Candidates           []evolution.Candidate         `json:"candidates,omitempty"`
+	NoChangeReason       string                        `json:"no_change_reason,omitempty"`
+	Receipts             []evolution.EffectReceipt     `json:"receipts,omitempty"`
+	Stopped              bool                          `json:"stopped,omitempty"`
+	StopReason           string                        `json:"stop_reason,omitempty"`
 }
 
 func marshal(v any) (json.RawMessage, error) { return json.Marshal(v) }
@@ -150,6 +153,11 @@ func (s *Strategy) collect(ctx context.Context, raw json.RawMessage) (json.RawMe
 // option the prompts leave for later, never a new writer.
 const prepareEntryBudget = 16000
 
+const (
+	maxLocalSkillSummaries = 32
+	maxLocalSkillContent   = 16 << 10
+)
+
 func (s *Strategy) prepare(_ context.Context, raw json.RawMessage) (json.RawMessage, error) {
 	var doc chainDoc
 	if err := decodeStrict(raw, &doc); err != nil {
@@ -244,10 +252,67 @@ func (s *Strategy) reflect(ctx context.Context, raw json.RawMessage) (json.RawMe
 		doc.NoChangeReason = "no new input"
 		return marshal(doc)
 	}
+	if source, ok := s.domain.(evolution.LocalSkillSource); ok {
+		doc.SkillSourceAvailable = true
+		skills, err := source.ListLocalSkills(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("list local Skills for reflection: %w", err)
+		}
+		if len(skills) > maxLocalSkillSummaries {
+			return nil, &evolution.ContractError{Code: evolution.ErrBudgetExceeded, Message: "local Skill index exceeds reflection budget"}
+		}
+		doc.AvailableSkills = skills
+		if len(skills) > 0 {
+			selectionInput, err := marshal(struct {
+				Batch  *evolution.EvidenceBatch      `json:"batch"`
+				Skills []evolution.LocalSkillSummary `json:"skills"`
+			}{Batch: doc.Batch, Skills: skills})
+			if err != nil {
+				return nil, err
+			}
+			selection, err := s.model.Infer(ctx, evolution.ModelRequest{
+				Stage: evolution.StageSkillSelect, Prompt: PromptSkillSelect,
+				InputJSON: selectionInput, OutputSchema: json.RawMessage(SchemaSkillSelect),
+			})
+			if err != nil {
+				return nil, err
+			}
+			var selected struct {
+				SkillName string `json:"skill_name"`
+			}
+			if err := decodeStrict(selection.OutputJSON, &selected); err != nil {
+				return nil, err
+			}
+			if selected.SkillName != "" {
+				var summary *evolution.LocalSkillSummary
+				for i := range skills {
+					if skills[i].Name == selected.SkillName {
+						summary = &skills[i]
+						break
+					}
+				}
+				if summary == nil {
+					return nil, &evolution.ContractError{Code: evolution.ErrInvalidSchema, Message: "selected Skill is outside the authorized local index"}
+				}
+				document, err := source.ReadLocalSkill(ctx, selected.SkillName)
+				if err != nil {
+					return nil, fmt.Errorf("read selected local Skill: %w", err)
+				}
+				if document.Name != summary.Name || document.Hash == "" || document.Hash != summary.Hash || len(document.Content) > maxLocalSkillContent {
+					return nil, &evolution.ContractError{Code: evolution.ErrRevisionConflict, Message: "selected Skill changed or exceeds reflection budget"}
+				}
+				doc.SelectedSkill = &document
+			}
+		}
+	}
+	reflectionInput, err := marshal(doc)
+	if err != nil {
+		return nil, err
+	}
 	reply, err := s.model.Infer(ctx, evolution.ModelRequest{
 		Stage:        evolution.StageReflect,
 		Prompt:       PromptReflect,
-		InputJSON:    raw,
+		InputJSON:    reflectionInput,
 		OutputSchema: json.RawMessage(SchemaReflectionOutput),
 	})
 	if err != nil {
@@ -257,6 +322,9 @@ func (s *Strategy) reflect(ctx context.Context, raw json.RawMessage) (json.RawMe
 	if err != nil {
 		return nil, err
 	}
+	if err := validateSkillCandidates(out.Candidates, doc); err != nil {
+		return nil, err
+	}
 	doc.Candidates = out.Candidates
 	doc.NoChangeReason = out.NoChangeReason
 	// Only the model consumes the evidence batch. Effects and finish use
@@ -264,7 +332,60 @@ func (s *Strategy) reflect(ctx context.Context, raw json.RawMessage) (json.RawMe
 	// evidence beside a full memory candidate can exceed the packet bound.
 	// Candidate bodies and source references remain complete.
 	doc.Batch = nil
+	doc.AvailableSkills = nil
+	doc.SelectedSkill = nil
 	return marshal(doc)
+}
+
+func validateSkillCandidates(candidates []evolution.Candidate, doc chainDoc) error {
+	available := make(map[string]evolution.LocalSkillSummary, len(doc.AvailableSkills))
+	for _, skill := range doc.AvailableSkills {
+		available[skill.Name] = skill
+	}
+	for _, candidate := range candidates {
+		if candidate.Kind != evolution.KindSkillProposal {
+			continue
+		}
+		proposal := candidate.SkillProposal
+		if proposal == nil {
+			return &evolution.ContractError{Code: evolution.ErrInvalidSchema, Message: "local Skill proposal missing typed payload"}
+		}
+		if !doc.SkillSourceAvailable {
+			return &evolution.ContractError{Code: evolution.ErrCapabilityUnavailable, Message: "local Skill source is not available"}
+		}
+		if proposal.Operation == evolution.SkillProposalUpdate {
+			if doc.SelectedSkill == nil || proposal.SkillName != doc.SelectedSkill.Name || proposal.BaseHash != doc.SelectedSkill.Hash {
+				return &evolution.ContractError{Code: evolution.ErrRevisionConflict, Message: "local Skill update does not match the selected revision"}
+			}
+		} else if _, exists := available[proposal.SkillName]; exists {
+			return &evolution.ContractError{Code: evolution.ErrIdempotencyConflict, Message: "new local Skill duplicates an existing identity"}
+		}
+		if !referencesEvidence(proposal.Sources, doc.Batch) {
+			return &evolution.ContractError{Code: evolution.ErrInvalidSchema, Message: "local Skill proposal cites evidence outside the admitted batch"}
+		}
+	}
+	return nil
+}
+
+func referencesEvidence(refs []evolution.SourceRef, batch *evolution.EvidenceBatch) bool {
+	if batch == nil || len(refs) == 0 {
+		return false
+	}
+	valid := make(map[evolution.SourceRef]struct{})
+	for _, ref := range batch.Sources {
+		valid[ref] = struct{}{}
+	}
+	for _, entry := range batch.Entries {
+		for _, ref := range entry.Sources {
+			valid[ref] = struct{}{}
+		}
+	}
+	for _, ref := range refs {
+		if _, ok := valid[ref]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // effects routes candidates in stable order. Each operation ID is the

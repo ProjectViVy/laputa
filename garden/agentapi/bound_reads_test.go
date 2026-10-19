@@ -31,6 +31,7 @@ func TestBoundReadPersonaExplicitWorld(t *testing.T) {
 
 func TestBoundReadACTMEMAndQueryACTMEM(t *testing.T) {
 	a := actmem.New(t.TempDir())
+	closeTestActmem(t, a)
 	if _, err := a.AppendEntry(evolution.Entry{Section: evolution.SectionPulse, Scope: evolution.Scope{SubjectID: "default", Kind: evolution.ScopePersonal}, SessionID: "session", Body: "unique milestone"}); err != nil {
 		t.Fatal(err)
 	}

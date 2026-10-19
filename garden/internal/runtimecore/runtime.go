@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	mentlebackends "github.com/ProjectViVy/laputa/garden/backends/mentle"
 	"github.com/ProjectViVy/laputa/garden/internal/activity"
@@ -28,6 +29,10 @@ import (
 // Config names every filesystem dependency. Empty, relative and home-expansion
 // paths are rejected rather than inherited from the host or process cwd.
 type Config struct {
+	// ResolveRecapBinding registers/verifies the existing owner path before
+	// workers start. A missing resolver leaves optional Recap unavailable.
+	ResolveRecapBinding func(context.Context, string) (actmem.RecapBinding, error)
+
 	PersonaDir        string
 	PalacePath        string
 	ModelsDir         string
@@ -45,6 +50,7 @@ type Config struct {
 // ProfileID is a binding label, not a selector for another authority.
 type Garden struct {
 	ProfileID      string
+	RecapBinding   actmem.RecapBinding
 	Persona        *persona.Service
 	Actmem         *actmem.Store
 	Frozen         *personactx.Store
@@ -139,7 +145,22 @@ func Open(ctx context.Context, cfg Config) (_ *Garden, err error) {
 	if g.Persona, err = persona.Open(cfg.PersonaDir); err != nil {
 		return nil, fmt.Errorf("persona: %w", err)
 	}
-	g.Actmem = actmem.New(cfg.PersonaDir)
+	if cfg.ResolveRecapBinding == nil {
+		g.Actmem = actmem.New(cfg.PersonaDir)
+	} else {
+		// The trusted binding observes the same already-owned canonical root used
+		// by ingestion and C1. A lazy alias must not change after registration.
+		if g.Actmem, err = actmem.Open(cfg.PersonaDir); err != nil {
+			return nil, fmt.Errorf("actmem owner: %w", err)
+		}
+		g.RecapBinding, err = cfg.ResolveRecapBinding(ctx, g.Actmem.Root())
+		if err != nil {
+			return nil, fmt.Errorf("recap binding: %w", err)
+		}
+		if g.RecapBinding.SubjectID == "" || g.RecapBinding.DomainID == "" || !utf8.ValidString(g.RecapBinding.SubjectID) || !utf8.ValidString(g.RecapBinding.DomainID) {
+			return nil, &actmem.Error{Code: "recap_scope_denied", Message: "trusted Recap subject and domain required"}
+		}
+	}
 	if available || lexicalOnly {
 		m := &facade.Service{}
 		if err = m.Init(ctx, facade.Options{PalacePath: cfg.PalacePath, ModelsDir: cfg.ModelsDir, RequireLocalModel: !lexicalOnly, LexicalOnly: lexicalOnly}); err != nil {
@@ -179,6 +200,7 @@ func Open(ctx context.Context, cfg Config) (_ *Garden, err error) {
 	g.Ingest.Actmem = g.Actmem
 	g.Ingest.Spool = g.TransientSpool
 	g.Ingest.ProfileID = cfg.ProfileID
+	g.Ingest.RecapBinding = g.RecapBinding
 	if !lexicalOnly && g.Mentle != nil {
 		if drained, drainErr := g.Ingest.DrainSpool(ctx); drainErr != nil {
 			return nil, fmt.Errorf("spool drain: %w", drainErr)
@@ -233,7 +255,10 @@ func (g *Garden) Close() error {
 		errs = append(errs, g.Mentle.Close())
 		g.Mentle = nil
 	}
-	g.Actmem = nil
+	if g.Actmem != nil {
+		errs = append(errs, g.Actmem.Close())
+		g.Actmem = nil
+	}
 	g.Persona = nil
 	return errors.Join(errs...)
 }
