@@ -88,6 +88,17 @@ func initializeActivityColumn(db *sql.DB) error {
 	return err
 }
 
+func sameActivitySource(stored, incoming string) bool {
+	if stored == "" || incoming == "" {
+		return stored == incoming
+	}
+	var oldIntent, newIntent activityIntent
+	if json.Unmarshal([]byte(stored), &oldIntent) != nil || json.Unmarshal([]byte(incoming), &newIntent) != nil {
+		return false
+	}
+	return oldIntent.Schema == newIntent.Schema && oldIntent.Source == newIntent.Source
+}
+
 func (s *Service) loadActivity(ctx context.Context, id string) (activityIntent, uint64, string, string, string, error) {
 	var raw, session, event, workspace string
 	var seq uint64
@@ -167,7 +178,9 @@ func (s *Service) finishActivity(ctx context.Context, id string, intent activity
 	for _, entry := range result.Entries {
 		intent.Entries = append(intent.Entries, entry.ID)
 	}
-	intent.Source.UserText = "" // operation receipt is not another ACTMEM authority
+	// Keep the exact admitted source with the event identity so later same-ID
+	// deliveries can be compared without a content digest. ACTMEM remains the
+	// authority for projected entries; this is the replay input record.
 	receiptCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	return s.saveActivity(receiptCtx, id, intent)

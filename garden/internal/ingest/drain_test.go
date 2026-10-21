@@ -13,10 +13,10 @@ import (
 	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
-type drainWriterFunc func(context.Context, facade.CreateMemoryRequest, string, string) (facade.Memory, error)
+type drainWriterFunc func(context.Context, facade.CreateMemoryRequest, string) (facade.Memory, error)
 
-func (f drainWriterFunc) CreateMemory(ctx context.Context, req facade.CreateMemoryRequest, key, hash string) (facade.Memory, error) {
-	return f(ctx, req, key, hash)
+func (f drainWriterFunc) CreateMemory(ctx context.Context, req facade.CreateMemoryRequest, key string) (facade.Memory, error) {
+	return f(ctx, req, key)
 }
 
 func newDrainFixture(t *testing.T, writer MemoryWriter) (*Service, activity.TransientEntry) {
@@ -33,11 +33,11 @@ func newDrainFixture(t *testing.T, writer MemoryWriter) (*Service, activity.Tran
 	}
 	t.Cleanup(func() { _ = spool.Close() })
 	svc.Spool = spool
-	entry := activity.TransientEntry{EventID: "event-drain", SessionID: "session-drain", ContentHash: "hash-drain", Content: "recover me", Kind: "source_artifact", Scope: memory.EncodeScope(evolution.Scope{SubjectID: "profile_1", Kind: evolution.ScopePersonal})}
+	entry := activity.TransientEntry{EventID: "event-drain", SessionID: "session-drain", Content: "recover me", Kind: "source_artifact", Scope: memory.EncodeScope(evolution.Scope{SubjectID: "profile_1", Kind: evolution.ScopePersonal})}
 	if err := spool.Append(ctx, entry); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.db.ExecContext(ctx, `INSERT INTO ingestions(ingestion_id,session_id,event_id,phase,content,content_hash,occurred_at,status,error,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, "ing_drain", entry.SessionID, entry.EventID, "session_end", entry.Content, entry.ContentHash, "now", "spooled", "mentle unavailable; spooled", "now", "now"); err != nil {
+	if _, err := svc.db.ExecContext(ctx, `INSERT INTO ingestions(ingestion_id,session_id,event_id,phase,content,occurred_at,status,error,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`, "ing_drain", entry.SessionID, entry.EventID, "session_end", entry.Content, "now", "spooled", "mentle unavailable; spooled", "now", "now"); err != nil {
 		t.Fatal(err)
 	}
 	return svc, entry
@@ -45,7 +45,7 @@ func newDrainFixture(t *testing.T, writer MemoryWriter) (*Service, activity.Tran
 
 func TestDrainSpoolReturnsIngestionUpdateFailure(t *testing.T) {
 	ctx := context.Background()
-	svc, _ := newDrainFixture(t, drainWriterFunc(func(_ context.Context, req facade.CreateMemoryRequest, _, _ string) (facade.Memory, error) {
+	svc, _ := newDrainFixture(t, drainWriterFunc(func(_ context.Context, req facade.CreateMemoryRequest, _ string) (facade.Memory, error) {
 		return facade.Memory{ID: "mem_drain", Content: req.Content}, nil
 	}))
 	if _, err := svc.db.Exec(`CREATE TRIGGER reject_drain_update BEFORE UPDATE ON ingestions WHEN NEW.status='completed' BEGIN SELECT RAISE(ABORT, 'ingestion update failed'); END`); err != nil {
@@ -67,9 +67,9 @@ func TestDrainSpoolReturnsIngestionUpdateFailure(t *testing.T) {
 
 func TestDrainSpoolCompletesIngestionWithRecoveredMemoryID(t *testing.T) {
 	ctx := context.Background()
-	svc, entry := newDrainFixture(t, drainWriterFunc(func(_ context.Context, req facade.CreateMemoryRequest, key, hash string) (facade.Memory, error) {
-		if req.Content != "recover me" || key != "session:event-drain" || hash != "hash-drain" {
-			t.Fatalf("canonical request = (%+v, %q, %q)", req, key, hash)
+	svc, entry := newDrainFixture(t, drainWriterFunc(func(_ context.Context, req facade.CreateMemoryRequest, key string) (facade.Memory, error) {
+		if req.Content != "recover me" || key != "session:event-drain" {
+			t.Fatalf("canonical request = (%+v, %q)", req, key)
 		}
 		return facade.Memory{ID: "mem_drain", Content: req.Content}, nil
 	}))
@@ -91,7 +91,7 @@ func TestDrainSpoolReturnsMarkDrainedFailure(t *testing.T) {
 	ctx := context.Background()
 	var svc *Service
 	var err error
-	svc, _ = newDrainFixture(t, drainWriterFunc(func(_ context.Context, req facade.CreateMemoryRequest, _, _ string) (facade.Memory, error) {
+	svc, _ = newDrainFixture(t, drainWriterFunc(func(_ context.Context, req facade.CreateMemoryRequest, _ string) (facade.Memory, error) {
 		if err = svc.Spool.Close(); err != nil {
 			t.Fatal(err)
 		}
@@ -110,7 +110,7 @@ func TestDrainSpoolReturnsMarkDrainedFailure(t *testing.T) {
 func TestDrainSpoolReturnsCanonicalWriteFailureWithoutDraining(t *testing.T) {
 	ctx := context.Background()
 	writeErr := errors.New("canonical memory unavailable")
-	svc, _ := newDrainFixture(t, drainWriterFunc(func(_ context.Context, req facade.CreateMemoryRequest, _, _ string) (facade.Memory, error) {
+	svc, _ := newDrainFixture(t, drainWriterFunc(func(_ context.Context, req facade.CreateMemoryRequest, _ string) (facade.Memory, error) {
 		if req.Content != "recover me" {
 			t.Fatalf("content = %q, want recover me", req.Content)
 		}

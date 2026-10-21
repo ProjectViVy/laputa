@@ -306,7 +306,7 @@ func TestConformanceTrustedPrincipalNotActorHeader(t *testing.T) {
 		t.Fatalf("embedded user review authorization: %v", err)
 	}
 	status, raw := f.wire(t, http.MethodPost, "/v2/persona/reviews", "conformance-agent", map[string]any{
-		"kind": "identity", "base_revision": 1, "base_hash": persona.ContentHash("identity fixture"),
+		"kind": "identity", "base_revision": 1, "expected_document": persona.DocumentPrecondition{Exists: true, Content: "identity fixture"},
 		"proposed_markdown": "reviewed identity", "reason": "conformance review",
 	}, "user")
 	if status != http.StatusCreated {

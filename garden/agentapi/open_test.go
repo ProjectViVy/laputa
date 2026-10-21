@@ -2,8 +2,6 @@ package agentapi
 
 import (
 	"context"
-	"crypto/sha256"
-	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -45,8 +43,7 @@ func TestOpenTrustedHostBootstrapAndCapture(t *testing.T) {
 		t.Fatalf("unexpected context: %+v", view)
 	}
 	content := "terminal result"
-	digest := sha256.Sum256([]byte(content))
-	req := CaptureRequest{Phase: CaptureCompleted, Content: content, ContentHash: fmt.Sprintf("sha256:%x", digest), Provenance: CaptureProvenance{RunID: "run-1", EventSeq: 1}}
+	req := CaptureRequest{Phase: CaptureCompleted, Content: content, Provenance: CaptureProvenance{RunID: "run-1", EventSeq: 1}}
 	first, err := bound.Capture(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)

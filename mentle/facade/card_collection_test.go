@@ -12,7 +12,7 @@ func TestCardCollectionMatchesCanonicalDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer svc.Close()
-	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "canonicalcollectionprobe ordinary note", Kind: "note"}, "collection-create", "collection-digest")
+	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "canonicalcollectionprobe ordinary note", Kind: "note"}, "collection-create")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,7 +3,6 @@ package server
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -70,14 +69,12 @@ func TestTerminalCaptureEmbeddedAndHTTPConvergeOnOneIngestion(t *testing.T) {
 		{name: "HTTP then embedded", runID: "run-2", seq: 8, content: "terminal completed two"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			hash := sha256.Sum256([]byte(tc.content))
-			contentHash := fmt.Sprintf("sha256:%x", hash)
 			// Independently construct the documented host namespace; the HTTP
 			// request must point at the exact event Capture derives.
 			key := binding.ProfileID + "\x00" + binding.AgentID + "\x00" + binding.Platform + "\x00" + binding.SessionID
 			eventID := "agent/" + base64.RawURLEncoding.EncodeToString([]byte(key)) + "/" + fmt.Sprintf("%s:%d", tc.runID, tc.seq)
-			capture := agentapi.CaptureRequest{Binding: binding, Phase: agentapi.CaptureCompleted, Content: tc.content, ContentHash: contentHash, OccurredAt: occurred, Provenance: agentapi.CaptureProvenance{RunID: tc.runID, EventSeq: tc.seq}}
-			ordinary := ingest.SubmitRequest{SessionID: binding.SessionID, EventID: eventID, Phase: "session_end", Content: tc.content, ContentHash: contentHash, OccurredAt: occurred}
+			capture := agentapi.CaptureRequest{Binding: binding, Phase: agentapi.CaptureCompleted, Content: tc.content, OccurredAt: occurred, Provenance: agentapi.CaptureProvenance{RunID: tc.runID, EventSeq: tc.seq}}
+			ordinary := ingest.SubmitRequest{SessionID: binding.SessionID, EventID: eventID, Phase: "session_end", Content: tc.content, OccurredAt: occurred}
 
 			var embedded agentapi.CaptureReceipt
 			var viaHTTP ingest.Accepted
@@ -115,22 +112,19 @@ func TestTerminalCaptureEmbeddedAndHTTPConvergeOnOneIngestion(t *testing.T) {
 			}
 			defer db.Close()
 			var count int
-			var phase, savedContent, savedHash, savedTime string
-			err = db.QueryRowContext(ctx, `SELECT count(*), max(phase), max(content), max(content_hash), max(occurred_at) FROM ingestions WHERE event_id=?`, eventID).Scan(&count, &phase, &savedContent, &savedHash, &savedTime)
+			var phase, savedContent, savedTime string
+			err = db.QueryRowContext(ctx, `SELECT count(*), max(phase), max(content), max(occurred_at) FROM ingestions WHERE event_id=?`, eventID).Scan(&count, &phase, &savedContent, &savedTime)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if count != 1 || phase != "session_end" || savedContent != tc.content || savedHash != contentHash || savedTime != occurred.Format(time.RFC3339Nano) {
-				t.Fatalf("durable ingestion: count=%d phase=%q content=%q hash=%q occurred=%q", count, phase, savedContent, savedHash, savedTime)
+			if count != 1 || phase != "session_end" || savedContent != tc.content || savedTime != occurred.Format(time.RFC3339Nano) {
+				t.Fatalf("durable ingestion: count=%d phase=%q content=%q occurred=%q", count, phase, savedContent, savedTime)
 			}
 
 			// A reused host event with different content conflicts through both
 			// adapters, rather than silently creating a second ingestion.
 			otherContent := tc.content + " changed"
-			otherHash := sha256.Sum256([]byte(otherContent))
 			capture.Content, ordinary.Content = otherContent, otherContent
-			capture.ContentHash = fmt.Sprintf("sha256:%x", otherHash)
-			ordinary.ContentHash = capture.ContentHash
 			if code, _ := httpSubmit(ordinary); code != http.StatusConflict {
 				t.Fatalf("HTTP divergent event status = %d, want 409", code)
 			}

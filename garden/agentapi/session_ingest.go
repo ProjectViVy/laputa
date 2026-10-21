@@ -11,13 +11,12 @@ import (
 // SessionSubmitRequest is the ordinary Garden session-ingest payload. It is
 // distinct from external terminal Capture, which requires bound provenance.
 type SessionSubmitRequest struct {
-	SessionID   string    `json:"session_id"`
-	EventID     string    `json:"event_id"`
-	Phase       string    `json:"phase"`
-	Content     string    `json:"content"`
-	ContentHash string    `json:"content_hash"`
-	Workspace   string    `json:"workspace,omitempty"`
-	OccurredAt  time.Time `json:"occurred_at,omitempty"`
+	SessionID  string    `json:"session_id"`
+	EventID    string    `json:"event_id"`
+	Phase      string    `json:"phase"`
+	Content    string    `json:"content"`
+	Workspace  string    `json:"workspace,omitempty"`
+	OccurredAt time.Time `json:"occurred_at,omitempty"`
 }
 
 type SessionAccepted struct {
@@ -42,7 +41,7 @@ func (s *Service) SubmitSession(ctx context.Context, principal Principal, req Se
 	}
 	accepted, err := s.runtime.Ingest.Submit(ctx, ingest.SubmitRequest{
 		SessionID: req.SessionID, EventID: req.EventID, Phase: req.Phase,
-		Content: req.Content, ContentHash: req.ContentHash, Workspace: req.Workspace,
+		Content: req.Content, Workspace: req.Workspace,
 		OccurredAt: req.OccurredAt,
 	})
 	if errors.Is(err, ingest.ErrEventConflict) {

@@ -1,6 +1,7 @@
 package facade
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -16,7 +17,7 @@ import (
 const mutationReceiptSchema = `
 CREATE TABLE IF NOT EXISTS mutation_receipts (
  operation_id TEXT PRIMARY KEY,
- payload_digest TEXT NOT NULL,
+ intent_json BLOB,
  scope TEXT NOT NULL,
  destination TEXT NOT NULL,
  record_id TEXT NOT NULL,
@@ -26,6 +27,67 @@ CREATE TABLE IF NOT EXISTS mutation_receipts (
  created_at TEXT NOT NULL
 );`
 
+func migrateReplayTables(db *sql.DB) error {
+	if err := migrateReplayTable(db, "idempotency", "body_hash", `
+		CREATE TABLE idempotency_new (
+		 key TEXT PRIMARY KEY, request_json BLOB, memory_id TEXT NOT NULL, created_at TEXT NOT NULL
+		);
+		INSERT INTO idempotency_new(key,request_json,memory_id,created_at)
+		 SELECT key,NULL,memory_id,created_at FROM idempotency;
+		DROP TABLE idempotency;
+		ALTER TABLE idempotency_new RENAME TO idempotency;`); err != nil {
+		return err
+	}
+	return migrateReplayTable(db, "mutation_receipts", "payload_digest", `
+		CREATE TABLE mutation_receipts_new (
+		 operation_id TEXT PRIMARY KEY, intent_json BLOB, scope TEXT NOT NULL,
+		 destination TEXT NOT NULL, record_id TEXT NOT NULL, revision INTEGER NOT NULL,
+		 status TEXT NOT NULL, error_code TEXT NOT NULL, created_at TEXT NOT NULL
+		);
+		INSERT INTO mutation_receipts_new(operation_id,intent_json,scope,destination,record_id,revision,status,error_code,created_at)
+		 SELECT operation_id,NULL,scope,destination,record_id,revision,status,error_code,created_at
+		 FROM mutation_receipts;
+		DROP TABLE mutation_receipts;
+		ALTER TABLE mutation_receipts_new RENAME TO mutation_receipts;`)
+}
+
+func migrateReplayTable(db *sql.DB, table, legacyColumn, migrationSQL string) error {
+	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return err
+	}
+	columns := map[string]bool{}
+	for rows.Next() {
+		var cid, notNull, primary int
+		var name, kind string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &kind, &notNull, &defaultValue, &primary); err != nil {
+			rows.Close()
+			return err
+		}
+		columns[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if !columns[legacyColumn] {
+		return nil
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	if _, err = tx.Exec(migrationSQL); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
 // MutationRequest is the closed create/update/tombstone contract. Scope and
 // destination are pre-validated encoded strings; the caller (Garden)
 // guarantees they equal the bound writer before dispatch.
@@ -33,7 +95,7 @@ type MutationRequest struct {
 	Scope            string
 	DestinationID    string
 	OperationID      string
-	PayloadDigest    string
+	IntentJSON       []byte
 	Operation        string // create | update | tombstone
 	RecordID         string
 	ExpectedRevision int
@@ -49,7 +111,7 @@ type MutationRequest struct {
 // MutationReceipt is the persisted outcome of one mutation.
 type MutationReceipt struct {
 	OperationID     string `json:"operation_id"`
-	PayloadDigest   string `json:"payload_digest"`
+	IntentJSON      []byte `json:"-"`
 	RecordID        string `json:"record_id"`
 	Status          string `json:"status"` // applied | rejected
 	Revision        int    `json:"revision"`
@@ -60,6 +122,7 @@ type MutationReceipt struct {
 
 // ErrMutationNotFound hides both absence and cross-binding receipts.
 var ErrMutationNotFound = errors.New("mutation receipt not found")
+var ErrMutationRecoveryRequired = errors.New("mutation receipt lacks exact original intent; explicit recovery required")
 
 // Mutate applies one scoped mutation inside a single canonical transaction
 // and stores the receipt in the same commit.
@@ -79,7 +142,10 @@ func (s *Service) Mutate(ctx context.Context, req MutationRequest) (MutationRece
 		// Create mints its own record id, so the caller's record_id hint is
 		// not part of the replay identity; updates/tombstones bind it.
 		recordMismatch := req.Operation != "create" && existing.RecordID != req.RecordID
-		if existing.PayloadDigest != req.PayloadDigest ||
+		if len(existing.IntentJSON) == 0 {
+			return MutationReceipt{}, ErrMutationRecoveryRequired
+		}
+		if !bytes.Equal(existing.IntentJSON, req.IntentJSON) ||
 			existing.scope != req.Scope ||
 			existing.destination != req.DestinationID ||
 			recordMismatch {
@@ -102,8 +168,8 @@ func (s *Service) Mutate(ctx context.Context, req MutationRequest) (MutationRece
 }
 
 func validateMutationRequest(req MutationRequest) error {
-	if req.OperationID == "" || req.PayloadDigest == "" || req.Scope == "" || req.DestinationID == "" {
-		return errors.New("mutation operation_id, payload_digest, scope and destination are required")
+	if req.OperationID == "" || len(req.IntentJSON) == 0 || req.Scope == "" || req.DestinationID == "" {
+		return errors.New("mutation operation_id, intent_json, scope and destination are required")
 	}
 	switch req.Operation {
 	case "create":
@@ -124,20 +190,20 @@ func validateMutationRequest(req MutationRequest) error {
 }
 
 type storedReceipt struct {
-	OperationID   string
-	PayloadDigest string
-	RecordID      string
-	Status        string
-	Revision      int
-	ErrorCode     string
-	scope         string
-	destination   string
+	OperationID string
+	IntentJSON  []byte
+	RecordID    string
+	Status      string
+	Revision    int
+	ErrorCode   string
+	scope       string
+	destination string
 }
 
 func (r storedReceipt) receipt() MutationReceipt {
 	return MutationReceipt{
 		OperationID:     r.OperationID,
-		PayloadDigest:   r.PayloadDigest,
+		IntentJSON:      append([]byte(nil), r.IntentJSON...),
 		RecordID:        r.RecordID,
 		Status:          r.Status,
 		Revision:        r.Revision,
@@ -150,9 +216,9 @@ func (r storedReceipt) receipt() MutationReceipt {
 func (s *Service) lookupReceipt(ctx context.Context, operationID string) (storedReceipt, bool, error) {
 	var r storedReceipt
 	err := s.Catalog.db.QueryRowContext(ctx,
-		`SELECT operation_id,payload_digest,record_id,status,revision,error_code,scope,destination
+		`SELECT operation_id,intent_json,record_id,status,revision,error_code,scope,destination
 		 FROM mutation_receipts WHERE operation_id=?`, operationID).
-		Scan(&r.OperationID, &r.PayloadDigest, &r.RecordID, &r.Status, &r.Revision, &r.ErrorCode, &r.scope, &r.destination)
+		Scan(&r.OperationID, &r.IntentJSON, &r.RecordID, &r.Status, &r.Revision, &r.ErrorCode, &r.scope, &r.destination)
 	if errors.Is(err, sql.ErrNoRows) {
 		return storedReceipt{}, false, nil
 	}
@@ -248,9 +314,9 @@ func (s *Service) mutateCreate(ctx context.Context, req MutationRequest) (Mutati
 		tx.Rollback()
 		return MutationReceipt{}, err
 	}
-	receipt := MutationReceipt{OperationID: req.OperationID, PayloadDigest: req.PayloadDigest, RecordID: m.ID, Status: "applied", Revision: 1, CanonicalStatus: "completed", IndexStatus: "pending"}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO mutation_receipts(operation_id,payload_digest,scope,destination,record_id,revision,status,error_code,created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
-		req.OperationID, req.PayloadDigest, req.Scope, req.DestinationID, m.ID, 1, "applied", "", now.Format(time.RFC3339Nano)); err != nil {
+	receipt := MutationReceipt{OperationID: req.OperationID, IntentJSON: append([]byte(nil), req.IntentJSON...), RecordID: m.ID, Status: "applied", Revision: 1, CanonicalStatus: "completed", IndexStatus: "pending"}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO mutation_receipts(operation_id,intent_json,scope,destination,record_id,revision,status,error_code,created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
+		req.OperationID, req.IntentJSON, req.Scope, req.DestinationID, m.ID, 1, "applied", "", now.Format(time.RFC3339Nano)); err != nil {
 		tx.Rollback()
 		return MutationReceipt{}, err
 	}
@@ -325,9 +391,9 @@ func (s *Service) mutateUpdate(ctx context.Context, req MutationRequest) (Mutati
 		tx.Rollback()
 		return MutationReceipt{}, err
 	}
-	receipt := MutationReceipt{OperationID: req.OperationID, PayloadDigest: req.PayloadDigest, RecordID: req.RecordID, Status: "applied", Revision: newVersion, CanonicalStatus: "completed", IndexStatus: "pending"}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO mutation_receipts(operation_id,payload_digest,scope,destination,record_id,revision,status,error_code,created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
-		req.OperationID, req.PayloadDigest, req.Scope, req.DestinationID, req.RecordID, newVersion, "applied", "", now.Format(time.RFC3339Nano)); err != nil {
+	receipt := MutationReceipt{OperationID: req.OperationID, IntentJSON: append([]byte(nil), req.IntentJSON...), RecordID: req.RecordID, Status: "applied", Revision: newVersion, CanonicalStatus: "completed", IndexStatus: "pending"}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO mutation_receipts(operation_id,intent_json,scope,destination,record_id,revision,status,error_code,created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
+		req.OperationID, req.IntentJSON, req.Scope, req.DestinationID, req.RecordID, newVersion, "applied", "", now.Format(time.RFC3339Nano)); err != nil {
 		tx.Rollback()
 		return MutationReceipt{}, err
 	}
@@ -382,9 +448,9 @@ func (s *Service) mutateTombstone(ctx context.Context, req MutationRequest) (Mut
 		tx.Rollback()
 		return MutationReceipt{}, err
 	}
-	receipt := MutationReceipt{OperationID: req.OperationID, PayloadDigest: req.PayloadDigest, RecordID: req.RecordID, Status: "applied", Revision: newVersion, CanonicalStatus: "completed", IndexStatus: "pending"}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO mutation_receipts(operation_id,payload_digest,scope,destination,record_id,revision,status,error_code,created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
-		req.OperationID, req.PayloadDigest, req.Scope, req.DestinationID, req.RecordID, newVersion, "applied", "", now.Format(time.RFC3339Nano)); err != nil {
+	receipt := MutationReceipt{OperationID: req.OperationID, IntentJSON: append([]byte(nil), req.IntentJSON...), RecordID: req.RecordID, Status: "applied", Revision: newVersion, CanonicalStatus: "completed", IndexStatus: "pending"}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO mutation_receipts(operation_id,intent_json,scope,destination,record_id,revision,status,error_code,created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
+		req.OperationID, req.IntentJSON, req.Scope, req.DestinationID, req.RecordID, newVersion, "applied", "", now.Format(time.RFC3339Nano)); err != nil {
 		tx.Rollback()
 		return MutationReceipt{}, err
 	}

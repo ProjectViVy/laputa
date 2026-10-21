@@ -152,7 +152,6 @@ func Capture(reader Reader, sessionID string, clock func() time.Time) (FrozenCor
 			Kind:           SectionMission,
 			Content:        persona.NormalizeMarkdown(mission.Content),
 			SourceRevision: mission.Revision,
-			SourceHash:     mission.ContentHash,
 		})
 	} else {
 		core.MissionStatus = evolution.MissionUnassigned
@@ -173,7 +172,6 @@ func Capture(reader Reader, sessionID string, clock func() time.Time) (FrozenCor
 			Kind:           section,
 			Content:        truncateVisible(content, frozenLimit(section)),
 			SourceRevision: document.Revision,
-			SourceHash:     document.ContentHash,
 		})
 	}
 	if err := core.Validate(); err != nil {

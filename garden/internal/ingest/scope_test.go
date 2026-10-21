@@ -15,7 +15,7 @@ import (
 func TestProcessUsesWorkspaceScope(t *testing.T) {
 	ctx := context.Background()
 	var got facade.CreateMemoryRequest
-	svc, err := OpenPaused(t.TempDir()+"/ingest.db", drainWriterFunc(func(_ context.Context, req facade.CreateMemoryRequest, _, _ string) (facade.Memory, error) {
+	svc, err := OpenPaused(t.TempDir()+"/ingest.db", drainWriterFunc(func(_ context.Context, req facade.CreateMemoryRequest, _ string) (facade.Memory, error) {
 		got = req
 		return facade.Memory{ID: "mem_1"}, nil
 	}))
@@ -24,7 +24,7 @@ func TestProcessUsesWorkspaceScope(t *testing.T) {
 	}
 	defer svc.Close()
 	svc.ProfileID = "profile_1"
-	acc, err := svc.Submit(ctx, SubmitRequest{SessionID: "s", EventID: "e", Phase: "session_end", Content: "body", ContentHash: "sha256:230d8358dc8e8890b4c58deeb62912ee2f20357ae92a5cc861b98e68fe31acb5", Workspace: "ws-9"})
+	acc, err := svc.Submit(ctx, SubmitRequest{SessionID: "s", EventID: "e", Phase: "session_end", Content: "body", Workspace: "ws-9"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,18 +40,18 @@ func TestProcessUsesWorkspaceScope(t *testing.T) {
 func TestDrainSpoolFailsUnclassifiedScope(t *testing.T) {
 	ctx := context.Background()
 	var writes []string
-	svc, _ := newDrainFixture(t, drainWriterFunc(func(_ context.Context, req facade.CreateMemoryRequest, _, _ string) (facade.Memory, error) {
+	svc, _ := newDrainFixture(t, drainWriterFunc(func(_ context.Context, req facade.CreateMemoryRequest, _ string) (facade.Memory, error) {
 		writes = append(writes, req.Scope)
 		return facade.Memory{ID: "mem_x"}, nil
 	}))
-	entry := activity.TransientEntry{EventID: "event-legacy", SessionID: "session-legacy", ContentHash: "hash-legacy", Content: "legacy", Kind: "source_artifact", Scope: "project:garden"}
+	entry := activity.TransientEntry{EventID: "event-legacy", SessionID: "session-legacy", Content: "legacy", Kind: "source_artifact", Scope: "project:garden"}
 	if svc.Spool == nil {
 		t.Fatal("fixture has no spool")
 	}
 	if err := svc.Spool.Append(ctx, entry); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.db.ExecContext(ctx, `INSERT INTO ingestions(ingestion_id,session_id,event_id,phase,content,content_hash,occurred_at,status,error,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, "ing_legacy", entry.SessionID, entry.EventID, "session_end", entry.Content, entry.ContentHash, "now", "spooled", "mentle unavailable; spooled", "now", "now"); err != nil {
+	if _, err := svc.db.ExecContext(ctx, `INSERT INTO ingestions(ingestion_id,session_id,event_id,phase,content,occurred_at,status,error,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`, "ing_legacy", entry.SessionID, entry.EventID, "session_end", entry.Content, "now", "spooled", "mentle unavailable; spooled", "now", "now"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.DrainSpool(ctx); err != nil {
@@ -75,12 +75,12 @@ func TestDrainSpoolFailsUnclassifiedScope(t *testing.T) {
 func TestDrainSpoolUsesStoredScope(t *testing.T) {
 	ctx := context.Background()
 	var got facade.CreateMemoryRequest
-	svc, _ := newDrainFixture(t, drainWriterFunc(func(_ context.Context, req facade.CreateMemoryRequest, _, _ string) (facade.Memory, error) {
+	svc, _ := newDrainFixture(t, drainWriterFunc(func(_ context.Context, req facade.CreateMemoryRequest, _ string) (facade.Memory, error) {
 		got = req
 		return facade.Memory{ID: "mem_drain"}, nil
 	}))
 	want := memory.EncodeScope(evolution.Scope{SubjectID: "profile_1", Kind: evolution.ScopeWorkspace, WorkspaceID: "ws-drain"})
-	entry := activity.TransientEntry{EventID: "event-drain2", SessionID: "session-drain2", ContentHash: "hash-drain2", Content: "recover me too", Kind: "source_artifact", Scope: want}
+	entry := activity.TransientEntry{EventID: "event-drain2", SessionID: "session-drain2", Content: "recover me too", Kind: "source_artifact", Scope: want}
 	if err := svc.Spool.Append(ctx, entry); err != nil {
 		t.Fatal(err)
 	}

@@ -8,8 +8,6 @@ package evolution
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,13 +24,13 @@ const (
 	ErrRevisionConflict       Code = "revision_conflict"
 	ErrIdempotencyConflict    Code = "idempotency_conflict"
 	ErrEffectNotFound         Code = "effect_not_found"
+	ErrRecoveryRequired       Code = "recovery_required"
 	ErrOutcomeUnknown         Code = "outcome_unknown"
 	ErrMissionRevisionChanged Code = "mission_revision_changed"
 	ErrActmemCapExceeded      Code = "actmem_cap_exceeded"
 	ErrActmemFormat           Code = "actmem_format_error"
 	ErrBackendUnavailable     Code = "backend_unavailable"
 	ErrCapabilityUnavailable  Code = "capability_unavailable"
-	ErrRecoveryRequired       Code = "recovery_required"
 )
 
 // ContractError carries a stable Code plus a human-readable message.
@@ -208,7 +206,8 @@ type RunBinding struct {
 	WorkspaceID     string `json:"workspace_id"`
 	DestinationID   string `json:"destination_id"`
 	PolicyRevision  string `json:"policy_revision"`
-	StrategyDigest  string `json:"strategy_digest"`
+	StrategyID      string `json:"strategy_id"`
+	StrategyVersion string `json:"strategy_version"`
 	MissionRevision uint64 `json:"mission_revision"`
 }
 
@@ -239,10 +238,11 @@ func (b RunBinding) Scope() Scope {
 // Validate requires the trusted identity fields to be present and nonempty.
 func (b RunBinding) Validate() error {
 	for name, value := range map[string]string{
-		"subject_id":      b.SubjectID,
-		"destination_id":  b.DestinationID,
-		"policy_revision": b.PolicyRevision,
-		"strategy_digest": b.StrategyDigest,
+		"subject_id":       b.SubjectID,
+		"destination_id":   b.DestinationID,
+		"policy_revision":  b.PolicyRevision,
+		"strategy_id":      b.StrategyID,
+		"strategy_version": b.StrategyVersion,
 	} {
 		if value == "" {
 			return invalidSchema("run binding %s required", name)
@@ -502,23 +502,4 @@ type Domain interface {
 	Collect(ctx context.Context, window Window) (EvidenceBatch, error)
 	Apply(ctx context.Context, effect Effect) (EffectReceipt, error)
 	Lookup(ctx context.Context, operationID string) (EffectReceipt, error)
-}
-
-// digestInput is the canonical digest preimage: the normalized typed payload
-// plus effective scope, destination, target and expected revision.
-type digestInput struct {
-	Scope         Scope      `json:"scope"`
-	DestinationID string     `json:"destination_id"`
-	Kind          EffectKind `json:"kind"`
-	Payload       any        `json:"payload"`
-}
-
-// digestOf hashes the canonical JSON preimage.
-func digestOf(in digestInput) (string, error) {
-	encoded, err := json.Marshal(in)
-	if err != nil {
-		return "", invalidSchema("digest preimage: %v", err)
-	}
-	sum := sha256.Sum256(encoded)
-	return hex.EncodeToString(sum[:]), nil
 }

@@ -2,9 +2,7 @@ package ingest
 
 import (
 	"context"
-	"crypto/sha256"
-	"fmt"
-	"github.com/ProjectViVy/laputa/laputa/evolution"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ProjectViVy/laputa/laputa/actmem"
+	"github.com/ProjectViVy/laputa/laputa/evolution"
 	"github.com/ProjectViVy/laputa/mentle/facade"
 )
 
@@ -34,8 +33,7 @@ func openActivityIngest(t *testing.T, dir string) *Service {
 
 func activityRequest() SubmitRequest {
 	content := "durable real user source"
-	hash := sha256.Sum256([]byte(content))
-	return SubmitRequest{SessionID: "session", EventID: "host:run:7", Phase: "session_end", Content: content, ContentHash: fmt.Sprintf("sha256:%x", hash), Activity: &CaptureActivity{Phase: "completed", UserText: "synthetic user-only fact"}}
+	return SubmitRequest{SessionID: "session", EventID: "host:run:7", Phase: "session_end", Content: content, Activity: &CaptureActivity{Phase: "completed", UserText: "synthetic user-only fact"}}
 }
 
 func awaitActivityProjection(t *testing.T, svc *Service, id string) ActivityProjection {
@@ -99,7 +97,7 @@ func TestCaptureActivityRawFirstAndExactReceiptReplay(t *testing.T) {
 	}
 }
 
-func TestCaptureActivityKeepsPreviouslyAcceptedRowsUnchanged(t *testing.T) {
+func TestCaptureActivityRejectsSameEventWithChangedProjectionInput(t *testing.T) {
 	svc := openActivityIngest(t, t.TempDir())
 	ctx := context.Background()
 	req := activityRequest()
@@ -109,9 +107,8 @@ func TestCaptureActivityKeepsPreviouslyAcceptedRowsUnchanged(t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Activity = activityRequest().Activity
-	replay, err := svc.Submit(ctx, req)
-	if err != nil || replay.IngestionID != original.IngestionID {
-		t.Fatalf("legacy receipt changed: %+v %v", replay, err)
+	if _, err := svc.Submit(ctx, req); !errors.Is(err, ErrEventConflict) {
+		t.Fatalf("same event with changed projection input err=%v, want ErrEventConflict", err)
 	}
 	if err := svc.Start(); err != nil {
 		t.Fatal(err)

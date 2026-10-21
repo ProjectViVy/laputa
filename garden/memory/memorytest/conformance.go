@@ -5,6 +5,7 @@
 package memorytest
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -40,7 +41,6 @@ func BackendConformance(t testing.TB, factory BackendFactory) {
 			Scope:          scope,
 			DestinationID:  dest,
 			OperationID:    op,
-			PayloadDigest:  "digest-" + op,
 			Operation:      evolution.MutationCreate,
 			RecordID:       "rec-" + op,
 			ExpectedAbsent: true,
@@ -58,7 +58,6 @@ func BackendConformance(t testing.TB, factory BackendFactory) {
 		Scope:          personal,
 		DestinationID:  dest,
 		OperationID:    "op-foreign-scope",
-		PayloadDigest:  "d-foreign-scope",
 		Operation:      evolution.MutationCreate,
 		RecordID:       "rec-foreign-scope",
 		ExpectedAbsent: true,
@@ -71,7 +70,6 @@ func BackendConformance(t testing.TB, factory BackendFactory) {
 		Scope:          workspaceA,
 		DestinationID:  "other-backend",
 		OperationID:    "op-foreign-dest",
-		PayloadDigest:  "d-foreign-dest",
 		Operation:      evolution.MutationCreate,
 		RecordID:       "rec-foreign-dest",
 		ExpectedAbsent: true,
@@ -115,15 +113,14 @@ func BackendConformance(t testing.TB, factory BackendFactory) {
 		t.Fatal("scoped expansion returned no evidence")
 	}
 
-	// Receipt replay: same operation id + digest returns the committed
-	// receipt; a changed digest conflicts.
+	// Receipt replay: the same operation id plus exact authorized input
+	// returns the committed receipt; changed content conflicts.
 	replay, err := b.Mutate(ctx, memory.AuthorizedMutation{
 		Scope:          workspaceA,
 		DestinationID:  dest,
 		OperationID:    "op-a",
-		PayloadDigest:  "digest-op-a",
 		Operation:      evolution.MutationCreate,
-		RecordID:       r1.TargetRef,
+		RecordID:       "rec-op-a",
 		ExpectedAbsent: true,
 		Body:           "alpha project needle",
 		Inference:      evolution.InferenceObserved,
@@ -138,14 +135,13 @@ func BackendConformance(t testing.TB, factory BackendFactory) {
 		Scope:          workspaceA,
 		DestinationID:  dest,
 		OperationID:    "op-a",
-		PayloadDigest:  "DIFFERENT",
 		Operation:      evolution.MutationCreate,
-		RecordID:       r1.TargetRef,
+		RecordID:       "rec-op-a",
 		ExpectedAbsent: true,
-		Body:           "alpha project needle",
+		Body:           "changed body",
 		Inference:      evolution.InferenceObserved,
 	}); err == nil {
-		t.Fatal("changed digest replay accepted")
+		t.Fatal("changed exact-intent replay accepted")
 	}
 	if _, err = b.MutationStatus(ctx, "op-a"); err != nil {
 		t.Fatal(err)
@@ -174,13 +170,13 @@ type fakeRecord struct {
 type FakeStore struct {
 	records  map[string]*fakeRecord
 	receipts map[string]memory.MutationReceipt
-	digests  map[string]string
+	intents  map[string][]byte
 	closed   bool
 }
 
 // NewFakeStore allocates a shared fake canonical store.
 func NewFakeStore() *FakeStore {
-	return &FakeStore{records: map[string]*fakeRecord{}, receipts: map[string]memory.MutationReceipt{}, digests: map[string]string{}}
+	return &FakeStore{records: map[string]*fakeRecord{}, receipts: map[string]memory.MutationReceipt{}, intents: map[string][]byte{}}
 }
 
 // NewFakeBackend binds a fake backend to one scope/destination.
@@ -241,8 +237,12 @@ func (f *FakeBackend) Mutate(_ context.Context, req memory.AuthorizedMutation) (
 		return memory.MutationReceipt{}, err
 	}
 	key := memory.EncodeScope(req.Scope) + "|" + req.DestinationID + "|" + req.OperationID
+	intent, err := req.IntentJSON()
+	if err != nil {
+		return memory.MutationReceipt{}, err
+	}
 	if stored, ok := f.store.receipts[key]; ok {
-		if f.store.digests[key] != req.PayloadDigest {
+		if !bytes.Equal(f.store.intents[key], intent) {
 			return memory.MutationReceipt{}, &evolution.ContractError{Code: evolution.ErrIdempotencyConflict, Message: "operation replayed with a different payload"}
 		}
 		return stored, nil
@@ -250,12 +250,13 @@ func (f *FakeBackend) Mutate(_ context.Context, req memory.AuthorizedMutation) (
 	r := &fakeRecord{scope: memory.EncodeScope(req.Scope), body: req.Body, status: "active", revision: 1}
 	f.store.records[req.RecordID] = r
 	receipt := memory.MutationReceipt{
-		EffectReceipt:   evolution.EffectReceipt{OperationID: req.OperationID, PayloadDigest: req.PayloadDigest, Status: evolution.StatusApplied, TargetRef: req.RecordID, Revision: r.revision},
+		EffectReceipt:   evolution.BindReceiptIntentJSON(evolution.EffectReceipt{OperationID: req.OperationID, Status: evolution.StatusApplied, TargetRef: req.RecordID, Revision: r.revision}, intent),
 		CanonicalStatus: memory.CanonicalCompleted,
 		IndexStatus:     memory.IndexNotRequired,
+		IntentJSON:      append([]byte(nil), intent...),
 	}
 	f.store.receipts[key] = receipt
-	f.store.digests[key] = req.PayloadDigest
+	f.store.intents[key] = append([]byte(nil), intent...)
 	return receipt, nil
 }
 

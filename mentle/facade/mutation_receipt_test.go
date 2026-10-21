@@ -2,6 +2,7 @@ package facade
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -23,18 +24,23 @@ func mutationService(t *testing.T) *Service {
 	return svc
 }
 
-func createReq(opID, scope, digest string) MutationRequest {
-	return MutationRequest{
+func createReq(opID, scope, body string) MutationRequest {
+	return bindMutationIntent(MutationRequest{
 		OperationID: opID, Operation: "create", Scope: scope, DestinationID: receiptDest,
-		PayloadDigest: digest, ExpectedAbsent: true,
-		Body: "body", Kind: "note",
-	}
+		ExpectedAbsent: true, Body: body, Kind: "note",
+	})
+}
+
+func bindMutationIntent(req MutationRequest) MutationRequest {
+	req.IntentJSON = nil
+	req.IntentJSON, _ = json.Marshal(req)
+	return req
 }
 
 func TestMutateCreateAndReplay(t *testing.T) {
 	ctx := context.Background()
 	svc := mutationService(t)
-	req := createReq("op-1", receiptScopePersonal, "d1")
+	req := createReq("op-1", receiptScopePersonal, "body")
 
 	r1, err := svc.Mutate(ctx, req)
 	if err != nil {
@@ -56,25 +62,28 @@ func TestMutateCreateAndReplay(t *testing.T) {
 func TestMutateReplayConflicts(t *testing.T) {
 	ctx := context.Background()
 	svc := mutationService(t)
-	req := createReq("op-c", receiptScopePersonal, "d1")
+	req := createReq("op-c", receiptScopePersonal, "body")
 	if _, err := svc.Mutate(ctx, req); err != nil {
 		t.Fatal(err)
 	}
 	// Same operation, different payload → conflict.
 	bad := req
-	bad.PayloadDigest = "d2"
+	bad.Body = "body changed"
+	bad = bindMutationIntent(bad)
 	if _, err := svc.Mutate(ctx, bad); !errors.Is(err, ErrIdempotencyConflict) {
-		t.Fatalf("changed digest: %v", err)
+		t.Fatalf("same operation id with changed content: %v", err)
 	}
 	// Same operation in another scope → conflict.
 	bad = req
 	bad.Scope = receiptScopeWorkspace
+	bad = bindMutationIntent(bad)
 	if _, err := svc.Mutate(ctx, bad); !errors.Is(err, ErrIdempotencyConflict) {
 		t.Fatalf("changed scope: %v", err)
 	}
 	// Same operation, different destination → conflict.
 	bad = req
 	bad.DestinationID = "other"
+	bad = bindMutationIntent(bad)
 	if _, err := svc.Mutate(ctx, bad); !errors.Is(err, ErrIdempotencyConflict) {
 		t.Fatalf("changed destination: %v", err)
 	}
@@ -116,9 +125,10 @@ func TestMutateUpdateVersionAndScope(t *testing.T) {
 	}
 	upd := MutationRequest{
 		OperationID: "op-u1", Operation: "update", Scope: receiptScopePersonal, DestinationID: receiptDest,
-		PayloadDigest: "d2", RecordID: created.RecordID, ExpectedRevision: 1,
+		RecordID: created.RecordID, ExpectedRevision: 1,
 		Body: "new body",
 	}
+	upd = bindMutationIntent(upd)
 	r, err := svc.Mutate(ctx, upd)
 	if err != nil {
 		t.Fatal(err)
@@ -134,6 +144,7 @@ func TestMutateUpdateVersionAndScope(t *testing.T) {
 	// Changed record id on replay → conflict.
 	bad := upd
 	bad.RecordID = "mem_other"
+	bad = bindMutationIntent(bad)
 	if _, err := svc.Mutate(ctx, bad); !errors.Is(err, ErrIdempotencyConflict) {
 		t.Fatalf("changed record id: %v", err)
 	}
@@ -141,6 +152,7 @@ func TestMutateUpdateVersionAndScope(t *testing.T) {
 	stale := upd
 	stale.OperationID = "op-u2"
 	stale.ExpectedRevision = 1
+	stale = bindMutationIntent(stale)
 	if _, err := svc.Mutate(ctx, stale); !errors.Is(err, ErrVersionConflict) {
 		t.Fatalf("stale revision: %v", err)
 	}
@@ -148,6 +160,7 @@ func TestMutateUpdateVersionAndScope(t *testing.T) {
 	wrongScope := upd
 	wrongScope.OperationID = "op-u3"
 	wrongScope.Scope = receiptScopeWorkspace
+	wrongScope = bindMutationIntent(wrongScope)
 	if _, err := svc.Mutate(ctx, wrongScope); !errors.Is(err, ErrMutationNotFound) {
 		t.Fatalf("foreign scope update: %v", err)
 	}
@@ -162,8 +175,9 @@ func TestMutateTombstone(t *testing.T) {
 	}
 	tomb := MutationRequest{
 		OperationID: "op-t1", Operation: "tombstone", Scope: receiptScopePersonal, DestinationID: receiptDest,
-		PayloadDigest: "d3", RecordID: created.RecordID, ExpectedRevision: 1,
+		RecordID: created.RecordID, ExpectedRevision: 1,
 	}
+	tomb = bindMutationIntent(tomb)
 	if _, err := svc.Mutate(ctx, tomb); err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +236,7 @@ func TestMutateValidatesRequest(t *testing.T) {
 	ctx := context.Background()
 	svc := mutationService(t)
 	// Update without record id.
-	if _, err := svc.Mutate(ctx, MutationRequest{OperationID: "x", Operation: "update", Scope: receiptScopePersonal, DestinationID: receiptDest, PayloadDigest: "d", ExpectedRevision: 1}); err == nil {
+	if _, err := svc.Mutate(ctx, bindMutationIntent(MutationRequest{OperationID: "x", Operation: "update", Scope: receiptScopePersonal, DestinationID: receiptDest, ExpectedRevision: 1})); err == nil {
 		t.Fatal("update without record id accepted")
 	}
 	// Create claiming an expected revision.
@@ -232,7 +246,7 @@ func TestMutateValidatesRequest(t *testing.T) {
 		t.Fatal("create with expected revision accepted")
 	}
 	// Unknown operation.
-	if _, err := svc.Mutate(ctx, MutationRequest{OperationID: "x3", Operation: "nuke", Scope: receiptScopePersonal, DestinationID: receiptDest, PayloadDigest: "d"}); err == nil {
+	if _, err := svc.Mutate(ctx, bindMutationIntent(MutationRequest{OperationID: "x3", Operation: "nuke", Scope: receiptScopePersonal, DestinationID: receiptDest})); err == nil {
 		t.Fatal("unknown operation accepted")
 	}
 }

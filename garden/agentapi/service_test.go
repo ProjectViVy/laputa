@@ -2,8 +2,6 @@ package agentapi
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -91,8 +89,7 @@ func TestFastRecallBindingAndPolicy(t *testing.T) {
 func TestCaptureIsolatesAgentEventNamespace(t *testing.T) {
 	s := fixture(t)
 	content := "same terminal"
-	hash := sha256.Sum256([]byte(content))
-	req := CaptureRequest{Binding: binding(), Phase: CaptureCompleted, Content: content, ContentHash: "sha256:" + hex.EncodeToString(hash[:]), Provenance: CaptureProvenance{RunID: "run-1", EventSeq: 7}}
+	req := CaptureRequest{Binding: binding(), Phase: CaptureCompleted, Content: content, Provenance: CaptureProvenance{RunID: "run-1", EventSeq: 7}}
 	first, err := s.Capture(context.Background(), PrincipalAgent, req)
 	if err != nil {
 		t.Fatal(err)
@@ -112,8 +109,7 @@ func TestCaptureStatusSurvivesIngestRestart(t *testing.T) {
 	}
 	s := NewService(&runtimecore.Garden{ProfileID: "default", Ingest: first})
 	content := "terminal result"
-	h := sha256.Sum256([]byte(content))
-	req := CaptureRequest{Binding: binding(), Phase: CaptureCompleted, Content: content, ContentHash: "sha256:" + hex.EncodeToString(h[:]), Provenance: CaptureProvenance{RunID: "run-1", EventSeq: 7}}
+	req := CaptureRequest{Binding: binding(), Phase: CaptureCompleted, Content: content, Provenance: CaptureProvenance{RunID: "run-1", EventSeq: 7}}
 	receipt, err := s.Capture(context.Background(), PrincipalAgent, req)
 	if err != nil {
 		t.Fatal(err)
@@ -144,8 +140,7 @@ func TestCaptureStatusSurvivesIngestRestart(t *testing.T) {
 func TestCaptureTerminalIdempotentAndStatusAuthorized(t *testing.T) {
 	s := fixture(t)
 	content := "terminal result"
-	hash := sha256.Sum256([]byte(content))
-	req := CaptureRequest{Binding: binding(), Phase: CaptureCompleted, Content: content, ContentHash: "sha256:" + hex.EncodeToString(hash[:]), Provenance: CaptureProvenance{RunID: "run-1", EventSeq: 7}}
+	req := CaptureRequest{Binding: binding(), Phase: CaptureCompleted, Content: content, Provenance: CaptureProvenance{RunID: "run-1", EventSeq: 7}}
 	_, err := s.Capture(context.Background(), PrincipalRead, req)
 	assertCode(t, err, "principal_forbidden")
 	req.Phase = "running"
@@ -179,8 +174,6 @@ func TestCaptureTerminalIdempotentAndStatusAuthorized(t *testing.T) {
 	_, err = s.CaptureStatus(context.Background(), PrincipalAgent, other, a.IngestionID)
 	assertCode(t, err, "invalid_binding")
 	req.Content = "changed"
-	h := sha256.Sum256([]byte(req.Content))
-	req.ContentHash = "sha256:" + hex.EncodeToString(h[:])
 	_, err = s.Capture(context.Background(), PrincipalAgent, req)
 	assertCode(t, err, "event_conflict")
 }
@@ -189,8 +182,7 @@ func TestCaptureReceiptLookupUsesTrustedEventIdentity(t *testing.T) {
 	s := fixture(t)
 	ctx := context.Background()
 	content := "legacy acknowledgement"
-	h := sha256.Sum256([]byte(content))
-	req := CaptureRequest{Binding: binding(), Phase: CaptureCompleted, Content: content, ContentHash: "sha256:" + hex.EncodeToString(h[:]), Provenance: CaptureProvenance{RunID: "old-run", EventSeq: 7}}
+	req := CaptureRequest{Binding: binding(), Phase: CaptureCompleted, Content: content, Provenance: CaptureProvenance{RunID: "old-run", EventSeq: 7}}
 	receipt, err := s.Capture(ctx, PrincipalAgent, req)
 	if err != nil {
 		t.Fatal(err)

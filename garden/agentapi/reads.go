@@ -21,7 +21,6 @@ type PersonaDocument struct {
 	Valid        bool       `json:"valid"`
 	Content      string     `json:"content"`
 	Revision     uint64     `json:"revision"`
-	ContentHash  string     `json:"content_hash"`
 	UpdatedAt    *time.Time `json:"updated_at"`
 	PendingCount int        `json:"pending_count"`
 }
@@ -94,7 +93,7 @@ func (s *Service) ReadPersona(_ context.Context, principal Principal, binding Bi
 	if err != nil {
 		return PersonaDocument{}, failure(persona.CodeOf(err), "persona read failed")
 	}
-	return PersonaDocument{Kind: doc.Kind.String(), FileName: doc.FileName, Exists: doc.Exists, Valid: doc.Valid, Content: doc.Content, Revision: doc.Revision, ContentHash: doc.ContentHash, UpdatedAt: doc.UpdatedAt, PendingCount: doc.PendingCount}, nil
+	return PersonaDocument{Kind: doc.Kind.String(), FileName: doc.FileName, Exists: doc.Exists, Valid: doc.Valid, Content: doc.Content, Revision: doc.Revision, UpdatedAt: doc.UpdatedAt, PendingCount: doc.PendingCount}, nil
 }
 
 // ReadACTMEM is a tool-only read, separate from bootstrap and recall.

@@ -1,6 +1,7 @@
 package facade
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -15,14 +16,15 @@ import (
 )
 
 var (
-	ErrMemoryNotFound             = errors.New("memory not found")
-	ErrVersionConflict            = errors.New("version conflict")
-	ErrIdempotencyConflict        = errors.New("idempotency conflict")
-	ErrUnavailable                = errors.New("mentle unavailable")
-	ErrReadOnly                   = errors.New("mentle lexical-only service is read-only")
-	ErrEmbeddingDimensionMismatch = errors.New("embedding dimension mismatch")
-	ErrEmbeddingMetricMismatch    = errors.New("embedding metric mismatch")
-	ErrEmbeddingIdentityMismatch  = errors.New("embedding identity mismatch")
+	ErrMemoryNotFound              = errors.New("memory not found")
+	ErrVersionConflict             = errors.New("version conflict")
+	ErrIdempotencyConflict         = errors.New("idempotency conflict")
+	ErrIdempotencyRecoveryRequired = errors.New("idempotency record lacks exact original request; explicit recovery required")
+	ErrUnavailable                 = errors.New("mentle unavailable")
+	ErrReadOnly                    = errors.New("mentle lexical-only service is read-only")
+	ErrEmbeddingDimensionMismatch  = errors.New("embedding dimension mismatch")
+	ErrEmbeddingMetricMismatch     = errors.New("embedding metric mismatch")
+	ErrEmbeddingIdentityMismatch   = errors.New("embedding identity mismatch")
 )
 
 type MemorySource struct {
@@ -121,11 +123,11 @@ CREATE TABLE IF NOT EXISTS memories (
 );
 CREATE INDEX IF NOT EXISTS memories_order ON memories(updated_at DESC, id DESC);
 CREATE TABLE IF NOT EXISTS idempotency (
- key TEXT PRIMARY KEY, body_hash TEXT NOT NULL, memory_id TEXT NOT NULL, created_at TEXT NOT NULL
+ key TEXT PRIMARY KEY, request_json BLOB, memory_id TEXT NOT NULL, created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS mutation_receipts (
  operation_id TEXT PRIMARY KEY,
- payload_digest TEXT NOT NULL,
+ intent_json BLOB,
  scope TEXT NOT NULL,
  destination TEXT NOT NULL,
  record_id TEXT NOT NULL,
@@ -180,6 +182,9 @@ CREATE TABLE IF NOT EXISTS embedding_identity (
  );`
 	if _, err = db.Exec(schema); err != nil {
 		return nil, errors.Join(err, db.Close())
+	}
+	if err = migrateReplayTables(db); err != nil {
+		return nil, errors.Join(fmt.Errorf("migrate replay intent tables: %w", err), db.Close())
 	}
 	if err = migrateIndexJobs(db); err != nil {
 		return nil, errors.Join(fmt.Errorf("migrate index outbox: %w", err), db.Close())
@@ -426,7 +431,7 @@ func (s *Service) ensureEmbeddingIdentity() error {
 	return ErrEmbeddingIdentityMismatch
 }
 
-func (s *Service) CreateMemory(ctx context.Context, req CreateMemoryRequest, idempotencyKey, bodyHash string) (Memory, error) {
+func (s *Service) CreateMemory(ctx context.Context, req CreateMemoryRequest, idempotencyKey string) (Memory, error) {
 	if s != nil && s.lexicalOnly {
 		return Memory{}, ErrReadOnly
 	}
@@ -456,11 +461,19 @@ func (s *Service) CreateMemory(ctx context.Context, req CreateMemoryRequest, ide
 	if !allowed(req.Source.Type, "user", "agent", "session", "import", "report_projection") {
 		return Memory{}, errors.New("invalid source type")
 	}
+	intentJSON, err := json.Marshal(req)
+	if err != nil {
+		return Memory{}, err
+	}
 	if idempotencyKey != "" {
-		var savedHash, id string
-		err := s.Catalog.db.QueryRowContext(ctx, `SELECT body_hash,memory_id FROM idempotency WHERE key=?`, idempotencyKey).Scan(&savedHash, &id)
+		var savedIntent []byte
+		var id string
+		err := s.Catalog.db.QueryRowContext(ctx, `SELECT request_json,memory_id FROM idempotency WHERE key=?`, idempotencyKey).Scan(&savedIntent, &id)
 		if err == nil {
-			if savedHash != bodyHash {
+			if len(savedIntent) == 0 {
+				return Memory{}, ErrIdempotencyRecoveryRequired
+			}
+			if !bytes.Equal(savedIntent, intentJSON) {
 				return Memory{}, ErrIdempotencyConflict
 			}
 			// The canonical row already committed on the original request. A
@@ -490,7 +503,7 @@ func (s *Service) CreateMemory(ctx context.Context, req CreateMemoryRequest, ide
 		return Memory{}, err
 	}
 	if err = insertMemory(ctx, tx, m); err == nil && idempotencyKey != "" {
-		_, err = tx.ExecContext(ctx, `INSERT INTO idempotency(key,body_hash,memory_id,created_at) VALUES(?,?,?,?)`, idempotencyKey, bodyHash, m.ID, now.Format(time.RFC3339Nano))
+		_, err = tx.ExecContext(ctx, `INSERT INTO idempotency(key,request_json,memory_id,created_at) VALUES(?,?,?,?)`, idempotencyKey, intentJSON, m.ID, now.Format(time.RFC3339Nano))
 	}
 	if err == nil {
 		_, err = enqueueIndexJobTx(ctx, tx, m.ID, m.Version, "upsert", m.Content, encode(m.Metadata), now)

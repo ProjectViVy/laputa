@@ -12,7 +12,7 @@ func TestReadEvidencePerItemBudget(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 	longContent := strings.Repeat("evidence text ", 200)
-	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: longContent, Kind: "fact"}, "k1", "h1")
+	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: longContent, Kind: "fact"}, "k1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func TestReadEvidenceTotalBudget(t *testing.T) {
 	ctx := context.Background()
 	ids := make([]string, 5)
 	for i := range ids {
-		created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: strings.Repeat("x", 500), Kind: "fact"}, "k"+string(rune('a'+i)), "h"+string(rune('a'+i)))
+		created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: strings.Repeat("x", 500), Kind: "fact"}, "k"+string(rune('a'+i)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -59,7 +59,7 @@ func TestReadEvidenceContentHash(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 	content := "hash verification content"
-	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: content, Kind: "fact"}, "k1", "h1")
+	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: content, Kind: "fact"}, "k1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestReadEvidenceContentHash(t *testing.T) {
 func TestReadEvidenceMissingCard(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
-	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "real content", Kind: "fact"}, "k1", "h1")
+	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "real content", Kind: "fact"}, "k1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestReadEvidenceMissingCard(t *testing.T) {
 func TestReadEvidenceValidity(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
-	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "valid content", Kind: "fact"}, "k1", "h1")
+	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "valid content", Kind: "fact"}, "k1")
 	if err != nil {
 		t.Fatal(err)
 	}

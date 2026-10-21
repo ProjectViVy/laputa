@@ -28,11 +28,11 @@ func TestCreateMemoryAcceptsArtifactKinds(t *testing.T) {
 	svc := semanticTestService(t)
 	ctx := context.Background()
 	for _, kind := range []string{"source_artifact", "semantic_unit"} {
-		if _, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "content for " + kind, Kind: kind}, "", ""); err != nil {
+		if _, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "content for " + kind, Kind: kind}, ""); err != nil {
 			t.Fatalf("kind %s rejected: %v", kind, err)
 		}
 	}
-	if _, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "x", Kind: "bogus"}, "", ""); err == nil {
+	if _, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "x", Kind: "bogus"}, ""); err == nil {
 		t.Fatal("unknown kind accepted")
 	}
 }
@@ -53,7 +53,7 @@ func TestProvenanceRoundTrip(t *testing.T) {
 			"source_ref":   "mem_parent",
 			"sync_state":   "current",
 		},
-	}, "", "")
+	}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestEvidenceRealOffsetsAndExcerptHash(t *testing.T) {
 			"start_offset": start,
 			"end_offset":   end,
 		},
-	}, "", "")
+	}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestEvidenceLegacySyntheticOffsets(t *testing.T) {
 	svc := semanticTestService(t)
 	ctx := context.Background()
 	content := "legacy memory content"
-	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: content, Kind: "note"}, "", "")
+	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: content, Kind: "note"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}

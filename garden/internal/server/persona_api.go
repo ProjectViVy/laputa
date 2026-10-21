@@ -77,7 +77,6 @@ func (s *Server) handlePersonaDocumentV2(w http.ResponseWriter, r *http.Request)
 
 type personaHistoryItem struct {
 	Revision     uint64 `json:"revision"`
-	ContentHash  string `json:"content_hash"`
 	Actor        string `json:"actor"`
 	Source       string `json:"source"`
 	Reason       string `json:"reason"`
@@ -88,7 +87,6 @@ type personaHistoryItem struct {
 func historyItem(entry persona.HistoryEntry) personaHistoryItem {
 	return personaHistoryItem{
 		Revision:     entry.Revision,
-		ContentHash:  entry.ContentHash,
 		Actor:        entry.Actor,
 		Source:       entry.Source,
 		Reason:       entry.Reason,
@@ -332,11 +330,11 @@ func (s *Server) handlePersonaRepairV2(w http.ResponseWriter, r *http.Request) {
 }
 
 type personaReviewCreateV2 struct {
-	Kind             string  `json:"kind"`
-	BaseRevision     *uint64 `json:"base_revision"`
-	BaseHash         string  `json:"base_hash"`
-	ProposedMarkdown string  `json:"proposed_markdown"`
-	Reason           string  `json:"reason"`
+	Kind             string                        `json:"kind"`
+	BaseRevision     *uint64                       `json:"base_revision"`
+	ExpectedDocument *persona.DocumentPrecondition `json:"expected_document"`
+	ProposedMarkdown string                        `json:"proposed_markdown"`
+	Reason           string                        `json:"reason"`
 }
 
 func (s *Server) handlePersonaReviewCreateV2(w http.ResponseWriter, r *http.Request) {
@@ -357,8 +355,8 @@ func (s *Server) handlePersonaReviewCreateV2(w http.ResponseWriter, r *http.Requ
 		writeRequestError(w, err)
 		return
 	}
-	if body.BaseRevision == nil || strings.TrimSpace(body.BaseHash) == "" || strings.TrimSpace(body.Reason) == "" {
-		writeErrorWithCode(w, http.StatusBadRequest, "persona_invalid_content", errors.New("base_revision, base_hash and reason are required"))
+	if body.BaseRevision == nil || body.ExpectedDocument == nil || strings.TrimSpace(body.Reason) == "" {
+		writeErrorWithCode(w, http.StatusBadRequest, "persona_invalid_content", errors.New("base_revision, expected_document and reason are required"))
 		return
 	}
 	kind, err := persona.ParseKind(body.Kind)
@@ -371,7 +369,7 @@ func (s *Server) handlePersonaReviewCreateV2(w http.ResponseWriter, r *http.Requ
 		actor = persona.ActorAutodream
 	}
 	review, err := s.Persona.CreateRequest(persona.ChangeRequest{
-		Kind: kind, BaseRevision: *body.BaseRevision, BaseHash: strings.TrimSpace(body.BaseHash),
+		Kind: kind, BaseRevision: *body.BaseRevision, ExpectedDocument: body.ExpectedDocument,
 		ProposedMarkdown: body.ProposedMarkdown, Actor: actor, Reason: strings.TrimSpace(body.Reason),
 	})
 	if err != nil {

@@ -5,8 +5,6 @@
 package testkit
 
 import (
-	"strings"
-
 	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
@@ -81,7 +79,8 @@ func Binding(scope evolution.Scope) evolution.RunBinding {
 		WorkspaceID:     scope.WorkspaceID,
 		DestinationID:   "mentle.default",
 		PolicyRevision:  "policy-2026-10-02",
-		StrategyDigest:  "sha256:" + strings.Repeat("a", 64),
+		StrategyID:      "laputa-diva",
+		StrategyVersion: "diva-cognitive/v1-review-3",
 		MissionRevision: 0,
 	}
 }

@@ -134,7 +134,7 @@ func TestMissionRejectsNonHumanPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, actor := range []RequestActor{ActorAgent, ActorAutodream} {
-		_, err = svc.CreateRequest(ChangeRequest{Kind: KindMission, BaseRevision: doc.Revision, BaseHash: doc.ContentHash, ProposedMarkdown: "x", Actor: actor, Reason: "r"})
+		_, err = svc.CreateRequest(ChangeRequest{Kind: KindMission, BaseRevision: doc.Revision, ProposedMarkdown: "x", Actor: actor, Reason: "r"})
 		if !errors.Is(err, ErrKindForbidden) {
 			t.Fatalf("CreateRequest(mission, %s) = %v", actor, err)
 		}

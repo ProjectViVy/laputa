@@ -2,9 +2,7 @@ package ingest
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
-	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -17,8 +15,7 @@ func TestPendingIngestionRestartsAndRemainsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := "durable session decision"
-	sum := sha256.Sum256([]byte(content))
-	req := SubmitRequest{SessionID: "session-restart", EventID: "event-restart", Phase: "session_end", Content: content, ContentHash: fmt.Sprintf("sha256:%x", sum)}
+	req := SubmitRequest{SessionID: "session-restart", EventID: "event-restart", Phase: "session_end", Content: content}
 	accepted, err := first.Submit(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -61,13 +58,11 @@ func TestPendingIngestionRestartsAndRemainsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sameContent.IngestionID != accepted.IngestionID {
-		t.Fatalf("content duplicate id=%q, want %q", sameContent.IngestionID, accepted.IngestionID)
+	if sameContent.IngestionID == accepted.IngestionID {
+		t.Fatalf("distinct event id reused ingestion %q", sameContent.IngestionID)
 	}
 	req.EventID = "event-restart"
 	req.Content = "changed content"
-	changed := sha256.Sum256([]byte(req.Content))
-	req.ContentHash = fmt.Sprintf("sha256:%x", changed)
 	if _, err := second.Submit(context.Background(), req); !errors.Is(err, ErrEventConflict) {
 		t.Fatalf("changed event error=%v, want ErrEventConflict", err)
 	}

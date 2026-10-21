@@ -104,7 +104,6 @@ type AuthorizedMutation struct {
 	Scope            evolution.Scope             `json:"scope"`
 	DestinationID    string                      `json:"destination_id"`
 	OperationID      string                      `json:"operation_id"`
-	PayloadDigest    string                      `json:"payload_digest"`
 	Operation        evolution.MutationOperation `json:"operation"`
 	RecordID         string                      `json:"record_id"`
 	ExpectedRevision uint64                      `json:"expected_revision"`
@@ -122,7 +121,6 @@ func (m AuthorizedMutation) Validate() error {
 	for name, value := range map[string]string{
 		"destination_id": m.DestinationID,
 		"operation_id":   m.OperationID,
-		"payload_digest": m.PayloadDigest,
 		"record_id":      m.RecordID,
 	} {
 		if value == "" {
@@ -152,6 +150,15 @@ func (m AuthorizedMutation) Validate() error {
 		}
 	}
 	return nil
+}
+
+// IntentJSON returns the exact authorized operation input owned by this
+// operation id. Its shape matches the memory effect replay form.
+func (m AuthorizedMutation) IntentJSON() ([]byte, error) {
+	if err := m.Validate(); err != nil {
+		return nil, err
+	}
+	return json.Marshal(m)
 }
 
 // MatchesWriter checks the mutation against the instance's bound writer.
@@ -200,13 +207,13 @@ type MutationReceipt struct {
 	evolution.EffectReceipt
 	CanonicalStatus CanonicalStatus `json:"canonical_status"`
 	IndexStatus     IndexStatus     `json:"index_status"`
+	IntentJSON      []byte          `json:"-"`
 }
 
 // MarshalJSON flattens the embedded receipt fields.
 func (r MutationReceipt) MarshalJSON() ([]byte, error) {
 	type wire struct {
 		OperationID     string                 `json:"operation_id"`
-		PayloadDigest   string                 `json:"payload_digest"`
 		Status          evolution.EffectStatus `json:"status"`
 		TargetRef       string                 `json:"target_ref"`
 		Revision        uint64                 `json:"revision"`
@@ -216,7 +223,6 @@ func (r MutationReceipt) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(wire{
 		OperationID:     r.OperationID,
-		PayloadDigest:   r.PayloadDigest,
 		Status:          r.Status,
 		TargetRef:       r.TargetRef,
 		Revision:        r.Revision,
@@ -230,7 +236,6 @@ func (r MutationReceipt) MarshalJSON() ([]byte, error) {
 func (r *MutationReceipt) UnmarshalJSON(data []byte) error {
 	type wire struct {
 		OperationID     string                 `json:"operation_id"`
-		PayloadDigest   string                 `json:"payload_digest"`
 		Status          evolution.EffectStatus `json:"status"`
 		TargetRef       string                 `json:"target_ref"`
 		Revision        uint64                 `json:"revision"`
@@ -243,12 +248,11 @@ func (r *MutationReceipt) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	r.EffectReceipt = evolution.EffectReceipt{
-		OperationID:   w.OperationID,
-		PayloadDigest: w.PayloadDigest,
-		Status:        w.Status,
-		TargetRef:     w.TargetRef,
-		Revision:      w.Revision,
-		ErrorCode:     w.ErrorCode,
+		OperationID: w.OperationID,
+		Status:      w.Status,
+		TargetRef:   w.TargetRef,
+		Revision:    w.Revision,
+		ErrorCode:   w.ErrorCode,
 	}
 	r.CanonicalStatus = w.CanonicalStatus
 	r.IndexStatus = w.IndexStatus

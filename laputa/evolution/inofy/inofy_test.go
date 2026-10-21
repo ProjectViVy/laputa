@@ -7,7 +7,6 @@ import (
 
 	"github.com/ProjectViVy/inofy"
 	"github.com/ProjectViVy/laputa/laputa/evolution"
-	"github.com/ProjectViVy/laputa/laputa/evolution/diva"
 )
 
 type fakeDomain struct{}
@@ -54,7 +53,7 @@ func TestDefinitionCompiles(t *testing.T) {
 func TestExecutorDispatch(t *testing.T) {
 	exec := NewExecutor(fakeDomain{}, fakeModel{})
 	in, _ := json.Marshal(evolution.Input{
-		Binding: evolution.RunBinding{SubjectID: "p", DestinationID: "actmem", PolicyRevision: "pol", MissionRevision: 1, StrategyDigest: "d"},
+		Binding: evolution.RunBinding{SubjectID: "p", DestinationID: "actmem", PolicyRevision: "pol", MissionRevision: 1, StrategyID: StrategyID, StrategyVersion: StrategyVersion},
 		Window:  evolution.Window{SourceID: "activity", After: 0, Through: 1},
 	})
 	callInput, _ := json.Marshal(map[string]json.RawMessage{"input": in})
@@ -81,19 +80,9 @@ func TestExecutorDispatch(t *testing.T) {
 	}
 }
 
-// A prompt/schema/implementation change moves the strategy digest.
-func TestDigestMovesWithImplementation(t *testing.T) {
-	digest1, err := StrategyDigest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	def, _ := Definition()
-	raw, _ := json.Marshal(def)
-	bundle := append(append([]byte{}, diva.PromptBundle()...), 'x')
-	if digest(raw, bundle) == digest1 {
-		t.Fatal("prompt bundle change did not move the digest")
-	}
-	if digest(append(raw, 'x'), diva.PromptBundle()) == digest1 {
-		t.Fatal("definition change did not move the digest")
+// The strategy version is an ordinary owner-maintained release identifier.
+func TestStrategyIdentityUsesImplementationVersion(t *testing.T) {
+	if StrategyID == "" || StrategyVersion == "" || ImplementationID != StrategyID+"/"+StrategyVersion {
+		t.Fatalf("strategy identity = %q@%q implementation=%q", StrategyID, StrategyVersion, ImplementationID)
 	}
 }

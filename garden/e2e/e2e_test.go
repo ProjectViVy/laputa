@@ -5,8 +5,6 @@ package e2e
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -129,11 +127,11 @@ func TestGardenCleanBreakEndToEnd(t *testing.T) {
 	}
 
 	var initialIdentity struct {
-		ContentHash string `json:"content_hash"`
-		Revision    uint64 `json:"revision"`
+		Content  string `json:"content"`
+		Revision uint64 `json:"revision"`
 	}
 	requestJSON(t, client, http.MethodGet, baseURL+"/v2/persona/documents/identity", nil, readToken, http.StatusOK, "", &initialIdentity)
-	if initialIdentity.Revision != 1 || initialIdentity.ContentHash == "" {
+	if initialIdentity.Revision != 1 || initialIdentity.Content == "" {
 		t.Fatalf("initial identity=%+v", initialIdentity)
 	}
 
@@ -165,7 +163,7 @@ func TestGardenCleanBreakEndToEnd(t *testing.T) {
 	}
 	requestJSON(t, client, http.MethodPost, baseURL+"/v2/persona/reviews", map[string]any{
 		"kind": "identity", "base_revision": initialIdentity.Revision,
-		"base_hash":         initialIdentity.ContentHash,
+		"expected_document": map[string]any{"exists": true, "content": initialIdentity.Content},
 		"proposed_markdown": "# Identity\nE2E identity after approved review",
 		"reason":            "clean-break e2e review",
 	}, agentToken, http.StatusCreated, "", &review)
@@ -273,13 +271,12 @@ func TestGardenCleanBreakEndToEnd(t *testing.T) {
 	}
 
 	transcript := "canonical session ingestion also survives a process boundary"
-	hash := sha256.Sum256([]byte(transcript))
 	var accepted struct {
 		IngestionID string `json:"ingestion_id"`
 	}
 	requestJSON(t, client, http.MethodPost, baseURL+"/v2/ingest/sessions", map[string]any{
 		"session_id": "ingest-session", "event_id": "ingest-event", "phase": "session_end",
-		"content": transcript, "content_hash": "sha256:" + hex.EncodeToString(hash[:]),
+		"content": transcript,
 	}, userToken, http.StatusAccepted, "", &accepted)
 	if accepted.IngestionID == "" {
 		t.Fatal("ingestion was not accepted")
@@ -290,7 +287,7 @@ func TestGardenCleanBreakEndToEnd(t *testing.T) {
 	}
 	requestJSON(t, client, http.MethodPost, baseURL+"/v2/ingest/sessions", map[string]any{
 		"session_id": "ingest-session", "event_id": "ingest-event", "phase": "session_end",
-		"content": transcript, "content_hash": "sha256:" + hex.EncodeToString(hash[:]),
+		"content": transcript,
 	}, userToken, http.StatusAccepted, "", &duplicateIngest)
 	if duplicateIngest.IngestionID != accepted.IngestionID {
 		t.Fatalf("duplicate ingestion=%q, want %q", duplicateIngest.IngestionID, accepted.IngestionID)

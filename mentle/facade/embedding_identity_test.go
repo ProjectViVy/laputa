@@ -156,7 +156,7 @@ func TestDimensionMismatchRejection(t *testing.T) {
 
 	_, err = svc.CreateMemory(context.Background(), CreateMemoryRequest{
 		Content: "test content",
-	}, "", "")
+	}, "")
 
 	if err != ErrEmbeddingDimensionMismatch {
 		t.Fatalf("expected ErrEmbeddingDimensionMismatch, got: %v", err)
@@ -196,7 +196,7 @@ func TestEveryEmbeddingIdentityFieldMismatchIsExplicit(t *testing.T) {
 			tc.mutate(&current)
 			store := &fakeStore{points: map[string]govector.SearchResult{}}
 			svc := &Service{Catalog: catalog, Hybrid: hybrid.NewSearcher(store, fakeEmbedder{}, .7), EmbeddingIdentity: func() embedder.Identity { return current }}
-			_, err = svc.CreateMemory(context.Background(), CreateMemoryRequest{Content: "identity guarded"}, "", "")
+			_, err = svc.CreateMemory(context.Background(), CreateMemoryRequest{Content: "identity guarded"}, "")
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("error=%v want=%v", err, tc.want)
 			}

@@ -30,7 +30,7 @@ func (f *fakeDomain) Apply(_ context.Context, e evolution.Effect) (evolution.Eff
 	if r, ok := f.applyOut[e.OperationID]; ok {
 		return r, nil
 	}
-	return evolution.EffectReceipt{OperationID: e.OperationID, PayloadDigest: e.PayloadDigest, Status: evolution.StatusApplied, Revision: 1}, nil
+	return evolution.BindReceiptIntent(evolution.EffectReceipt{OperationID: e.OperationID, Status: evolution.StatusApplied, Revision: 1}, e), nil
 }
 
 func (f *fakeDomain) Lookup(_ context.Context, opID string) (evolution.EffectReceipt, error) {
@@ -63,7 +63,8 @@ func testInput() evolution.Input {
 			DestinationID:   "actmem",
 			PolicyRevision:  "pol-1",
 			MissionRevision: 1,
-			StrategyDigest:  "dig",
+			StrategyID:      "laputa-diva",
+			StrategyVersion: "v1",
 		},
 		Window: evolution.Window{SourceID: "activity", After: 0, Through: 5},
 	}
@@ -185,8 +186,8 @@ func TestStrategyRoutesTypedEffectsInOrder(t *testing.T) {
 		t.Fatalf("kinds = %v", ids)
 	}
 	for _, e := range d.applied {
-		if e.PayloadDigest == "" {
-			t.Fatal("effect missing payload digest")
+		if _, err := e.IntentJSON(); err != nil {
+			t.Fatalf("effect missing exact replay intent: %v", err)
 		}
 	}
 	if out.Status != OutcomeApplied && out.Status != OutcomeSubmitted {
@@ -293,7 +294,7 @@ func TestStrategyUnknownOutcomeStopsAndMarksRecovery(t *testing.T) {
 
 func TestStrategyReplayResolvesCommittedEffect(t *testing.T) {
 	d := &fakeDomain{batch: testBatch()}
-	// Compute the digest the first run would have produced for e0.
+	// Retain the exact first-run intent for e0.
 	cand := mustCandidate(t, memoryCandidate())
 	eff, err := evolution.NewEffect("op-r:e0", evolution.KindMemoryMutation, cand.Payload(),
 		evolution.Scope{SubjectID: "profile_1", Kind: evolution.ScopePersonal}, "actmem")
@@ -301,7 +302,7 @@ func TestStrategyReplayResolvesCommittedEffect(t *testing.T) {
 		t.Fatal(err)
 	}
 	d.receipts = map[string]evolution.EffectReceipt{
-		"op-r:e0": {OperationID: "op-r:e0", PayloadDigest: eff.PayloadDigest, Status: evolution.StatusApplied, TargetRef: "mem_x", Revision: 2},
+		"op-r:e0": evolution.BindReceiptIntent(evolution.EffectReceipt{OperationID: "op-r:e0", Status: evolution.StatusApplied, TargetRef: "mem_x", Revision: 2}, eff),
 	}
 	m := &fakeModel{replies: map[evolution.ModelStage]json.RawMessage{
 		evolution.StageReconcile: json.RawMessage(`{"base_revision":1,"changes":[]}`),
@@ -321,12 +322,17 @@ func TestStrategyReplayResolvesCommittedEffect(t *testing.T) {
 }
 
 func TestStrategyReplayConflictFails(t *testing.T) {
-	d := &fakeDomain{
-		batch: testBatch(),
-		receipts: map[string]evolution.EffectReceipt{
-			"op-c:e0": {OperationID: "op-c:e0", PayloadDigest: "different", Status: evolution.StatusApplied},
-		},
+	changed := mustCandidate(t, memoryCandidate())
+	changedPayload := changed.Payload().(*evolution.MemoryMutationPayload)
+	changedPayload.Body = "changed"
+	conflict, err := evolution.NewEffect("op-c:e0", evolution.KindMemoryMutation, changedPayload,
+		evolution.Scope{SubjectID: "profile_1", Kind: evolution.ScopePersonal}, "actmem")
+	if err != nil {
+		t.Fatal(err)
 	}
+	d := &fakeDomain{batch: testBatch(), receipts: map[string]evolution.EffectReceipt{
+		"op-c:e0": evolution.BindReceiptIntent(evolution.EffectReceipt{OperationID: "op-c:e0", Status: evolution.StatusApplied}, conflict),
+	}}
 	m := &fakeModel{replies: map[evolution.ModelStage]json.RawMessage{
 		evolution.StageReconcile: json.RawMessage(`{"base_revision":1,"changes":[]}`),
 		evolution.StageReflect:   reflectReply(memoryCandidate()),

@@ -171,7 +171,6 @@ type personaDocumentResponse struct {
 	Valid        bool    `json:"valid"`
 	Content      string  `json:"content"`
 	Revision     int     `json:"revision"`
-	ContentHash  string  `json:"content_hash"`
 	UpdatedAt    *string `json:"updated_at"`
 	PendingCount int     `json:"pending_count"`
 }
@@ -268,7 +267,6 @@ type personaReviewResponse struct {
 	ID           string `json:"id"`
 	Kind         string `json:"kind"`
 	BaseRevision uint64 `json:"base_revision"`
-	BaseHash     string `json:"base_hash"`
 	Actor        string `json:"actor"`
 	Reason       string `json:"reason"`
 	State        string `json:"state"`
@@ -459,23 +457,23 @@ func handlePersonaPropose(client *Client) (mcp.Tool, server.ToolHandlerFunc) {
 		mcp.WithDescription("Submit a protected Persona Markdown proposal for user review. This creates a review request and never applies the change directly."),
 		mcp.WithString("kind", mcp.Required(), mcp.Description("Persona kind: identity, relationship, redline, user, dream, dark, or world")),
 		mcp.WithNumber("base_revision", mcp.Required(), mcp.Description("Revision read before preparing the proposal")),
-		mcp.WithString("base_hash", mcp.Required(), mcp.Description("Content hash read for the base revision")),
+		mcp.WithObject("expected_document", mcp.Required(), mcp.Description("Exact document state read for the base revision; fields: exists and content")),
 		mcp.WithString("proposed_markdown", mcp.Required(), mcp.Description("Proposed Markdown body")),
 		mcp.WithString("reason", mcp.Required(), mcp.Description("Why the proposal is needed")),
 	)
 	handler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		args, _ := req.Params.Arguments.(map[string]any)
 		kind, _ := args["kind"].(string)
-		baseHash, _ := args["base_hash"].(string)
+		expectedDocument, _ := args["expected_document"].(map[string]any)
 		proposed, _ := args["proposed_markdown"].(string)
 		reason, _ := args["reason"].(string)
 		baseRevision, ok := integerArgument(args["base_revision"])
-		if strings.TrimSpace(kind) == "" || !ok || strings.TrimSpace(baseHash) == "" || strings.TrimSpace(proposed) == "" || strings.TrimSpace(reason) == "" {
-			return errorResult(fmt.Errorf("kind, base_revision, base_hash, proposed_markdown and reason are required")), nil
+		if strings.TrimSpace(kind) == "" || !ok || expectedDocument == nil || strings.TrimSpace(proposed) == "" || strings.TrimSpace(reason) == "" {
+			return errorResult(fmt.Errorf("kind, base_revision, expected_document, proposed_markdown and reason are required")), nil
 		}
 		var resp personaReviewResponse
 		if err := client.post(ctx, "/v2/persona/reviews", map[string]any{
-			"kind": kind, "base_revision": baseRevision, "base_hash": baseHash,
+			"kind": kind, "base_revision": baseRevision, "expected_document": expectedDocument,
 			"proposed_markdown": proposed, "reason": reason,
 		}, &resp); err != nil {
 			return errorResult(err), nil
@@ -937,9 +935,6 @@ func formatPersonaDocument(resp personaDocumentResponse) string {
 		return b.String()
 	}
 	fmt.Fprintf(&b, "revision: %d\n", resp.Revision)
-	if resp.ContentHash != "" {
-		fmt.Fprintf(&b, "content_hash: %s\n", resp.ContentHash)
-	}
 	fmt.Fprintf(&b, "---\n%s\n", resp.Content)
 	return b.String()
 }

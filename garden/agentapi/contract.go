@@ -92,13 +92,12 @@ type CaptureProvenance struct {
 type CaptureActivity struct{ UserText string }
 
 type CaptureRequest struct {
-	Activity    *CaptureActivity  `json:"-"`
-	Binding     Binding           `json:"binding"`
-	Phase       CapturePhase      `json:"phase"`
-	Content     string            `json:"content"`
-	ContentHash string            `json:"content_hash"`
-	Provenance  CaptureProvenance `json:"provenance"`
-	OccurredAt  time.Time         `json:"occurred_at,omitempty"`
+	Activity   *CaptureActivity  `json:"-"`
+	Binding    Binding           `json:"binding"`
+	Phase      CapturePhase      `json:"phase"`
+	Content    string            `json:"content"`
+	Provenance CaptureProvenance `json:"provenance"`
+	OccurredAt time.Time         `json:"occurred_at,omitempty"`
 }
 
 // CaptureReceipt matches the existing asynchronous ingest acceptance keys.

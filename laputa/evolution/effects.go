@@ -1,6 +1,7 @@
 package evolution
 
 import (
+	"bytes"
 	"encoding/json"
 )
 
@@ -214,23 +215,46 @@ func (p *effectPayloads) validate() error {
 
 // Effect is one typed, replayable effect. OperationID comes from the
 // committed operation key plus stable candidate index, never from model
-// text.
+// text. Its scope and destination are the exact authority binding admitted
+// for this operation.
 type Effect struct {
 	OperationID   string `json:"operation_id"`
-	PayloadDigest string `json:"payload_digest"`
+	Scope         Scope  `json:"scope"`
+	DestinationID string `json:"destination_id"`
 	effectPayloads
 }
 
 // effectWire is the on-the-wire envelope shape.
 type effectWire struct {
 	OperationID        string                     `json:"operation_id"`
-	PayloadDigest      string                     `json:"payload_digest"`
+	Scope              Scope                      `json:"scope"`
+	DestinationID      string                     `json:"destination_id"`
 	Kind               EffectKind                 `json:"kind"`
 	WorkPatch          *WorkPatch                 `json:"work_patch,omitempty"`
 	MemoryMutation     *MemoryMutationPayload     `json:"memory_mutation,omitempty"`
 	PersonaRequest     *PersonaRequestPayload     `json:"persona_request,omitempty"`
 	CapabilityProposal *CapabilityProposalPayload `json:"capability_proposal,omitempty"`
 	ReflectionNote     *ReflectionNotePayload     `json:"reflection_note,omitempty"`
+}
+
+type effectIntent struct {
+	Scope         Scope      `json:"scope"`
+	DestinationID string     `json:"destination_id"`
+	Kind          EffectKind `json:"kind"`
+	Payload       any        `json:"payload"`
+}
+
+type memoryMutationIntent struct {
+	Scope            Scope             `json:"scope"`
+	DestinationID    string            `json:"destination_id"`
+	OperationID      string            `json:"operation_id"`
+	Operation        MutationOperation `json:"operation"`
+	RecordID         string            `json:"record_id"`
+	ExpectedRevision uint64            `json:"expected_revision"`
+	ExpectedAbsent   bool              `json:"expected_absent"`
+	Body             string            `json:"body"`
+	Sources          []SourceRef       `json:"sources"`
+	Inference        InferenceClass    `json:"inference"`
 }
 
 // Payload returns the typed payload matching the effect kind.
@@ -241,10 +265,30 @@ func (e Effect) Validate() error {
 	if e.OperationID == "" {
 		return invalidSchema("effect operation_id required")
 	}
-	if e.PayloadDigest == "" {
-		return invalidSchema("effect payload_digest required")
+	if err := e.Scope.Validate(); err != nil {
+		return err
+	}
+	if e.DestinationID == "" {
+		return invalidSchema("effect destination_id required")
 	}
 	return e.effectPayloads.validate()
+}
+
+// IntentJSON returns the exact normalized authority binding and typed payload
+// owned by this operation id.
+func (e Effect) IntentJSON() ([]byte, error) {
+	if err := e.Validate(); err != nil {
+		return nil, err
+	}
+	if e.Kind == KindMemoryMutation {
+		p := e.MemoryMutation
+		return json.Marshal(memoryMutationIntent{
+			Scope: e.Scope, DestinationID: e.DestinationID, OperationID: e.OperationID,
+			Operation: p.Operation, RecordID: p.RecordID, ExpectedRevision: p.ExpectedRevision,
+			ExpectedAbsent: p.ExpectedAbsent, Body: p.Body, Sources: p.Sources, Inference: p.Inference,
+		})
+	}
+	return json.Marshal(effectIntent{Scope: e.Scope, DestinationID: e.DestinationID, Kind: e.Kind, Payload: e.Payload()})
 }
 
 // DecodeEffect strict-decodes one effect. Unknown fields, unknown or absent
@@ -256,7 +300,8 @@ func DecodeEffect(data []byte) (Effect, error) {
 	}
 	e := Effect{
 		OperationID:   w.OperationID,
-		PayloadDigest: w.PayloadDigest,
+		Scope:         w.Scope,
+		DestinationID: w.DestinationID,
 		effectPayloads: effectPayloads{
 			Kind:               w.Kind,
 			WorkPatch:          w.WorkPatch,
@@ -276,7 +321,8 @@ func DecodeEffect(data []byte) (Effect, error) {
 func (e Effect) MarshalJSON() ([]byte, error) {
 	return json.Marshal(effectWire{
 		OperationID:        e.OperationID,
-		PayloadDigest:      e.PayloadDigest,
+		Scope:              e.Scope,
+		DestinationID:      e.DestinationID,
 		Kind:               e.Kind,
 		WorkPatch:          e.WorkPatch,
 		MemoryMutation:     e.MemoryMutation,
@@ -286,10 +332,9 @@ func (e Effect) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// NewEffect builds an effect whose payload digest is SHA-256 of the canonical
-// typed payload plus effective scope and destination.
+// NewEffect binds a typed payload to the trusted scope and destination.
 func NewEffect(operationID string, kind EffectKind, payload any, scope Scope, destinationID string) (Effect, error) {
-	e := Effect{OperationID: operationID}
+	e := Effect{OperationID: operationID, Scope: scope, DestinationID: destinationID}
 	e.effectPayloads.Kind = kind
 	switch p := payload.(type) {
 	case *WorkPatch:
@@ -305,29 +350,27 @@ func NewEffect(operationID string, kind EffectKind, payload any, scope Scope, de
 	default:
 		return Effect{}, invalidSchema("effect %s payload type mismatch", kind)
 	}
-	if e.Payload() == nil {
-		return Effect{}, invalidSchema("effect %s payload type mismatch", kind)
-	}
-	digest, err := digestOf(digestInput{Scope: scope, DestinationID: destinationID, Kind: kind, Payload: e.Payload()})
-	if err != nil {
-		return Effect{}, err
-	}
-	e.PayloadDigest = digest
 	if err := e.Validate(); err != nil {
 		return Effect{}, err
 	}
 	return e, nil
 }
 
-// CheckReplay compares a recorded effect with an incoming one bearing the
-// same operation_id. Same digest replays (the caller returns the recorded
-// receipt); a changed payload or scope changes the digest and conflicts.
+// CheckReplay compares the exact owner-bound intent for one operation id.
 func CheckReplay(recorded, incoming Effect) error {
 	if recorded.OperationID != incoming.OperationID {
 		return &ContractError{Code: ErrInvalidSchema, Message: "replay requires equal operation_id"}
 	}
-	if recorded.PayloadDigest != incoming.PayloadDigest {
-		return &ContractError{Code: ErrIdempotencyConflict, Message: "operation payload changed under the same operation_id"}
+	recordedIntent, err := recorded.IntentJSON()
+	if err != nil {
+		return err
+	}
+	incomingIntent, err := incoming.IntentJSON()
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(recordedIntent, incomingIntent) {
+		return &ContractError{Code: ErrIdempotencyConflict, Message: "operation intent changed under the same operation_id"}
 	}
 	return nil
 }
@@ -345,12 +388,47 @@ const (
 
 // EffectReceipt reports one effect's durable outcome.
 type EffectReceipt struct {
-	OperationID   string       `json:"operation_id"`
-	PayloadDigest string       `json:"payload_digest"`
-	Status        EffectStatus `json:"status"`
-	TargetRef     string       `json:"target_ref"`
-	Revision      uint64       `json:"revision"`
-	ErrorCode     string       `json:"error_code"`
+	OperationID string       `json:"operation_id"`
+	Status      EffectStatus `json:"status"`
+	TargetRef   string       `json:"target_ref"`
+	Revision    uint64       `json:"revision"`
+	ErrorCode   string       `json:"error_code"`
+	intentJSON  []byte
+}
+
+// BindReceiptIntent associates exact private operation input with a receipt.
+// The intent is never part of the receipt wire or model-facing projection.
+func BindReceiptIntent(receipt EffectReceipt, effect Effect) EffectReceipt {
+	intent, err := effect.IntentJSON()
+	if err == nil {
+		receipt.intentJSON = intent
+	}
+	return receipt
+}
+
+// BindReceiptIntentJSON restores exact input from its private durable owner.
+func BindReceiptIntentJSON(receipt EffectReceipt, intent []byte) EffectReceipt {
+	receipt.intentJSON = append([]byte(nil), intent...)
+	return receipt
+}
+
+// CheckReceiptReplay verifies a durable receipt against the incoming intent.
+// Legacy receipts without exact input require explicit recovery.
+func CheckReceiptReplay(receipt EffectReceipt, incoming Effect) error {
+	if receipt.OperationID != incoming.OperationID {
+		return &ContractError{Code: ErrInvalidSchema, Message: "replay requires equal operation_id"}
+	}
+	if len(receipt.intentJSON) == 0 {
+		return &ContractError{Code: ErrRecoveryRequired, Message: "operation receipt has no retained exact intent"}
+	}
+	incomingIntent, err := incoming.IntentJSON()
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(receipt.intentJSON, incomingIntent) {
+		return &ContractError{Code: ErrIdempotencyConflict, Message: "operation intent changed under the same operation_id"}
+	}
+	return nil
 }
 
 // Candidate is a proposed effect before binding: the operation id and digest

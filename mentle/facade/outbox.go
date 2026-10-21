@@ -341,8 +341,8 @@ func contractIndexState(state string) string {
 	return "index_pending"
 }
 
-func (s *Service) CreateMemoryWithIndexStatus(ctx context.Context, req CreateMemoryRequest, idempotencyKey, bodyHash string) (MemoryMutationResult, error) {
-	memory, err := s.CreateMemory(ctx, req, idempotencyKey, bodyHash)
+func (s *Service) CreateMemoryWithIndexStatus(ctx context.Context, req CreateMemoryRequest, idempotencyKey string) (MemoryMutationResult, error) {
+	memory, err := s.CreateMemory(ctx, req, idempotencyKey)
 	if err != nil {
 		return MemoryMutationResult{}, err
 	}

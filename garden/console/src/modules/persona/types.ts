@@ -25,14 +25,12 @@ export interface PersonaDocument {
   valid: boolean;
   content: string;
   revision: number;
-  content_hash: string;
   updated_at: string | null;
   pending_count: number;
 }
 
 export interface PersonaHistoryEntry {
   revision: number;
-  content_hash: string;
   actor: string;
   source: string;
   reason: string;
@@ -42,7 +40,6 @@ export interface PersonaHistoryEntry {
 
 export interface PersonaHistoryRevision {
   revision: number;
-  content_hash: string;
   actor: string;
   source: string;
   reason: string;

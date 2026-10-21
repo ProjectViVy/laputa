@@ -13,7 +13,7 @@ func TestSpoolAppendIdempotent(t *testing.T) {
 	}
 	defer spool.Close()
 	ctx := context.Background()
-	entry := TransientEntry{EventID: "ev_1", SessionID: "sess_1", ContentHash: "sha256:abc", Content: "hello world"}
+	entry := TransientEntry{EventID: "ev_1", SessionID: "sess_1", Content: "hello world"}
 	if err := spool.Append(ctx, entry); err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestSpoolRead(t *testing.T) {
 	defer spool.Close()
 	ctx := context.Background()
 	for i, content := range []string{"first", "second", "third"} {
-		entry := TransientEntry{EventID: "ev_" + string(rune('a'+i)), SessionID: "sess_1", ContentHash: "hash_" + string(rune('a'+i)), Content: content, CreatedAt: "2026-08-01T00:00:0" + string(rune('1'+i)) + "Z"}
+		entry := TransientEntry{EventID: "ev_" + string(rune('a'+i)), SessionID: "sess_1", Content: content, CreatedAt: "2026-08-01T00:00:0" + string(rune('1'+i)) + "Z"}
 		if err := spool.Append(ctx, entry); err != nil {
 			t.Fatal(err)
 		}
@@ -61,11 +61,11 @@ func TestSpoolMarkDrained(t *testing.T) {
 	}
 	defer spool.Close()
 	ctx := context.Background()
-	entry := TransientEntry{EventID: "ev_1", SessionID: "sess_1", ContentHash: "hash_1", Content: "data"}
+	entry := TransientEntry{EventID: "ev_1", SessionID: "sess_1", Content: "data"}
 	if err := spool.Append(ctx, entry); err != nil {
 		t.Fatal(err)
 	}
-	if err := spool.MarkDrained(ctx, "ev_1", "hash_1"); err != nil {
+	if err := spool.MarkDrained(ctx, "ev_1", entry.Content); err != nil {
 		t.Fatal(err)
 	}
 	pending, err := spool.Pending(ctx)
@@ -85,9 +85,9 @@ func TestSpoolPendingOrdered(t *testing.T) {
 	defer spool.Close()
 	ctx := context.Background()
 	entries := []TransientEntry{
-		{EventID: "ev_2", SessionID: "s", ContentHash: "h2", Content: "second", CreatedAt: "2026-08-01T00:00:02Z"},
-		{EventID: "ev_1", SessionID: "s", ContentHash: "h1", Content: "first", CreatedAt: "2026-08-01T00:00:01Z"},
-		{EventID: "ev_3", SessionID: "s", ContentHash: "h3", Content: "third", CreatedAt: "2026-08-01T00:00:03Z"},
+		{EventID: "ev_2", SessionID: "s", Content: "second", CreatedAt: "2026-08-01T00:00:02Z"},
+		{EventID: "ev_1", SessionID: "s", Content: "first", CreatedAt: "2026-08-01T00:00:01Z"},
+		{EventID: "ev_3", SessionID: "s", Content: "third", CreatedAt: "2026-08-01T00:00:03Z"},
 	}
 	for _, e := range entries {
 		if err := spool.Append(ctx, e); err != nil {
@@ -111,7 +111,7 @@ func TestSpoolBudgetChars(t *testing.T) {
 	defer spool.Close()
 	ctx := context.Background()
 	for i := 0; i < 5; i++ {
-		entry := TransientEntry{EventID: "ev_" + string(rune('a'+i)), SessionID: "s", ContentHash: "h" + string(rune('a'+i)), Content: "1234567890", CreatedAt: "2026-08-01T00:00:0" + string(rune('1'+i)) + "Z"}
+		entry := TransientEntry{EventID: "ev_" + string(rune('a'+i)), SessionID: "s", Content: "1234567890", CreatedAt: "2026-08-01T00:00:0" + string(rune('1'+i)) + "Z"}
 		if err := spool.Append(ctx, entry); err != nil {
 			t.Fatal(err)
 		}

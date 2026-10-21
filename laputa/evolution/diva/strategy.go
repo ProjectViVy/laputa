@@ -310,16 +310,15 @@ func (s *Strategy) effects(ctx context.Context, raw json.RawMessage, operationKe
 }
 
 // resolveOrApply returns a committed receipt for the operation or applies
-// the effect. A recorded digest that differs from the incoming payload is
-// an idempotency conflict; non-not-found lookup errors propagate. A failed
+// the effect. A receipt whose retained exact intent differs from the incoming
+// effect is an idempotency conflict; non-not-found lookup errors propagate. A failed
 // Apply is not a run error: it stops the chain so committed receipts stay
 // visible.
 func (s *Strategy) resolveOrApply(ctx context.Context, effect evolution.Effect) (evolution.EffectReceipt, bool, error) {
 	recorded, err := s.domain.Lookup(ctx, effect.OperationID)
 	switch {
 	case err == nil:
-		recordedEffect := evolution.Effect{OperationID: recorded.OperationID, PayloadDigest: recorded.PayloadDigest}
-		if err := evolution.CheckReplay(recordedEffect, effect); err != nil {
+		if err := evolution.CheckReceiptReplay(recorded, effect); err != nil {
 			return evolution.EffectReceipt{}, false, err
 		}
 		return recorded, false, nil

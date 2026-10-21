@@ -68,7 +68,7 @@ func TestScopeStrictDecode(t *testing.T) {
 
 func TestRunBindingRejectsEmptyTrustedIdentity(t *testing.T) {
 	binding, err := evolution.DecodeRunBinding([]byte(
-		`{"subject_id":"subject-a","workspace_id":"ws-x","destination_id":"mentle.default","policy_revision":"pol-3","strategy_digest":"sha256:aa","mission_revision":4}`))
+		`{"subject_id":"subject-a","workspace_id":"ws-x","destination_id":"mentle.default","policy_revision":"pol-3","strategy_id":"laputa-diva","strategy_version":"v1","mission_revision":4}`))
 	if err != nil {
 		t.Fatalf("valid binding rejected: %v", err)
 	}
@@ -76,12 +76,13 @@ func TestRunBindingRejectsEmptyTrustedIdentity(t *testing.T) {
 		t.Fatalf("mission_revision decode failed: %+v", binding)
 	}
 	empty := map[string]string{
-		"subject":      `{"subject_id":"","workspace_id":"x","destination_id":"d","policy_revision":"p","strategy_digest":"s","mission_revision":0}`,
-		"destination":  `{"subject_id":"a","workspace_id":"x","destination_id":"","policy_revision":"p","strategy_digest":"s","mission_revision":0}`,
-		"policy":       `{"subject_id":"a","workspace_id":"x","destination_id":"d","policy_revision":"","strategy_digest":"s","mission_revision":0}`,
-		"digest":       `{"subject_id":"a","workspace_id":"x","destination_id":"d","policy_revision":"p","strategy_digest":"","mission_revision":0}`,
-		"unknown key":  `{"subject_id":"a","workspace_id":"x","destination_id":"d","policy_revision":"p","strategy_digest":"s","mission_revision":0,"actor":"model"}`,
-		"negative rev": `{"subject_id":"a","workspace_id":"x","destination_id":"d","policy_revision":"p","strategy_digest":"s","mission_revision":-1}`,
+		"subject":          `{"subject_id":"","workspace_id":"x","destination_id":"d","policy_revision":"p","strategy_id":"s","strategy_version":"v1","mission_revision":0}`,
+		"destination":      `{"subject_id":"a","workspace_id":"x","destination_id":"","policy_revision":"p","strategy_id":"s","strategy_version":"v1","mission_revision":0}`,
+		"policy":           `{"subject_id":"a","workspace_id":"x","destination_id":"d","policy_revision":"","strategy_id":"s","strategy_version":"v1","mission_revision":0}`,
+		"strategy id":      `{"subject_id":"a","workspace_id":"x","destination_id":"d","policy_revision":"p","strategy_id":"","strategy_version":"v1","mission_revision":0}`,
+		"strategy version": `{"subject_id":"a","workspace_id":"x","destination_id":"d","policy_revision":"p","strategy_id":"s","strategy_version":"","mission_revision":0}`,
+		"unknown key":      `{"subject_id":"a","workspace_id":"x","destination_id":"d","policy_revision":"p","strategy_id":"s","strategy_version":"v1","mission_revision":0,"actor":"model"}`,
+		"negative rev":     `{"subject_id":"a","workspace_id":"x","destination_id":"d","policy_revision":"p","strategy_id":"s","strategy_version":"v1","mission_revision":-1}`,
 	}
 	for name, wire := range empty {
 		if _, err := evolution.DecodeRunBinding([]byte(wire)); err == nil {
@@ -89,7 +90,7 @@ func TestRunBindingRejectsEmptyTrustedIdentity(t *testing.T) {
 		}
 	}
 	unassigned, err := evolution.DecodeRunBinding([]byte(
-		`{"subject_id":"subject-a","workspace_id":"","destination_id":"mentle.default","policy_revision":"pol-3","strategy_digest":"sha256:aa"}`))
+		`{"subject_id":"subject-a","workspace_id":"","destination_id":"mentle.default","policy_revision":"pol-3","strategy_id":"laputa-diva","strategy_version":"v1"}`))
 	if err != nil {
 		t.Fatalf("unassigned personal binding rejected: %v", err)
 	}
@@ -100,11 +101,11 @@ func TestRunBindingRejectsEmptyTrustedIdentity(t *testing.T) {
 
 func TestEffectStrictUnion(t *testing.T) {
 	valid := map[string]string{
-		"work_patch":          `{"operation_id":"op-1","payload_digest":"ab12","kind":"work_patch","work_patch":{"base_revision":3,"changes":[{"kind":"add","entry_id":"","field":"goal","body":"ship it","sources":[]}]}}`,
-		"memory_mutation":     `{"operation_id":"op-2","payload_digest":"cd34","kind":"memory_mutation","memory_mutation":{"operation":"create","record_id":"r1","expected_revision":0,"expected_absent":true,"body":"fact","sources":[],"inference":"observed"}}`,
-		"persona_request":     `{"operation_id":"op-3","payload_digest":"ef56","kind":"persona_request","persona_request":{"kind":"user_observations","base_revision":2,"proposed_markdown":"# Notes\n\n- prefers terse answers","reason":"observed twice","sources":[]}}`,
-		"capability_proposal": `{"operation_id":"op-4","payload_digest":"gh78","kind":"capability_proposal","capability_proposal":{"name":"summarize","description":"d","proposed_artifact":"skill.md","sources":[]}}`,
-		"reflection_note":     `{"operation_id":"op-5","payload_digest":"ij90","kind":"reflection_note","reflection_note":{"body":"# Review\n\nno drift","sources":[]}}`,
+		"work_patch":          `{"operation_id":"op-1","scope":{"subject_id":"subject-a","kind":"personal","workspace_id":""},"destination_id":"mentle.default","kind":"work_patch","work_patch":{"base_revision":3,"changes":[{"kind":"add","entry_id":"","field":"goal","body":"ship it","sources":[]}]}}`,
+		"memory_mutation":     `{"operation_id":"op-2","scope":{"subject_id":"subject-a","kind":"personal","workspace_id":""},"destination_id":"mentle.default","kind":"memory_mutation","memory_mutation":{"operation":"create","record_id":"r1","expected_revision":0,"expected_absent":true,"body":"fact","sources":[],"inference":"observed"}}`,
+		"persona_request":     `{"operation_id":"op-3","scope":{"subject_id":"subject-a","kind":"personal","workspace_id":""},"destination_id":"mentle.default","kind":"persona_request","persona_request":{"kind":"user_observations","base_revision":2,"proposed_markdown":"# Notes\n\n- prefers terse answers","reason":"observed twice","sources":[]}}`,
+		"capability_proposal": `{"operation_id":"op-4","scope":{"subject_id":"subject-a","kind":"personal","workspace_id":""},"destination_id":"mentle.default","kind":"capability_proposal","capability_proposal":{"name":"summarize","description":"d","proposed_artifact":"skill.md","sources":[]}}`,
+		"reflection_note":     `{"operation_id":"op-5","scope":{"subject_id":"subject-a","kind":"personal","workspace_id":""},"destination_id":"mentle.default","kind":"reflection_note","reflection_note":{"body":"# Review\n\nno drift","sources":[]}}`,
 	}
 	for name, wire := range valid {
 		effect, err := evolution.DecodeEffect([]byte(wire))
@@ -138,7 +139,7 @@ func TestEffectStrictUnion(t *testing.T) {
 	// Markdown payloads ride through verbatim.
 	body := "## Boundaries\n\n* item `code`\n\n```json\n{}\n```"
 	wire, err := json.Marshal(map[string]any{
-		"operation_id": "op-md", "payload_digest": "k", "kind": "persona_request",
+		"operation_id": "op-md", "scope": testkit.SubjectAPersonal(), "destination_id": "mentle.default", "kind": "persona_request",
 		"persona_request": map[string]any{"kind": "identity", "base_revision": 1, "proposed_markdown": body, "reason": "r", "sources": []any{}},
 	})
 	if err != nil {
@@ -156,7 +157,7 @@ func TestEffectStrictUnion(t *testing.T) {
 
 func TestFrozenCoreV2(t *testing.T) {
 	section := func(kind string, rev int) string {
-		return `{"kind":"` + kind + `","content":"body","source_revision":` + itoa(rev) + `,"source_hash":"h"}`
+		return `{"kind":"` + kind + `","content":"body","source_revision":` + itoa(rev) + `}`
 	}
 	valid := `{"schema_version":"laputa.frozen-core/v2","session_id":"s1","captured_at":"2026-10-02T00:00:00Z","mission_status":"assigned","sections":[` +
 		section("mission", 7) + `,` + section("identity", 1) + `,` + section("relationship", 1) + `,` + section("redline", 1) + `,` + section("user", 1) + `,` + section("dream", 1) + `,` + section("dark", 1) + `]}`
@@ -168,7 +169,7 @@ func TestFrozenCoreV2(t *testing.T) {
 		t.Fatalf("v2 kind order lost: %+v", core.Sections)
 	}
 	unassigned := `{"schema_version":"laputa.frozen-core/v2","session_id":"s1","captured_at":"2026-10-02T00:00:00Z","mission_status":"unassigned","sections":[` +
-		`{"kind":"mission","content":"","source_revision":0,"source_hash":""}` + `,` + section("identity", 1) + `,` + section("relationship", 1) + `,` + section("redline", 1) + `,` + section("user", 1) + `,` + section("dream", 1) + `,` + section("dark", 1) + `]}`
+		`{"kind":"mission","content":"","source_revision":0}` + `,` + section("identity", 1) + `,` + section("relationship", 1) + `,` + section("redline", 1) + `,` + section("user", 1) + `,` + section("dream", 1) + `,` + section("dark", 1) + `]}`
 	if _, err := evolution.DecodeFrozenCoreV2([]byte(unassigned)); err != nil {
 		t.Fatalf("unassigned mission shape rejected: %v", err)
 	}
@@ -190,7 +191,7 @@ func TestFrozenCoreV2(t *testing.T) {
 	}
 }
 
-func TestEffectReplayDigest(t *testing.T) {
+func TestEffectReplayUsesExactScopedIntent(t *testing.T) {
 	scope := testkit.SubjectAWorkspaceX()
 	mutation := &evolution.MemoryMutationPayload{Operation: evolution.MutationCreate, RecordID: "r1", ExpectedAbsent: true, Body: "fact", Inference: evolution.InferenceObserved}
 	effect, err := evolution.NewEffect("op-1", evolution.KindMemoryMutation, mutation, scope, "mentle.default")
@@ -201,11 +202,22 @@ func TestEffectReplayDigest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if effect.PayloadDigest != same.PayloadDigest {
-		t.Fatalf("identical payload produced different digest: %s vs %s", effect.PayloadDigest, same.PayloadDigest)
-	}
 	if err := evolution.CheckReplay(effect, same); err != nil {
-		t.Fatalf("same operation/digest must replay: %v", err)
+		t.Fatalf("same exact intent must replay: %v", err)
+	}
+	encoded, err := json.Marshal(effect)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "digest") {
+		t.Fatalf("effect wire contains digest metadata: %s", encoded)
+	}
+	receipt := evolution.BindReceiptIntent(evolution.EffectReceipt{OperationID: effect.OperationID, Status: evolution.StatusApplied}, effect)
+	if err := evolution.CheckReceiptReplay(receipt, effect); err != nil {
+		t.Fatalf("same receipt intent must replay: %v", err)
+	}
+	if err := evolution.CheckReceiptReplay(evolution.EffectReceipt{OperationID: effect.OperationID, Status: evolution.StatusApplied}, effect); evolution.CodeOf(err) != evolution.ErrRecoveryRequired {
+		t.Fatalf("receipt without retained intent err=%v, want recovery_required", err)
 	}
 	changedBody, err := evolution.NewEffect("op-1", evolution.KindMemoryMutation, &evolution.MemoryMutationPayload{Operation: evolution.MutationCreate, RecordID: "r1", ExpectedAbsent: true, Body: "changed", Inference: evolution.InferenceObserved}, scope, "mentle.default")
 	if err != nil {
@@ -215,7 +227,11 @@ func TestEffectReplayDigest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, other := range map[string]evolution.Effect{"changed payload": changedBody, "changed scope": changedScope} {
+	changedDestination, err := evolution.NewEffect("op-1", evolution.KindMemoryMutation, mutation, scope, "mentle.other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, other := range map[string]evolution.Effect{"changed payload": changedBody, "changed scope": changedScope, "changed destination": changedDestination} {
 		err := evolution.CheckReplay(effect, other)
 		if err == nil || evolution.CodeOf(err) != evolution.ErrIdempotencyConflict {
 			t.Fatalf("%s: want idempotency_conflict, got %v", name, err)

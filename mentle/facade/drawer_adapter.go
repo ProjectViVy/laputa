@@ -2,9 +2,6 @@ package facade
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
 
 	"github.com/ProjectViVy/laputa/mentle/internal/palace"
@@ -53,11 +50,6 @@ func (s *Service) CreateDrawer(ctx context.Context, drawer palace.Drawer, actor,
 		Actor:     actor,
 		RequestID: requestID,
 	}
-	body, err := json.Marshal(request)
-	if err != nil {
-		return MemoryMutationResult{}, err
-	}
-	hash := sha256.Sum256(body)
-	key := fmt.Sprintf("drawer:%x", hash[:])
-	return s.CreateMemoryWithIndexStatus(ctx, request, key, "sha256:"+hex.EncodeToString(hash[:]))
+	key := fmt.Sprintf("drawer:%s:%s:%d", requestID, drawer.SourceFile, drawer.ChunkIndex)
+	return s.CreateMemoryWithIndexStatus(ctx, request, key)
 }

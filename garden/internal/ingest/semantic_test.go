@@ -17,7 +17,7 @@ type fakeMemoryWriter struct {
 	seq   int
 }
 
-func (f *fakeMemoryWriter) CreateMemory(_ context.Context, req facade.CreateMemoryRequest, idempotencyKey, bodyHash string) (facade.Memory, error) {
+func (f *fakeMemoryWriter) CreateMemory(_ context.Context, req facade.CreateMemoryRequest, idempotencyKey string) (facade.Memory, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, req)

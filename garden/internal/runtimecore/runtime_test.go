@@ -3,9 +3,7 @@ package runtimecore
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,8 +90,7 @@ func TestOpenMissingModelReadsExistingCanonicalLexically(t *testing.T) {
 		t.Fatalf("lexical wiring: mentle=%v searcher=%v lexical=%v", core.Mentle, core.FastRecall.Searcher, core.LexicalOnly)
 	}
 	content := "offline capture cannot mutate canonical"
-	digest := sha256.Sum256([]byte(content))
-	accepted, err := core.Ingest.Submit(context.Background(), ingest.SubmitRequest{SessionID: "lexical", EventID: "event-lexical", Phase: "session_end", Content: content, ContentHash: fmt.Sprintf("sha256:%x", digest)})
+	accepted, err := core.Ingest.Submit(context.Background(), ingest.SubmitRequest{SessionID: "lexical", EventID: "event-lexical", Phase: "session_end", Content: content})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +146,7 @@ func TestOpenFullModelPersistsAndRetrievesCardAcrossReopen(t *testing.T) {
 	if _, err := core.Persona.Initialize(persona.Initialization{Identity: "identity", Relationship: "relationship", Redline: "redline", User: "user", World: "world"}, "user", persona.SourceInit, "init"); err != nil {
 		t.Fatal(err)
 	}
-	memory, err := core.Mentle.CreateMemory(context.Background(), facade.CreateMemoryRequest{Content: "uniquefullmodeltoken evidence", Scope: "global"}, "", "")
+	memory, err := core.Mentle.CreateMemory(context.Background(), facade.CreateMemoryRequest{Content: "uniquefullmodeltoken evidence", Scope: "global"}, "")
 	if err != nil {
 		core.Close()
 		t.Fatal(err)
@@ -245,8 +242,7 @@ func TestDegradedCaptureReusesDurableIngestion(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := "terminal event content"
-	digest := sha256.Sum256([]byte(content))
-	req := ingest.SubmitRequest{SessionID: "session-1", EventID: "terminal-1", Phase: "session_end", Content: content, ContentHash: fmt.Sprintf("sha256:%x", digest)}
+	req := ingest.SubmitRequest{SessionID: "session-1", EventID: "terminal-1", Phase: "session_end", Content: content}
 	first, err := core.Ingest.Submit(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -297,8 +293,7 @@ func TestDegradedCapturePersistsActivityAndTransientSpoolAcrossReopen(t *testing
 		t.Fatal("ingest must use composed activity and spool")
 	}
 	content := "durable degraded capture"
-	digest := sha256.Sum256([]byte(content))
-	req := ingest.SubmitRequest{SessionID: "session-1", EventID: "terminal-1", Phase: "session_end", Content: content, ContentHash: fmt.Sprintf("sha256:%x", digest)}
+	req := ingest.SubmitRequest{SessionID: "session-1", EventID: "terminal-1", Phase: "session_end", Content: content}
 	accepted, err := core.Ingest.Submit(context.Background(), req)
 	if err != nil {
 		_ = core.Close()
@@ -312,7 +307,7 @@ func TestDegradedCapturePersistsActivityAndTransientSpoolAcrossReopen(t *testing
 			t.Fatal(err)
 		}
 		if len(pending) == 1 {
-			if pending[0].EventID != req.EventID || pending[0].Content != content || pending[0].ContentHash != req.ContentHash {
+			if pending[0].EventID != req.EventID || pending[0].Content != content {
 				_ = core.Close()
 				t.Fatalf("incorrect spooled entry: %+v", pending[0])
 			}
@@ -364,8 +359,7 @@ func TestOpenLexicalOnlyLeavesExistingSpoolPending(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := "lexical spool must remain pending"
-	digest := sha256.Sum256([]byte(content))
-	accepted, err := core.Ingest.Submit(ctx, ingest.SubmitRequest{SessionID: "lexical-session", EventID: "lexical-pending", Phase: "session_end", Content: content, ContentHash: fmt.Sprintf("sha256:%x", digest)})
+	accepted, err := core.Ingest.Submit(ctx, ingest.SubmitRequest{SessionID: "lexical-session", EventID: "lexical-pending", Phase: "session_end", Content: content})
 	if err != nil {
 		_ = core.Close()
 		t.Fatal(err)
@@ -435,8 +429,7 @@ func TestOpenRecoversSpooledCaptureWhenModelReturns(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := "recovered durable capture unique recovery token"
-	digest := sha256.Sum256([]byte(content))
-	req := ingest.SubmitRequest{SessionID: "recover-session", EventID: "recover-event", Phase: "session_end", Content: content, ContentHash: fmt.Sprintf("sha256:%x", digest)}
+	req := ingest.SubmitRequest{SessionID: "recover-session", EventID: "recover-event", Phase: "session_end", Content: content}
 	accepted, err := core.Ingest.Submit(ctx, req)
 	if err != nil {
 		_ = core.Close()
@@ -508,10 +501,9 @@ func TestOpenReportsSpoolDrainFailureInsteadOfHidingIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := "recovery failure should remain retryable"
-	digest := sha256.Sum256([]byte(content))
 	accepted, err := core.Ingest.Submit(ctx, ingest.SubmitRequest{
 		SessionID: "failed-recovery-session", EventID: "failed-recovery-event",
-		Phase: "session_end", Content: content, ContentHash: fmt.Sprintf("sha256:%x", digest),
+		Phase: "session_end", Content: content,
 	})
 	if err != nil {
 		_ = core.Close()

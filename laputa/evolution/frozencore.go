@@ -45,7 +45,6 @@ type FrozenSectionV2 struct {
 	Kind           FrozenCoreKind `json:"kind"`
 	Content        string         `json:"content"`
 	SourceRevision uint64         `json:"source_revision"`
-	SourceHash     string         `json:"source_hash"`
 }
 
 // FrozenCoreV2 is the session-frozen projection envelope. The mission slot

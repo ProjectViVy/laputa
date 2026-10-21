@@ -52,7 +52,7 @@ func TestSearchCursorPagesAndBindsToAdapterHost(t *testing.T) {
 			Content: "hostboundcursorprobe " + color,
 			Kind:    "note",
 			Scope:   memory.EncodeScope(scope),
-		}, fmt.Sprintf("host-cursor-key-%d", i), fmt.Sprintf("host-cursor-hash-%d", i))
+		}, fmt.Sprintf("host-cursor-key-%d", i))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -114,7 +114,7 @@ func TestRestartPreservesReceipts(t *testing.T) {
 		t.Fatal(err)
 	}
 	r1, err := b1.Mutate(context.Background(), memory.AuthorizedMutation{
-		Scope: scope, DestinationID: "dest-1", OperationID: "op-1", PayloadDigest: "pd-1",
+		Scope: scope, DestinationID: "dest-1", OperationID: "op-1",
 		Operation: evolution.MutationCreate, RecordID: "rec-1", ExpectedAbsent: true,
 		Body: "alpha", Inference: evolution.InferenceObserved,
 	})
@@ -133,7 +133,7 @@ func TestRestartPreservesReceipts(t *testing.T) {
 		t.Fatal(err)
 	}
 	r2, err := b2.Mutate(context.Background(), memory.AuthorizedMutation{
-		Scope: scope, DestinationID: "dest-1", OperationID: "op-1", PayloadDigest: "pd-1",
+		Scope: scope, DestinationID: "dest-1", OperationID: "op-1",
 		Operation: evolution.MutationCreate, RecordID: "rec-1", ExpectedAbsent: true,
 		Body: "alpha", Inference: evolution.InferenceObserved,
 	})
@@ -142,5 +142,13 @@ func TestRestartPreservesReceipts(t *testing.T) {
 	}
 	if r2.Revision != r1.Revision || r2.TargetRef != r1.TargetRef {
 		t.Fatalf("restarted replay = %+v want %+v", r2, r1)
+	}
+	changed := memory.AuthorizedMutation{
+		Scope: scope, DestinationID: "dest-1", OperationID: "op-1",
+		Operation: evolution.MutationCreate, RecordID: "rec-1", ExpectedAbsent: true,
+		Body: "same operation id, changed bytes", Inference: evolution.InferenceObserved,
+	}
+	if _, err := b2.Mutate(context.Background(), changed); evolution.CodeOf(err) != evolution.ErrIdempotencyConflict {
+		t.Fatalf("restarted changed-intent replay error=%v, want idempotency conflict", err)
 	}
 }

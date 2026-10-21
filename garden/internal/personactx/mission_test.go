@@ -137,6 +137,7 @@ func TestStoreV1AdmissionRequiresRenewal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer store.Close()
 	ctx := context.Background()
 
 	// Seed a legacy v1-shaped row: numeric sections, no schema_version.
@@ -170,7 +171,8 @@ func TestMissionRevisionPinBlocksStaleEffects(t *testing.T) {
 		SubjectID:       "sub",
 		DestinationID:   "dest",
 		PolicyRevision:  "p1",
-		StrategyDigest:  "d",
+		StrategyID:      "strategy",
+		StrategyVersion: "v1",
 		MissionRevision: 1,
 	}
 

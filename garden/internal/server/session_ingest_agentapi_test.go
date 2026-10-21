@@ -2,8 +2,6 @@ package server
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -25,8 +23,7 @@ func TestSessionIngestHTTPUsesSharedServiceAndLegacyPayload(t *testing.T) {
 	srv.AgentAPI = agentapi.NewService(&runtimecore.Garden{ProfileID: srv.ProfileID, Ingest: ing})
 	// Ingestions is deliberately nil: a direct handler call to the legacy field fails.
 	content := "legacy precompact"
-	sum := sha256.Sum256([]byte(content))
-	payload, err := json.Marshal(ingest.SubmitRequest{SessionID: "session-1", EventID: "event-1", Phase: "precompact", Content: content, ContentHash: "sha256:" + hex.EncodeToString(sum[:]), Workspace: "workspace"})
+	payload, err := json.Marshal(ingest.SubmitRequest{SessionID: "session-1", EventID: "event-1", Phase: "precompact", Content: content, Workspace: "workspace"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +49,7 @@ func TestSessionIngestHTTPUsesSharedServiceAndLegacyPayload(t *testing.T) {
 			firstID = accepted.IngestionID
 		}
 	}
-	badPayload, err := json.Marshal(ingest.SubmitRequest{SessionID: "session-1", EventID: "bad-event", Phase: "running", Content: content, ContentHash: "sha256:" + hex.EncodeToString(sum[:])})
+	badPayload, err := json.Marshal(ingest.SubmitRequest{SessionID: "session-1", EventID: "bad-event", Phase: "running", Content: content})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -151,12 +151,33 @@ func (s *Service) fileStateLocked(kind Kind) (FileState, error) {
 	if err != nil {
 		return FileState{}, err
 	}
-	if len(history) > 0 && history[0].Revision == doc.Revision && history[0].ContentHash == doc.ContentHash {
-		state.Valid = true
-		return state, nil
+	if len(history) > 0 && history[0].Revision == doc.Revision {
+		matches, err := s.historySnapshotMatchesLocked(kind, history[0], doc.Content)
+		if err != nil {
+			return FileState{}, err
+		}
+		if matches {
+			state.Valid = true
+			return state, nil
+		}
 	}
 	state.Reason = stringPtr("history_mismatch")
 	return state, nil
+}
+
+func matchesDocumentPrecondition(current *Document, expected *DocumentPrecondition) bool {
+	return expected != nil && current.Exists == expected.Exists && current.Content == NormalizeMarkdown(expected.Content)
+}
+
+func (s *Service) historySnapshotMatchesLocked(kind Kind, entry HistoryEntry, content string) (bool, error) {
+	raw, err := os.ReadFile(filepath.Join(s.historyDir(kind), entry.Snapshot))
+	if err != nil {
+		return false, storageError("cannot read history snapshot", err)
+	}
+	if !utf8.Valid(raw) {
+		return false, nil
+	}
+	return NormalizeMarkdown(string(raw)) == content, nil
 }
 
 // GetDocument returns a full, explicit read of one authority file. WORLD is
@@ -195,7 +216,7 @@ func (s *Service) readDocumentUncheckedLocked(kind Kind) (*Document, error) {
 		if kind.RequiredForReady() {
 			return nil, &InvalidContentError{Kind: kind, Reason: "missing"}
 		}
-		return &Document{Kind: kind, FileName: kind.FileName(), ContentHash: ContentHash("")}, nil
+		return &Document{Kind: kind, FileName: kind.FileName()}, nil
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -221,7 +242,7 @@ func (s *Service) readDocumentUncheckedLocked(kind Kind) (*Document, error) {
 		return nil, storageError("cannot stat document", err)
 	}
 	updated := info.ModTime().UTC()
-	return &Document{Kind: kind, FileName: kind.FileName(), Exists: true, Valid: true, Content: content, Revision: revision, ContentHash: ContentHash(content), UpdatedAt: &updated}, nil
+	return &Document{Kind: kind, FileName: kind.FileName(), Exists: true, Valid: true, Content: content, Revision: revision, UpdatedAt: &updated}, nil
 }
 
 // ListHistory returns immutable revision metadata newest-first.
@@ -647,7 +668,7 @@ func (s *Service) CreateRequest(req ChangeRequest) (*ChangeRequest, error) {
 	if err != nil {
 		return nil, err
 	}
-	if current.Revision != req.BaseRevision || current.ContentHash != req.BaseHash {
+	if current.Revision != req.BaseRevision || !matchesDocumentPrecondition(current, req.ExpectedDocument) {
 		return nil, &RevisionConflictError{Expected: req.BaseRevision, Current: current.Revision}
 	}
 	requests, err := s.listRequestsLocked(&req.Kind)
@@ -674,7 +695,7 @@ func (s *Service) CreateRequest(req ChangeRequest) (*ChangeRequest, error) {
 
 // CreateReview is the clean-break spelling for CreateRequest.
 func (s *Service) CreateReview(input PersonaReviewCreate) (*ChangeRequest, error) {
-	return s.CreateRequest(ChangeRequest{Kind: input.Kind, BaseRevision: input.BaseRevision, BaseHash: input.BaseHash, ProposedMarkdown: input.ProposedMarkdown, Actor: input.Actor, Reason: input.Reason})
+	return s.CreateRequest(ChangeRequest{Kind: input.Kind, BaseRevision: input.BaseRevision, ExpectedDocument: input.ExpectedDocument, ProposedMarkdown: input.ProposedMarkdown, Actor: input.Actor, Reason: input.Reason})
 }
 
 // ListReviews provides domain-side filtering for the clean-break adapter.
@@ -725,7 +746,7 @@ func (s *Service) AcceptRequest(id string) (*WriteOutcome, error) {
 	if err != nil {
 		return nil, err
 	}
-	if current.Revision != req.BaseRevision || current.ContentHash != req.BaseHash {
+	if current.Revision != req.BaseRevision || !matchesDocumentPrecondition(current, req.ExpectedDocument) {
 		req.State = RequestStale
 		now := s.now()
 		req.DecidedAt = &now
@@ -847,7 +868,7 @@ func (s *Service) writeDocumentCoreLocked(kind Kind, content string, baseRevisio
 	if current.Revision != baseRevision {
 		return nil, &RevisionConflictError{Expected: baseRevision, Current: current.Revision}
 	}
-	if !force && current.Exists && current.ContentHash == ContentHash(normalized) {
+	if !force && current.Exists && current.Content == normalized {
 		current.PendingCount, _ = s.pendingCountLocked(kind)
 		return &WriteOutcome{Document: *current, Changed: false}, nil
 	}
@@ -885,9 +906,9 @@ func (s *Service) currentDocumentForWriteLocked(kind Kind, force bool) (*Documen
 		return nil, revErr
 	}
 	if invalid.Reason == "missing" {
-		return &Document{Kind: kind, FileName: kind.FileName(), Revision: revision, ContentHash: ContentHash("")}, nil
+		return &Document{Kind: kind, FileName: kind.FileName(), Revision: revision}, nil
 	}
-	return &Document{Kind: kind, FileName: kind.FileName(), Exists: fileExists(s.documentPath(kind)), Revision: revision, ContentHash: ContentHash("")}, nil
+	return &Document{Kind: kind, FileName: kind.FileName(), Exists: fileExists(s.documentPath(kind)), Revision: revision}, nil
 }
 
 // persistRevisionLocked creates immutable history, appends and syncs its
@@ -899,7 +920,7 @@ func (s *Service) persistRevisionLocked(kind Kind, current *Document, content st
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, storageError("cannot create history directory", err)
 	}
-	entry := HistoryEntry{Revision: revision, ContentHash: ContentHash(content), Snapshot: fmt.Sprintf("%d.md", revision), Diff: fmt.Sprintf("%d.diff", revision), Actor: actor, Source: string(source), Reason: strings.TrimSpace(reason), BaseRevision: baseRevision, CreatedAt: s.now()}
+	entry := HistoryEntry{Revision: revision, Snapshot: fmt.Sprintf("%d.md", revision), Diff: fmt.Sprintf("%d.diff", revision), Actor: actor, Source: string(source), Reason: strings.TrimSpace(reason), BaseRevision: baseRevision, CreatedAt: s.now()}
 	snapshotPath := filepath.Join(dir, entry.Snapshot)
 	diffPath := filepath.Join(dir, entry.Diff)
 	if err := writeImmutable(snapshotPath, []byte(content)); err != nil {
@@ -936,7 +957,7 @@ func (s *Service) persistRevisionLocked(kind Kind, current *Document, content st
 		rollbackLog()
 		return nil, storageError("cannot install Persona document", err)
 	}
-	return &Document{Kind: kind, FileName: kind.FileName(), Exists: true, Valid: true, Content: content, Revision: revision, ContentHash: entry.ContentHash}, nil
+	return &Document{Kind: kind, FileName: kind.FileName(), Exists: true, Valid: true, Content: content, Revision: revision}, nil
 }
 
 func (s *Service) stalePendingLocked(kind Kind, exceptID string) ([]fileBackup, error) {
@@ -1001,7 +1022,7 @@ func writeInitialArtifacts(root string, kind Kind, content, actor string, source
 	if err := writeImmutable(filepath.Join(root, kind.FileName()), []byte(content)); err != nil {
 		return storageError("cannot stage Persona document", err)
 	}
-	entry := HistoryEntry{Revision: 1, ContentHash: ContentHash(content), Snapshot: "1.md", Diff: "1.diff", Actor: actor, Source: string(source), Reason: strings.TrimSpace(reason), BaseRevision: 0, CreatedAt: now}
+	entry := HistoryEntry{Revision: 1, Snapshot: "1.md", Diff: "1.diff", Actor: actor, Source: string(source), Reason: strings.TrimSpace(reason), BaseRevision: 0, CreatedAt: now}
 	if err := writeImmutable(filepath.Join(historyDir, entry.Snapshot), []byte(content)); err != nil {
 		return storageError("cannot stage initial snapshot", err)
 	}
