@@ -1,6 +1,8 @@
 package persona
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"sync"
@@ -255,6 +257,71 @@ func TestCreateReviewRejectsSameLengthStaleContentAndSurvivesRestart(t *testing.
 	}
 	if !out.Changed || out.Document.Content != "candidate identity" {
 		t.Fatalf("recovered review result = %+v", out)
+	}
+}
+
+func TestAcceptLegacyReviewMigratesFromExactHistorySnapshot(t *testing.T) {
+	dir := t.TempDir()
+	svc, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Initialize(Initialization{Identity: "legacy identity", Relationship: "r", Redline: "x", User: "u", World: "w"}, "user", SourceInit, "init"); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := svc.GetDocument(KindIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := map[string]any{
+		"id": "legacy-review", "kind": KindIdentity.String(), "base_revision": doc.Revision,
+		"base_hash": "sha256:legacy", "proposed_markdown": "accepted legacy proposal",
+		"actor": ActorAgent, "reason": "older host proposal", "created_at": "2026-10-20T00:00:00Z",
+		"state": RequestPending, "decided_at": nil,
+	}
+	raw, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(svc.requestPath("legacy-review"), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	review, err := svc.GetReview("legacy-review")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if review.ExpectedDocument == nil || !review.ExpectedDocument.Exists || review.ExpectedDocument.Content != doc.Content {
+		t.Fatalf("legacy review did not migrate from its exact base snapshot: %+v", review)
+	}
+	migrated, err := os.ReadFile(svc.requestPath("legacy-review"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(migrated, []byte("base_hash")) {
+		t.Fatalf("legacy hash was retained after migration: %s", migrated)
+	}
+	if _, err := svc.AcceptRequest("legacy-review"); err != nil {
+		t.Fatalf("accept migrated legacy review: %v", err)
+	}
+
+	// Without an owned history snapshot there is no lossless conversion; the
+	// proposal remains inspectable but is persisted stale instead of guessed.
+	unrecoverable := map[string]any{
+		"id": "legacy-without-snapshot", "kind": KindDark.String(), "base_revision": 0,
+		"base_hash": "sha256:legacy", "proposed_markdown": "dark proposal",
+		"actor": ActorAutodream, "reason": "older proposal", "created_at": "2026-10-20T00:00:00Z",
+		"state": RequestPending, "decided_at": nil,
+	}
+	raw, err = json.Marshal(unrecoverable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(svc.requestPath("legacy-without-snapshot"), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	stale, err := svc.GetReview("legacy-without-snapshot")
+	if err != nil || stale.State != RequestStale || stale.DecidedAt == nil {
+		t.Fatalf("unrecoverable legacy review = %+v, %v; want persisted stale", stale, err)
 	}
 }
 

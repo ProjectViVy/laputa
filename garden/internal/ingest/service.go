@@ -19,8 +19,9 @@ import (
 )
 
 var (
-	ErrEventConflict = errors.New("event id was already used with different content")
-	ErrNotFound      = errors.New("ingestion not found")
+	ErrEventConflict           = errors.New("event id was already used with different content")
+	ErrEventReplayUnverifiable = errors.New("legacy activity replay cannot be verified because its exact input was not retained; use capture receipt lookup by binding and provenance")
+	ErrNotFound                = errors.New("ingestion not found")
 )
 
 type SubmitRequest struct {
@@ -245,7 +246,14 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, erro
 		}
 		parsedOccurred, _ := time.Parse(time.RFC3339Nano, occurred)
 		if existing.SessionID != req.SessionID || phase != req.Phase || content != req.Content || workspace != req.Workspace ||
-			!sameActivitySource(activityJSON, activityIntentJSON) || (!req.OccurredAt.IsZero() && !parsedOccurred.Equal(req.OccurredAt.UTC())) {
+			(!req.OccurredAt.IsZero() && !parsedOccurred.Equal(req.OccurredAt.UTC())) {
+			return Accepted{}, ErrEventConflict
+		}
+		sameActivity, replayErr := sameActivitySource(activityJSON, activityIntentJSON)
+		if replayErr != nil {
+			return Accepted{}, replayErr
+		}
+		if !sameActivity {
 			return Accepted{}, ErrEventConflict
 		}
 		return existing, nil

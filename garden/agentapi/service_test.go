@@ -2,6 +2,7 @@ package agentapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,8 @@ import (
 	"github.com/ProjectViVy/laputa/garden/internal/personactx"
 	"github.com/ProjectViVy/laputa/garden/internal/recall"
 	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
+	"github.com/ProjectViVy/laputa/garden/internal/sqliteconn"
+	"github.com/ProjectViVy/laputa/laputa/actmem"
 	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
@@ -176,6 +179,56 @@ func TestCaptureTerminalIdempotentAndStatusAuthorized(t *testing.T) {
 	req.Content = "changed"
 	_, err = s.Capture(context.Background(), PrincipalAgent, req)
 	assertCode(t, err, "event_conflict")
+}
+
+func TestCaptureUnverifiableLegacyReplayPointsToReceiptRecovery(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.db")
+	ing, err := ingest.OpenPaused(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ing.Close()
+	ing.ProfileID = "default"
+	ing.Actmem = actmem.New(filepath.Join(dir, "persona"))
+	s := NewService(&runtimecore.Garden{ProfileID: "default", Ingest: ing})
+	req := CaptureRequest{
+		Binding: binding(), Phase: CaptureCompleted, Content: "terminal result",
+		Provenance: CaptureProvenance{RunID: "legacy-run", EventSeq: 9},
+		Activity:   &CaptureActivity{UserText: "admitted source"},
+	}
+	receipt, err := s.Capture(context.Background(), PrincipalAgent, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := json.Marshal(map[string]any{
+		"schema": "garden.capture-activity/v1",
+		"source": map[string]string{"phase": "completed", "user_text": ""},
+		"status": "applied", "revision": 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := sqliteconn.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`UPDATE ingestions SET activity_json=? WHERE event_id=?`, string(legacy), receipt.EventID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Capture(context.Background(), PrincipalAgent, req); err == nil {
+		t.Fatal("legacy replay unexpectedly returned a receipt")
+	} else {
+		assertCode(t, err, "event_replay_unverifiable")
+		if !strings.Contains(err.Error(), "receipt lookup") {
+			t.Fatalf("recovery guidance missing from error: %v", err)
+		}
+	}
+	got, found, err := s.LookupCapture(context.Background(), PrincipalAgent, req.Binding, req.Provenance)
+	if err != nil || !found || got.IngestionID != receipt.IngestionID || got.Seq != receipt.Seq {
+		t.Fatalf("receipt lookup recovery: %+v found=%v err=%v", got, found, err)
+	}
 }
 
 func TestCaptureReceiptLookupUsesTrustedEventIdentity(t *testing.T) {

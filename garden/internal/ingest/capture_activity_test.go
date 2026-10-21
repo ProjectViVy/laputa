@@ -2,10 +2,13 @@ package ingest
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"html"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,7 +58,8 @@ func awaitActivityProjection(t *testing.T, svc *Service, id string) ActivityProj
 }
 
 func TestCaptureActivityRawFirstAndExactReceiptReplay(t *testing.T) {
-	svc := openActivityIngest(t, t.TempDir())
+	dir := t.TempDir()
+	svc := openActivityIngest(t, dir)
 	ctx := context.Background()
 	req := activityRequest()
 	accepted, err := svc.Submit(ctx, req)
@@ -73,6 +77,10 @@ func TestCaptureActivityRawFirstAndExactReceiptReplay(t *testing.T) {
 	if len(first.Entries) != 2 || first.Revision != 1 {
 		t.Fatalf("real native projection=%+v", first)
 	}
+	if err := svc.Close(); err != nil {
+		t.Fatal(err)
+	}
+	svc = openActivityIngest(t, dir)
 	again, err := svc.Submit(ctx, req)
 	if err != nil || again.IngestionID != accepted.IngestionID || again.Seq != accepted.Seq {
 		t.Fatalf("original source replay: %+v %v", again, err)
@@ -94,6 +102,102 @@ func TestCaptureActivityRawFirstAndExactReceiptReplay(t *testing.T) {
 	head, err := svc.Actmem.Read()
 	if err != nil || len(head.Entries()) != 0 {
 		t.Fatalf("replay resurrected archived activity: %+v %v", head, err)
+	}
+}
+
+func TestCaptureActivityConflictsOnDifferencesBeyondProjectionCap(t *testing.T) {
+	svc := openActivityIngest(t, t.TempDir())
+	ctx := context.Background()
+	req := activityRequest()
+	sharedPrefix := strings.Repeat("x", actmem.RecapItemCapChars+32)
+	req.Activity.UserText = sharedPrefix + " first suffix"
+	if _, err := svc.Submit(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	req.Activity.UserText = sharedPrefix + " second suffix"
+	if _, err := svc.Submit(ctx, req); !errors.Is(err, ErrEventConflict) {
+		t.Fatalf("same event with content beyond projection cap err=%v, want ErrEventConflict", err)
+	}
+}
+
+func TestCaptureActivityReplaysProvableLegacyV1Input(t *testing.T) {
+	svc := openActivityIngest(t, t.TempDir())
+	ctx := context.Background()
+	req := activityRequest()
+	req.Activity.UserText = `legacy <single-line> & exact`
+	accepted, err := svc.Submit(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := activityIntent{
+		Schema:             "garden.capture-activity/v1",
+		Source:             CaptureActivity{Phase: req.Activity.Phase, UserText: "User said:\n> " + html.EscapeString(req.Activity.UserText)},
+		ActivityProjection: ActivityProjection{Status: "pending"},
+	}
+	seedLegacyActivityIntent(t, svc, accepted.IngestionID, legacy)
+
+	again, err := svc.Submit(ctx, req)
+	if err != nil || again.IngestionID != accepted.IngestionID || again.Seq != accepted.Seq {
+		t.Fatalf("provable v1 replay: %+v %v", again, err)
+	}
+}
+
+func TestCaptureActivityRequiresRecoveryForUnverifiableLegacyV1Replay(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		legacySource string
+	}{
+		{name: "applied source discarded"},
+		{name: "line ending normalized", legacySource: "User said:\n> first\n> second"},
+		{name: "projection truncated", legacySource: "User said:\n> " + strings.Repeat("x", actmem.RecapItemCapChars-len("User said:\n> "))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := openActivityIngest(t, t.TempDir())
+			ctx := context.Background()
+			req := activityRequest()
+			accepted, err := svc.Submit(ctx, req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			legacySource := tc.legacySource
+			status := "applied"
+			if tc.legacySource != "" {
+				status = "pending"
+			}
+			legacy := activityIntent{
+				Schema:             "garden.capture-activity/v1",
+				Source:             CaptureActivity{Phase: req.Activity.Phase, UserText: legacySource},
+				ActivityProjection: ActivityProjection{Status: status, Revision: 1},
+			}
+			seedLegacyActivityIntent(t, svc, accepted.IngestionID, legacy)
+
+			if _, err := svc.Submit(ctx, req); !errors.Is(err, ErrEventReplayUnverifiable) {
+				t.Fatalf("legacy replay err=%v, want ErrEventReplayUnverifiable", err)
+			}
+		})
+	}
+}
+
+func seedLegacyActivityIntent(t *testing.T, svc *Service, id string, intent activityIntent) {
+	t.Helper()
+	raw, err := json.Marshal(intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.db.Exec(`UPDATE ingestions SET activity_json=? WHERE ingestion_id=?`, string(raw), id); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCaptureActivityIntentHasRequestSizedLimit(t *testing.T) {
+	req := activityRequest()
+	req.Activity.UserText = strings.Repeat("x", maxActivityIntentBytes+1)
+	if _, err := initialActivity(req.Activity); err == nil || !strings.Contains(err.Error(), "exceeds 4 MiB") {
+		t.Fatalf("oversized activity error=%v, want 4 MiB limit", err)
+	}
+	req.Activity.UserText = strings.Repeat("\x01", maxActivityIntentBytes/5)
+	if _, err := initialActivity(req.Activity); err == nil || !strings.Contains(err.Error(), "intent exceeds 4 MiB") {
+		t.Fatalf("oversized encoded intent error=%v, want 4 MiB limit", err)
 	}
 }
 

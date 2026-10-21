@@ -168,6 +168,18 @@ func TestFrozenCoreV2(t *testing.T) {
 	if len(core.Sections) != 7 || core.Sections[0].Kind != evolution.FrozenKindMission || core.Sections[6].Kind != evolution.FrozenKindDark {
 		t.Fatalf("v2 kind order lost: %+v", core.Sections)
 	}
+	legacyV2 := strings.ReplaceAll(valid, `"source_revision":`, `"source_hash":"sha256:legacy","source_revision":`)
+	legacy, err := evolution.DecodeFrozenCoreV2([]byte(legacyV2))
+	if err != nil {
+		t.Fatalf("legacy v2 source_hash snapshot rejected: %v", err)
+	}
+	if legacy.Content(evolution.FrozenKindIdentity) != "body" {
+		t.Fatalf("legacy v2 content lost: %+v", legacy.Sections[1])
+	}
+	withoutHash, err := json.Marshal(legacy)
+	if err != nil || strings.Contains(string(withoutHash), "source_hash") {
+		t.Fatalf("legacy source_hash was retained in current snapshot: %s (%v)", withoutHash, err)
+	}
 	unassigned := `{"schema_version":"laputa.frozen-core/v2","session_id":"s1","captured_at":"2026-10-02T00:00:00Z","mission_status":"unassigned","sections":[` +
 		`{"kind":"mission","content":"","source_revision":0}` + `,` + section("identity", 1) + `,` + section("relationship", 1) + `,` + section("redline", 1) + `,` + section("user", 1) + `,` + section("dream", 1) + `,` + section("dark", 1) + `]}`
 	if _, err := evolution.DecodeFrozenCoreV2([]byte(unassigned)); err != nil {

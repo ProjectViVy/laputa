@@ -10,6 +10,7 @@ import (
 	"io"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/ProjectViVy/laputa/laputa/actmem"
 	"github.com/ProjectViVy/laputa/laputa/evolution"
@@ -32,11 +33,19 @@ type ActivityProjection struct {
 }
 
 type activityIntent struct {
-	Schema string                `json:"schema"`
-	Source CaptureActivity       `json:"source"`
-	Before actmem.AppendSnapshot `json:"before"`
+	Schema       string                `json:"schema"`
+	Source       CaptureActivity       `json:"source"`
+	ReplaySource CaptureActivity       `json:"replay_source,omitempty"`
+	Before       actmem.AppendSnapshot `json:"before"`
 	ActivityProjection
 }
+
+const activityIntentSchema = "garden.capture-activity/v2"
+
+// The server's outer request middleware caps HTTP bodies at 4 MiB. Activity
+// is host-only and can bypass that middleware, so cap both its raw source and
+// the serialized durable intent at the same boundary.
+const maxActivityIntentBytes = 4 << 20
 
 func initialActivity(value *CaptureActivity) (string, error) {
 	if value == nil {
@@ -48,13 +57,25 @@ func initialActivity(value *CaptureActivity) (string, error) {
 	if strings.TrimSpace(value.UserText) == "" {
 		return "", errors.New("activity requires admitted user content")
 	}
+	if !utf8.ValidString(value.UserText) {
+		return "", errors.New("activity user content must be valid UTF-8 for exact replay")
+	}
+	if len(value.UserText) > maxActivityIntentBytes {
+		return "", errors.New("activity user content exceeds 4 MiB")
+	}
 	body := html.EscapeString(strings.ReplaceAll(strings.ReplaceAll(value.UserText, "\r\n", "\n"), "\r", "\n"))
 	body = "User said:\n> " + strings.ReplaceAll(body, "\n", "\n> ")
 	runes := []rune(body)
 	if len(runes) > actmem.RecapItemCapChars {
 		body = string(runes[:actmem.RecapItemCapChars])
 	}
-	encoded, err := json.Marshal(activityIntent{Schema: "garden.capture-activity/v1", Source: CaptureActivity{Phase: value.Phase, UserText: body}, ActivityProjection: ActivityProjection{Status: "pending"}})
+	encoded, err := json.Marshal(activityIntent{
+		Schema: activityIntentSchema, Source: CaptureActivity{Phase: value.Phase, UserText: body},
+		ReplaySource: *value, ActivityProjection: ActivityProjection{Status: "pending"},
+	})
+	if err == nil && len(encoded) > maxActivityIntentBytes {
+		return "", errors.New("captured activity intent exceeds 4 MiB")
+	}
 	return string(encoded), err
 }
 
@@ -88,15 +109,55 @@ func initializeActivityColumn(db *sql.DB) error {
 	return err
 }
 
-func sameActivitySource(stored, incoming string) bool {
+func sameActivitySource(stored, incoming string) (bool, error) {
 	if stored == "" || incoming == "" {
-		return stored == incoming
+		return stored == incoming, nil
 	}
 	var oldIntent, newIntent activityIntent
 	if json.Unmarshal([]byte(stored), &oldIntent) != nil || json.Unmarshal([]byte(incoming), &newIntent) != nil {
-		return false
+		return false, nil
 	}
-	return oldIntent.Schema == newIntent.Schema && oldIntent.Source == newIntent.Source
+	if newIntent.Schema != activityIntentSchema {
+		return false, nil
+	}
+	switch oldIntent.Schema {
+	case activityIntentSchema:
+		return oldIntent.ReplaySource == newIntent.ReplaySource, nil
+	case "garden.capture-activity/v1":
+		return sameLegacyActivitySource(oldIntent, newIntent)
+	default:
+		return false, nil
+	}
+}
+
+func sameLegacyActivitySource(oldIntent, newIntent activityIntent) (bool, error) {
+	if oldIntent.Source.Phase != newIntent.ReplaySource.Phase {
+		return false, nil
+	}
+	legacySource, ok := decodeLegacySingleLineSource(oldIntent.Source.UserText)
+	if !ok {
+		return false, ErrEventReplayUnverifiable
+	}
+	return legacySource == newIntent.ReplaySource.UserText, nil
+}
+
+// v1 stored only the escaped projection. Exact equality is provable only for
+// a single-line value that was not truncated: v1 normalized CR/CRLF and
+// discarded the source after projection, so either case loses information.
+func decodeLegacySingleLineSource(projected string) (string, bool) {
+	const prefix = "User said:\n> "
+	if !strings.HasPrefix(projected, prefix) {
+		return "", false
+	}
+	escaped := strings.TrimPrefix(projected, prefix)
+	if strings.ContainsAny(escaped, "\r\n") || utf8.RuneCountInString(projected) >= actmem.RecapItemCapChars {
+		return "", false
+	}
+	source := html.UnescapeString(escaped)
+	if html.EscapeString(source) != escaped {
+		return "", false
+	}
+	return source, true
 }
 
 func (s *Service) loadActivity(ctx context.Context, id string) (activityIntent, uint64, string, string, string, error) {
@@ -127,7 +188,7 @@ func (s *Service) loadActivity(ctx context.Context, id string) (activityIntent, 
 	default:
 		return intent, 0, "", "", "", errors.New("invalid captured activity status")
 	}
-	if intent.Schema != "garden.capture-activity/v1" {
+	if intent.Schema != "garden.capture-activity/v1" && intent.Schema != activityIntentSchema {
 		return intent, 0, "", "", "", errors.New("unknown captured activity intent schema")
 	}
 	return intent, seq, session, event, workspace, nil
