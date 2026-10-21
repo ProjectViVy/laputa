@@ -47,7 +47,7 @@ func TestInitExplicitPalaceReopenCanonicalLifecycle(t *testing.T) {
 	if err := first.Init(ctx, opts); err != nil {
 		t.Fatalf("first init: %v", err)
 	}
-	created, err := first.CreateMemory(ctx, CreateMemoryRequest{Content: "m1 original decision", Kind: "decision"}, "m1-create", "m1-create-hash")
+	created, err := first.CreateMemory(ctx, CreateMemoryRequest{Content: "m1 original decision", Kind: "decision"}, "m1-create")
 	if err != nil {
 		first.Close()
 		t.Fatalf("create: %v", err)

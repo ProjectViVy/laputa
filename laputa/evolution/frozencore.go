@@ -1,6 +1,9 @@
 package evolution
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // FrozenCoreV2SchemaVersion is the v2 wire marker. v1 six-slot data must
 // never carry it.
@@ -45,7 +48,29 @@ type FrozenSectionV2 struct {
 	Kind           FrozenCoreKind `json:"kind"`
 	Content        string         `json:"content"`
 	SourceRevision uint64         `json:"source_revision"`
-	SourceHash     string         `json:"source_hash"`
+}
+
+// UnmarshalJSON accepts source_hash from snapshots written by the previous
+// v2 contract, then discards it. SourceRevision and the exact projected
+// Content remain the only provenance carried by current snapshots.
+func (s *FrozenSectionV2) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		Kind           FrozenCoreKind  `json:"kind"`
+		Content        string          `json:"content"`
+		SourceRevision uint64          `json:"source_revision"`
+		SourceHash     json.RawMessage `json:"source_hash"`
+	}
+	if err := DecodeStrictJSON(data, &wire); err != nil {
+		return err
+	}
+	if len(wire.SourceHash) != 0 {
+		var ignored string
+		if err := json.Unmarshal(wire.SourceHash, &ignored); err != nil {
+			return invalidSchema("legacy source_hash must be a string")
+		}
+	}
+	*s = FrozenSectionV2{Kind: wire.Kind, Content: wire.Content, SourceRevision: wire.SourceRevision}
+	return nil
 }
 
 // FrozenCoreV2 is the session-frozen projection envelope. The mission slot

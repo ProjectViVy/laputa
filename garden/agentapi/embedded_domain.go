@@ -3,7 +3,6 @@ package agentapi
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -438,6 +437,9 @@ func (c *Client) BindEvolutionSource(scope evolution.Scope, destinationID string
 			if err != nil {
 				return 0, err
 			}
+			if !doc.Exists || strings.TrimSpace(doc.Content) == "" {
+				return 0, nil
+			}
 			return doc.Revision, nil
 		},
 	}, nil
@@ -717,7 +719,7 @@ func (h *HumanClient) ExpandMemory(ctx context.Context, q memory.AuthorizedExpan
 	return page, nil
 }
 
-// MutateMemory stamps operation identity and payload digest on the trusted
+// MutateMemory stamps operation identity on the trusted
 // side, validates scope/destination against the bound writer, then performs
 // exactly one canonical mutation through the selected backend.
 func (h *HumanClient) MutateMemory(ctx context.Context, m memory.AuthorizedMutation) (memory.MutationReceipt, error) {
@@ -740,7 +742,6 @@ func (h *HumanClient) MutateMemory(ctx context.Context, m memory.AuthorizedMutat
 	}
 	// The adapter issues operation identity; caller-supplied values are ignored.
 	m.OperationID = "op_" + randomHex16()
-	m.PayloadDigest = mutationDigest(m)
 	if err := m.Validate(); err != nil {
 		return memory.MutationReceipt{}, failure("invalid_request", err.Error())
 	}
@@ -866,25 +867,6 @@ func randomHex16() string {
 		return "0000000000000000"
 	}
 	return hex.EncodeToString(buf[:])
-}
-
-// mutationDigest binds the stamped operation to the canonical payload fields
-// so a replay with different content is an idempotency conflict.
-func mutationDigest(m memory.AuthorizedMutation) string {
-	raw, err := json.Marshal(map[string]any{
-		"operation":         m.Operation,
-		"record_id":         m.RecordID,
-		"body":              m.Body,
-		"sources":           m.Sources,
-		"inference":         m.Inference,
-		"expected_revision": m.ExpectedRevision,
-		"expected_absent":   m.ExpectedAbsent,
-	})
-	if err != nil {
-		return ""
-	}
-	sum := sha256.Sum256(raw)
-	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 func memoryCodeOf(err error) string {

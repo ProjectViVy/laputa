@@ -32,7 +32,7 @@ func TestSearchCardsNoFullContent(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 	longContent := strings.Repeat("detailed memory content ", 50)
-	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: longContent, Kind: "fact"}, "k1", "h1")
+	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: longContent, Kind: "fact"}, "k1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,11 +61,11 @@ func TestSearchCardsNoFullContent(t *testing.T) {
 func TestSearchCardsStatusFilter(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
-	active, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "active memory", Kind: "fact"}, "k1", "h1")
+	active, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "active memory", Kind: "fact"}, "k1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	deleted, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "deleted memory", Kind: "fact"}, "k2", "h2")
+	deleted, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "deleted memory", Kind: "fact"}, "k2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,11 +95,11 @@ func TestSearchCardsStatusFilter(t *testing.T) {
 func TestSearchCardsSupersededFilter(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
-	old, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "old version", Kind: "fact"}, "k1", "h1")
+	old, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "old version", Kind: "fact"}, "k1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = svc.CreateMemory(ctx, CreateMemoryRequest{Content: "new version", Kind: "fact", Supersedes: []string{old.ID}}, "k2", "h2")
+	_, err = svc.CreateMemory(ctx, CreateMemoryRequest{Content: "new version", Kind: "fact", Supersedes: []string{old.ID}}, "k2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,11 +120,11 @@ func TestSearchCardsSupersededFilter(t *testing.T) {
 func TestSearchCardsScopeFilter(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
-	_, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "scoped memory", Kind: "fact", Scope: "project-a"}, "k1", "h1")
+	_, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "scoped memory", Kind: "fact", Scope: "project-a"}, "k1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = svc.CreateMemory(ctx, CreateMemoryRequest{Content: "other scoped memory", Kind: "fact", Scope: "project-b"}, "k2", "h2")
+	_, err = svc.CreateMemory(ctx, CreateMemoryRequest{Content: "other scoped memory", Kind: "fact", Scope: "project-b"}, "k2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestSearchCardsLimitAndDedup(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 	for i := 0; i < 5; i++ {
-		_, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "memory item", Kind: "note"}, "k"+string(rune('a'+i)), "h"+string(rune('a'+i)))
+		_, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "memory item", Kind: "note"}, "k"+string(rune('a'+i)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -168,7 +168,7 @@ func TestSearchCardsPaginatesWithBoundedOffsetCursor(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
 	for i, color := range []string{"red", "green", "blue"} {
-		_, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "cursorpaginationprobe " + color, Kind: "note"}, fmt.Sprintf("cursor-key-%d", i), fmt.Sprintf("cursor-hash-%d", i))
+		_, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "cursorpaginationprobe " + color, Kind: "note"}, fmt.Sprintf("cursor-key-%d", i))
 		if err != nil {
 			t.Fatal(err)
 		}

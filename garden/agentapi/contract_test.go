@@ -11,7 +11,7 @@ import (
 )
 
 func TestBootstrapWireRoundTrip(t *testing.T) {
-	wire := `{"trace_id":"t1","context":"bounded","frozen_core":{"schema_version":"laputa.frozen-core/v2","session_id":"s1","captured_at":"2026-09-27T00:00:00Z","mission_status":"unassigned","sections":[{"kind":"mission","content":"","source_revision":0,"source_hash":""},{"kind":"identity","content":"id","source_revision":1,"source_hash":"h"},{"kind":"relationship","content":"rel","source_revision":1,"source_hash":"h"},{"kind":"redline","content":"red","source_revision":1,"source_hash":"h"},{"kind":"user","content":"user","source_revision":1,"source_hash":"h"},{"kind":"dream","content":"","source_revision":1,"source_hash":"h"},{"kind":"dark","content":"","source_revision":1,"source_hash":"h"}]},"evidence":[],"degraded":false,"warnings":[]}`
+	wire := `{"trace_id":"t1","context":"bounded","frozen_core":{"schema_version":"laputa.frozen-core/v2","session_id":"s1","captured_at":"2026-09-27T00:00:00Z","mission_status":"unassigned","sections":[{"kind":"mission","content":"","source_revision":0},{"kind":"identity","content":"id","source_revision":1},{"kind":"relationship","content":"rel","source_revision":1},{"kind":"redline","content":"red","source_revision":1},{"kind":"user","content":"user","source_revision":1},{"kind":"dream","content":"","source_revision":1},{"kind":"dark","content":"","source_revision":1}]},"evidence":[],"degraded":false,"warnings":[]}`
 	var response BootstrapResponse
 	if err := json.Unmarshal([]byte(wire), &response); err != nil {
 		t.Fatal(err)
@@ -45,7 +45,7 @@ func TestPublicContextViewWireAndNoAutomaticAuthorityFields(t *testing.T) {
 }
 
 func TestCaptureHostTerminalDTOAndWireReceipt(t *testing.T) {
-	request := CaptureRequest{Binding: Binding{ProfileID: "default", AgentID: "vivy", Platform: "vivy", SessionID: "s", TurnID: "turn", EventID: "event"}, Phase: CaptureCompleted, Content: "bounded", ContentHash: "hash", Provenance: CaptureProvenance{Source: "journal", RunID: "run", EventSeq: 7}, OccurredAt: time.Date(2026, 9, 27, 0, 0, 0, 0, time.UTC)}
+	request := CaptureRequest{Binding: Binding{ProfileID: "default", AgentID: "vivy", Platform: "vivy", SessionID: "s", TurnID: "turn", EventID: "event"}, Phase: CaptureCompleted, Content: "bounded", Provenance: CaptureProvenance{Source: "journal", RunID: "run", EventSeq: 7}, OccurredAt: time.Date(2026, 9, 27, 0, 0, 0, 0, time.UTC)}
 	encoded, err := json.Marshal(request)
 	if err != nil {
 		t.Fatal(err)

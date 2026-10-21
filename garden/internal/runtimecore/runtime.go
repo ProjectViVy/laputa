@@ -284,7 +284,7 @@ func (g *Garden) admittedScopes(scope evolution.Scope) []evolution.Scope {
 // backend fail rather than falling back.
 type scopedMemoryWriter struct{ g *Garden }
 
-func (w *scopedMemoryWriter) CreateMemory(ctx context.Context, req facade.CreateMemoryRequest, operationID, payloadDigest string) (facade.Memory, error) {
+func (w *scopedMemoryWriter) CreateMemory(ctx context.Context, req facade.CreateMemoryRequest, operationID string) (facade.Memory, error) {
 	scope, err := memory.DecodeScope(req.Scope)
 	if err != nil {
 		return facade.Memory{}, err
@@ -294,12 +294,12 @@ func (w *scopedMemoryWriter) CreateMemory(ctx context.Context, req facade.Create
 		return facade.Memory{}, err
 	}
 	creator, ok := backend.(interface {
-		CreateMemory(context.Context, facade.CreateMemoryRequest, string, string) (facade.Memory, error)
+		CreateMemory(context.Context, facade.CreateMemoryRequest, string) (facade.Memory, error)
 	})
 	if !ok {
 		return facade.Memory{}, &evolution.ContractError{Code: evolution.ErrCapabilityUnavailable, Message: "bound backend cannot accept ingest writes"}
 	}
-	return creator.CreateMemory(ctx, req, operationID, payloadDigest)
+	return creator.CreateMemory(ctx, req, operationID)
 }
 
 // SessionStateStore delegation: session leases and cursors are per-session

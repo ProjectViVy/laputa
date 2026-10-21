@@ -123,7 +123,10 @@ func (s *Service) Capture(ctx context.Context, principal Principal, req CaptureR
 	if req.Activity != nil {
 		activity = &ingest.CaptureActivity{Phase: string(req.Phase), UserText: req.Activity.UserText}
 	}
-	accepted, err := s.runtime.Ingest.Submit(ctx, ingest.SubmitRequest{SessionID: req.Binding.SessionID, EventID: event, Phase: "session_end", Content: req.Content, ContentHash: req.ContentHash, Workspace: req.Binding.WorkspaceID, OccurredAt: req.OccurredAt, Activity: activity})
+	accepted, err := s.runtime.Ingest.Submit(ctx, ingest.SubmitRequest{SessionID: req.Binding.SessionID, EventID: event, Phase: "session_end", Content: req.Content, Workspace: req.Binding.WorkspaceID, OccurredAt: req.OccurredAt, Activity: activity})
+	if errors.Is(err, ingest.ErrEventReplayUnverifiable) {
+		return CaptureReceipt{}, failure("event_replay_unverifiable", err.Error())
+	}
 	if errors.Is(err, ingest.ErrEventConflict) {
 		return CaptureReceipt{}, failure("event_conflict", err.Error())
 	}

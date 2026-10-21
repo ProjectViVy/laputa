@@ -10,7 +10,6 @@
 package persona
 
 import (
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -240,7 +239,6 @@ type Document struct {
 	Valid        bool       `json:"valid"`
 	Content      string     `json:"content"`
 	Revision     uint64     `json:"revision"`
-	ContentHash  string     `json:"content_hash"`
 	UpdatedAt    *time.Time `json:"updated_at"`
 	PendingCount int        `json:"pending_count"`
 }
@@ -248,7 +246,6 @@ type Document struct {
 // HistoryEntry is one revision entry from log.jsonl.
 type HistoryEntry struct {
 	Revision     uint64    `json:"revision"`
-	ContentHash  string    `json:"content_hash"`
 	Snapshot     string    `json:"snapshot"`
 	Diff         string    `json:"diff"`
 	Actor        string    `json:"actor"`
@@ -313,12 +310,20 @@ type PersonaReview = ChangeRequest
 // supplied by the verified capability claim and is ignored by HTTP adapters
 // when a caller attempts to spoof it.
 type PersonaReviewCreate struct {
-	Kind             Kind         `json:"kind"`
-	BaseRevision     uint64       `json:"base_revision"`
-	BaseHash         string       `json:"base_hash"`
-	ProposedMarkdown string       `json:"proposed_markdown"`
-	Actor            RequestActor `json:"actor"`
-	Reason           string       `json:"reason"`
+	Kind             Kind                  `json:"kind"`
+	BaseRevision     uint64                `json:"base_revision"`
+	ExpectedDocument *DocumentPrecondition `json:"expected_document"`
+	ProposedMarkdown string                `json:"proposed_markdown"`
+	Actor            RequestActor          `json:"actor"`
+	Reason           string                `json:"reason"`
+}
+
+// DocumentPrecondition is the exact current state observed by a review
+// producer. It lets the owner detect a changed file even when its revision
+// has not advanced through the service.
+type DocumentPrecondition struct {
+	Exists  bool   `json:"exists"`
+	Content string `json:"content"`
 }
 
 // Map returns the initialization content keyed by kind.
@@ -352,16 +357,16 @@ const (
 
 // ChangeRequest is an agent-proposed Persona revision awaiting user review.
 type ChangeRequest struct {
-	ID               string       `json:"id"`
-	Kind             Kind         `json:"kind"`
-	BaseRevision     uint64       `json:"base_revision"`
-	BaseHash         string       `json:"base_hash"`
-	ProposedMarkdown string       `json:"proposed_markdown"`
-	Actor            RequestActor `json:"actor"`
-	Reason           string       `json:"reason"`
-	CreatedAt        time.Time    `json:"created_at"`
-	State            RequestState `json:"state"`
-	DecidedAt        *time.Time   `json:"decided_at"`
+	ID               string                `json:"id"`
+	Kind             Kind                  `json:"kind"`
+	BaseRevision     uint64                `json:"base_revision"`
+	ExpectedDocument *DocumentPrecondition `json:"expected_document"`
+	ProposedMarkdown string                `json:"proposed_markdown"`
+	Actor            RequestActor          `json:"actor"`
+	Reason           string                `json:"reason"`
+	CreatedAt        time.Time             `json:"created_at"`
+	State            RequestState          `json:"state"`
+	DecidedAt        *time.Time            `json:"decided_at"`
 }
 
 // WriteSource classifies a persona write for history purposes.
@@ -375,12 +380,6 @@ const (
 	SourceInit            WriteSource = "init"
 	SourceHistoryResave   WriteSource = "history_resave"
 )
-
-// ContentHash returns the canonical sha256:<hex> hash of normalized content.
-func ContentHash(content string) string {
-	digest := sha256.Sum256([]byte(NormalizeMarkdown(content)))
-	return fmt.Sprintf("sha256:%x", digest)
-}
 
 // Error sentinels mapped by writeHandlerError in the Garden server.
 var (

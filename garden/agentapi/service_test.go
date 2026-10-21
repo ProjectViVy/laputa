@@ -2,8 +2,7 @@ package agentapi
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -13,6 +12,8 @@ import (
 	"github.com/ProjectViVy/laputa/garden/internal/personactx"
 	"github.com/ProjectViVy/laputa/garden/internal/recall"
 	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
+	"github.com/ProjectViVy/laputa/garden/internal/sqliteconn"
+	"github.com/ProjectViVy/laputa/laputa/actmem"
 	"github.com/ProjectViVy/laputa/laputa/evolution"
 )
 
@@ -91,8 +92,7 @@ func TestFastRecallBindingAndPolicy(t *testing.T) {
 func TestCaptureIsolatesAgentEventNamespace(t *testing.T) {
 	s := fixture(t)
 	content := "same terminal"
-	hash := sha256.Sum256([]byte(content))
-	req := CaptureRequest{Binding: binding(), Phase: CaptureCompleted, Content: content, ContentHash: "sha256:" + hex.EncodeToString(hash[:]), Provenance: CaptureProvenance{RunID: "run-1", EventSeq: 7}}
+	req := CaptureRequest{Binding: binding(), Phase: CaptureCompleted, Content: content, Provenance: CaptureProvenance{RunID: "run-1", EventSeq: 7}}
 	first, err := s.Capture(context.Background(), PrincipalAgent, req)
 	if err != nil {
 		t.Fatal(err)
@@ -112,8 +112,7 @@ func TestCaptureStatusSurvivesIngestRestart(t *testing.T) {
 	}
 	s := NewService(&runtimecore.Garden{ProfileID: "default", Ingest: first})
 	content := "terminal result"
-	h := sha256.Sum256([]byte(content))
-	req := CaptureRequest{Binding: binding(), Phase: CaptureCompleted, Content: content, ContentHash: "sha256:" + hex.EncodeToString(h[:]), Provenance: CaptureProvenance{RunID: "run-1", EventSeq: 7}}
+	req := CaptureRequest{Binding: binding(), Phase: CaptureCompleted, Content: content, Provenance: CaptureProvenance{RunID: "run-1", EventSeq: 7}}
 	receipt, err := s.Capture(context.Background(), PrincipalAgent, req)
 	if err != nil {
 		t.Fatal(err)
@@ -144,8 +143,7 @@ func TestCaptureStatusSurvivesIngestRestart(t *testing.T) {
 func TestCaptureTerminalIdempotentAndStatusAuthorized(t *testing.T) {
 	s := fixture(t)
 	content := "terminal result"
-	hash := sha256.Sum256([]byte(content))
-	req := CaptureRequest{Binding: binding(), Phase: CaptureCompleted, Content: content, ContentHash: "sha256:" + hex.EncodeToString(hash[:]), Provenance: CaptureProvenance{RunID: "run-1", EventSeq: 7}}
+	req := CaptureRequest{Binding: binding(), Phase: CaptureCompleted, Content: content, Provenance: CaptureProvenance{RunID: "run-1", EventSeq: 7}}
 	_, err := s.Capture(context.Background(), PrincipalRead, req)
 	assertCode(t, err, "principal_forbidden")
 	req.Phase = "running"
@@ -179,18 +177,65 @@ func TestCaptureTerminalIdempotentAndStatusAuthorized(t *testing.T) {
 	_, err = s.CaptureStatus(context.Background(), PrincipalAgent, other, a.IngestionID)
 	assertCode(t, err, "invalid_binding")
 	req.Content = "changed"
-	h := sha256.Sum256([]byte(req.Content))
-	req.ContentHash = "sha256:" + hex.EncodeToString(h[:])
 	_, err = s.Capture(context.Background(), PrincipalAgent, req)
 	assertCode(t, err, "event_conflict")
+}
+
+func TestCaptureUnverifiableLegacyReplayPointsToReceiptRecovery(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.db")
+	ing, err := ingest.OpenPaused(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ing.Close()
+	ing.ProfileID = "default"
+	ing.Actmem = actmem.New(filepath.Join(dir, "persona"))
+	s := NewService(&runtimecore.Garden{ProfileID: "default", Ingest: ing})
+	req := CaptureRequest{
+		Binding: binding(), Phase: CaptureCompleted, Content: "terminal result",
+		Provenance: CaptureProvenance{RunID: "legacy-run", EventSeq: 9},
+		Activity:   &CaptureActivity{UserText: "admitted source"},
+	}
+	receipt, err := s.Capture(context.Background(), PrincipalAgent, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := json.Marshal(map[string]any{
+		"schema": "garden.capture-activity/v1",
+		"source": map[string]string{"phase": "completed", "user_text": ""},
+		"status": "applied", "revision": 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := sqliteconn.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`UPDATE ingestions SET activity_json=? WHERE event_id=?`, string(legacy), receipt.EventID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Capture(context.Background(), PrincipalAgent, req); err == nil {
+		t.Fatal("legacy replay unexpectedly returned a receipt")
+	} else {
+		assertCode(t, err, "event_replay_unverifiable")
+		if !strings.Contains(err.Error(), "receipt lookup") {
+			t.Fatalf("recovery guidance missing from error: %v", err)
+		}
+	}
+	got, found, err := s.LookupCapture(context.Background(), PrincipalAgent, req.Binding, req.Provenance)
+	if err != nil || !found || got.IngestionID != receipt.IngestionID || got.Seq != receipt.Seq {
+		t.Fatalf("receipt lookup recovery: %+v found=%v err=%v", got, found, err)
+	}
 }
 
 func TestCaptureReceiptLookupUsesTrustedEventIdentity(t *testing.T) {
 	s := fixture(t)
 	ctx := context.Background()
 	content := "legacy acknowledgement"
-	h := sha256.Sum256([]byte(content))
-	req := CaptureRequest{Binding: binding(), Phase: CaptureCompleted, Content: content, ContentHash: "sha256:" + hex.EncodeToString(h[:]), Provenance: CaptureProvenance{RunID: "old-run", EventSeq: 7}}
+	req := CaptureRequest{Binding: binding(), Phase: CaptureCompleted, Content: content, Provenance: CaptureProvenance{RunID: "old-run", EventSeq: 7}}
 	receipt, err := s.Capture(ctx, PrincipalAgent, req)
 	if err != nil {
 		t.Fatal(err)

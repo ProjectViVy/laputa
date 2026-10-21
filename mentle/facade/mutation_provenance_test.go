@@ -24,12 +24,12 @@ func TestMutateUpdateCommitsProvenanceWithCanonicalAndOutbox(t *testing.T) {
 	hybrid := svc.Hybrid
 	svc.Hybrid = nil
 	defer func() { svc.Hybrid = hybrid }()
-	update := MutationRequest{
-		OperationID: "provenance-update", PayloadDigest: "update-digest", Operation: "update",
+	update := bindMutationIntent(MutationRequest{
+		OperationID: "provenance-update", Operation: "update",
 		Scope: receiptScopePersonal, DestinationID: receiptDest, RecordID: created.RecordID,
 		ExpectedRevision: 1, Body: "new body", Sources: []MemorySource{newSource},
 		Metadata: map[string]any{"inference": "inferred"},
-	}
+	})
 	updated, err := svc.Mutate(ctx, update)
 	if err != nil || updated.IndexStatus != "pending" {
 		t.Fatalf("canonical update/outbox status: %+v %v", updated, err)
@@ -46,8 +46,9 @@ func TestMutateUpdateCommitsProvenanceWithCanonicalAndOutbox(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &indexed); err != nil || !reflect.DeepEqual(indexed, record.Metadata) {
 		t.Fatalf("outbox has different metadata: %s canonical=%+v err=%v", raw, record.Metadata, err)
 	}
-	update.OperationID, update.PayloadDigest = "provenance-stale", "stale-digest"
+	update.OperationID = "provenance-stale"
 	update.Sources[0].URI = "source://stale"
+	update = bindMutationIntent(update)
 	if _, err := svc.Mutate(ctx, update); !errors.Is(err, ErrVersionConflict) {
 		t.Fatalf("stale version accepted: %v", err)
 	}

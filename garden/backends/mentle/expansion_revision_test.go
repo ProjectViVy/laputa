@@ -19,7 +19,7 @@ func TestConcurrentExpansionKeepsOneCanonicalRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := backend.Mutate(ctx, memory.AuthorizedMutation{Scope: scope, DestinationID: "dest-1", OperationID: "create", PayloadDigest: "create", Operation: evolution.MutationCreate, RecordID: "requested", ExpectedAbsent: true, Body: "body-version-1", Inference: evolution.InferenceObserved})
+	created, err := backend.Mutate(ctx, memory.AuthorizedMutation{Scope: scope, DestinationID: "dest-1", OperationID: "create", Operation: evolution.MutationCreate, RecordID: "requested", ExpectedAbsent: true, Body: "body-version-1", Inference: evolution.InferenceObserved})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestConcurrentExpansionKeepsOneCanonicalRevision(t *testing.T) {
 	go func() {
 		defer workers.Done()
 		for version := 2; version <= 200; version++ {
-			_, err := backend.Mutate(ctx, memory.AuthorizedMutation{Scope: scope, DestinationID: "dest-1", OperationID: fmt.Sprintf("update-%d", version), PayloadDigest: fmt.Sprintf("digest-%d", version), Operation: evolution.MutationUpdate, RecordID: created.TargetRef, ExpectedRevision: uint64(version - 1), Body: fmt.Sprintf("body-version-%d", version), Inference: evolution.InferenceObserved})
+			_, err := backend.Mutate(ctx, memory.AuthorizedMutation{Scope: scope, DestinationID: "dest-1", OperationID: fmt.Sprintf("update-%d", version), Operation: evolution.MutationUpdate, RecordID: created.TargetRef, ExpectedRevision: uint64(version - 1), Body: fmt.Sprintf("body-version-%d", version), Inference: evolution.InferenceObserved})
 			if err != nil {
 				t.Error(err)
 				return

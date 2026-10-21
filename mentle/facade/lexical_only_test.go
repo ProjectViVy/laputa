@@ -76,7 +76,7 @@ func TestLexicalOnlyRejectsMutationsWithoutChangingCanonical(t *testing.T) {
 	}
 	defer svc.Close()
 	ctx := context.Background()
-	if _, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "new"}, "", ""); !errors.Is(err, ErrReadOnly) {
+	if _, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "new"}, ""); !errors.Is(err, ErrReadOnly) {
 		t.Errorf("create: %v", err)
 	}
 	updated := "changed"

@@ -1,10 +1,44 @@
 package persona
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestPersonaReadAndHistoryDoNotExposeContentHash(t *testing.T) {
+	svc, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Initialize(Initialization{Identity: "identity", Relationship: "relationship", Redline: "redline", User: "user", World: "world"}, "user", SourceInit, "init"); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := svc.GetDocument(KindIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "content_hash") {
+		t.Fatalf("persona read exposes a content digest: %s", encoded)
+	}
+	history, err := svc.ListHistory(KindIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err = json.Marshal(history)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "content_hash") {
+		t.Fatalf("persona history exposes a content digest: %s", encoded)
+	}
+}
 
 func TestNormalizeAndVisibleLen(t *testing.T) {
 	if got := NormalizeMarkdown("  e\u0301\r\n猫  "); got != "é\n猫" {
@@ -137,10 +171,9 @@ func TestStatusHistoryMismatch(t *testing.T) {
 
 func TestStatusReadyWithMatchingHistory(t *testing.T) {
 	content := identityContent()
-	hash := ContentHash(content)
 	dir := writePersonaTree(t, map[string]string{"IDENTITY.MD": content}, map[string]string{
-		"history/IDENTITY.MD/1.md": content,
-		"history/IDENTITY.MD/log.jsonl": `{"revision":1,"content_hash":"` + hash + `","snapshot":"1.md","diff":"1.diff","actor":"user","source":"init","reason":"init","base_revision":0,"created_at":"2026-08-14T00:00:00Z"}` + "\n",
+		"history/IDENTITY.MD/1.md":      content,
+		"history/IDENTITY.MD/log.jsonl": `{"revision":1,"snapshot":"1.md","diff":"1.diff","actor":"user","source":"init","reason":"init","base_revision":0,"created_at":"2026-08-14T00:00:00Z"}` + "\n",
 	})
 	svc, err := Open(dir)
 	if err != nil {
@@ -161,11 +194,10 @@ func TestStatusReadyWithMatchingHistory(t *testing.T) {
 
 func TestGetDocumentAndHistory(t *testing.T) {
 	content := identityContent()
-	hash := ContentHash(content)
 	dir := writePersonaTree(t, map[string]string{"IDENTITY.MD": content}, map[string]string{
-		"history/IDENTITY.MD/1.md":  content,
-		"history/IDENTITY.MD/1.diff": "--- IDENTITY.MD\n+++ IDENTITY.MD\n@@ -1 +1 @@\n+new\n",
-		"history/IDENTITY.MD/log.jsonl": `{"revision":1,"content_hash":"` + hash + `","snapshot":"1.md","diff":"1.diff","actor":"user","source":"init","reason":"init","base_revision":0,"created_at":"2026-08-14T00:00:00Z"}` + "\n",
+		"history/IDENTITY.MD/1.md":      content,
+		"history/IDENTITY.MD/1.diff":    "--- IDENTITY.MD\n+++ IDENTITY.MD\n@@ -1 +1 @@\n+new\n",
+		"history/IDENTITY.MD/log.jsonl": `{"revision":1,"snapshot":"1.md","diff":"1.diff","actor":"user","source":"init","reason":"init","base_revision":0,"created_at":"2026-08-14T00:00:00Z"}` + "\n",
 	})
 	svc, err := Open(dir)
 	if err != nil {
@@ -175,7 +207,7 @@ func TestGetDocumentAndHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if doc.Content != content || doc.Revision != 1 || doc.ContentHash != hash {
+	if doc.Content != content || doc.Revision != 1 {
 		t.Fatalf("doc = %+v", doc)
 	}
 	rev, err := svc.ReadHistory(KindIdentity, 1)

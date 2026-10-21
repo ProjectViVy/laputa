@@ -2,14 +2,11 @@ package evolution
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/ProjectViVy/laputa/garden/internal/ingest"
 	"github.com/ProjectViVy/laputa/garden/memory"
@@ -31,7 +28,7 @@ type fakeWriter struct {
 	seq   int
 }
 
-func (f *fakeWriter) CreateMemory(_ context.Context, req facade.CreateMemoryRequest, key, _ string) (facade.Memory, error) {
+func (f *fakeWriter) CreateMemory(_ context.Context, req facade.CreateMemoryRequest, key string) (facade.Memory, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.memos == nil {
@@ -64,11 +61,10 @@ func openIngest(t *testing.T, writer *fakeWriter) *ingest.Service {
 
 func submitCapture(t *testing.T, svc *ingest.Service, sessionID, eventID, workspace, body string) ingest.Accepted {
 	t.Helper()
-	sum := sha256.Sum256([]byte(body))
 	accepted, err := svc.Submit(context.Background(), ingest.SubmitRequest{
 		SessionID: sessionID, EventID: eventID, Phase: "session_end",
-		Content: body, ContentHash: "sha256:" + hex.EncodeToString(sum[:]),
-		Workspace: workspace, OccurredAt: time.Now().UTC(),
+		Content:   body,
+		Workspace: workspace,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -117,10 +113,13 @@ func (b *fakeBackend) Mutate(_ context.Context, m memory.AuthorizedMutation) (me
 	if r, ok := b.receipts[m.OperationID]; ok {
 		return r, nil
 	}
-	r := memory.MutationReceipt{EffectReceipt: laputaevolution.EffectReceipt{
-		OperationID: m.OperationID, PayloadDigest: m.PayloadDigest,
-		Status: laputaevolution.StatusApplied, TargetRef: "memory:" + m.RecordID, Revision: 1,
-	}, CanonicalStatus: memory.CanonicalCompleted, IndexStatus: memory.IndexReady}
+	intent, err := m.IntentJSON()
+	if err != nil {
+		return memory.MutationReceipt{}, err
+	}
+	r := memory.MutationReceipt{EffectReceipt: laputaevolution.BindReceiptIntentJSON(laputaevolution.EffectReceipt{
+		OperationID: m.OperationID, Status: laputaevolution.StatusApplied, TargetRef: "memory:" + m.RecordID, Revision: 1,
+	}, intent), CanonicalStatus: memory.CanonicalCompleted, IndexStatus: memory.IndexReady, IntentJSON: intent}
 	b.receipts[m.OperationID] = r
 	b.mutated = append(b.mutated, m)
 	return r, nil
@@ -219,7 +218,7 @@ func TestLookupReconcilesCommittedEffects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if again.Status != laputaevolution.StatusApplied || again.PayloadDigest != effect.PayloadDigest {
+	if again.Status != laputaevolution.StatusApplied {
 		t.Fatalf("restart lookup lost receipt: %+v", again)
 	}
 	// A backend-committed mutation that never reached the ledger still
@@ -233,7 +232,7 @@ func TestLookupReconcilesCommittedEffects(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := mem.Mutate(context.Background(), memory.AuthorizedMutation{
-		Scope: scope, DestinationID: "dest_a", OperationID: fx.OperationID, PayloadDigest: fx.PayloadDigest,
+		Scope: scope, DestinationID: "dest_a", OperationID: fx.OperationID,
 		Operation: laputaevolution.MutationCreate, RecordID: "rec_9", ExpectedAbsent: true, Body: "x",
 		Inference: laputaevolution.InferenceObserved,
 	}); err != nil {
@@ -277,7 +276,7 @@ func TestWorkPatchApplyAndReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if replayed != receipt {
+	if replayed.OperationID != receipt.OperationID || replayed.Status != receipt.Status || replayed.TargetRef != receipt.TargetRef || replayed.Revision != receipt.Revision || laputaevolution.CheckReceiptReplay(replayed, effect) != nil {
 		t.Fatalf("replay diverged: %+v vs %+v", replayed, receipt)
 	}
 }

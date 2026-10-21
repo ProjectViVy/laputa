@@ -22,12 +22,12 @@ func (r fakeReader) GetDocument(kind persona.Kind) (*persona.Document, error) {
 
 func TestCaptureHasExactlySevenBoundedSections(t *testing.T) {
 	reader := fakeReader{documents: map[persona.Kind]*persona.Document{
-		persona.KindIdentity:     {Content: "identity " + repeat("i", 300), Revision: 2, ContentHash: "id"},
-		persona.KindRelationship: {Content: "relationship " + repeat("r", 200), Revision: 3, ContentHash: "rel"},
-		persona.KindRedline:      {Content: "redline", Revision: 4, ContentHash: "red"},
-		persona.KindUser:         {Content: "## Preferences\nuser preferences\n## Observations\nprivate observations", Revision: 5, ContentHash: "user"},
-		persona.KindDream:        {Content: "dream " + repeat("d", 50), Revision: 6, ContentHash: "dream"},
-		persona.KindDark:         {Content: "dark", Revision: 7, ContentHash: "dark"},
+		persona.KindIdentity:     {Content: "identity " + repeat("i", 300), Revision: 2},
+		persona.KindRelationship: {Content: "relationship " + repeat("r", 200), Revision: 3},
+		persona.KindRedline:      {Content: "redline", Revision: 4},
+		persona.KindUser:         {Content: "## Preferences\nuser preferences\n## Observations\nprivate observations", Revision: 5},
+		persona.KindDream:        {Content: "dream " + repeat("d", 50), Revision: 6},
+		persona.KindDark:         {Content: "dark", Revision: 7},
 	}}
 	core, err := Capture(reader, "session-1", func() time.Time { return time.Date(2026, 9, 3, 1, 2, 3, 0, time.UTC) })
 	if err != nil {

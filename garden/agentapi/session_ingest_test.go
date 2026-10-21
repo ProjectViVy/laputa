@@ -2,8 +2,6 @@ package agentapi
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"testing"
 
 	"github.com/ProjectViVy/laputa/garden/internal/runtimecore"
@@ -12,15 +10,14 @@ import (
 func TestSubmitSessionPreservesLegacyPayloadAndRoles(t *testing.T) {
 	s := fixture(t)
 	content := "session notes"
-	hash := sha256.Sum256([]byte(content))
-	req := SessionSubmitRequest{SessionID: "session-1", EventID: "event-1", Phase: "precompact", Content: content, ContentHash: "sha256:" + hex.EncodeToString(hash[:]), Workspace: "project"}
+	req := SessionSubmitRequest{SessionID: "session-1", EventID: "event-1", Phase: "precompact", Content: content, Workspace: "project"}
 	for _, principal := range []Principal{PrincipalUser, PrincipalAgent, PrincipalAutodream} {
 		req.EventID = "event-" + string(principal)
 		receipt, err := s.SubmitSession(context.Background(), principal, req)
 		if err != nil {
 			t.Fatalf("%s: %v", principal, err)
 		}
-		if receipt.SessionID != req.SessionID || receipt.EventID != "event-user" || receipt.IngestionID == "" {
+		if receipt.SessionID != req.SessionID || receipt.EventID != req.EventID || receipt.IngestionID == "" {
 			t.Fatalf("receipt: %+v", receipt)
 		}
 	}

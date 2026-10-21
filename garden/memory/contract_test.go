@@ -21,7 +21,6 @@ func TestAuthorizedMutationValidate(t *testing.T) {
 		Scope:         scopeX,
 		DestinationID: "mentle.default",
 		OperationID:   "op-1",
-		PayloadDigest: "ab12",
 		RecordID:      "rec-1",
 		Body:          "fact",
 		Inference:     evolution.InferenceObserved,
@@ -39,13 +38,13 @@ func TestAuthorizedMutationValidate(t *testing.T) {
 		t.Fatalf("valid update rejected: %v", err)
 	}
 	bad := map[string]memory.AuthorizedMutation{
-		"create without absent":   {Scope: scopeX, DestinationID: "d", OperationID: "o", PayloadDigest: "p", Operation: evolution.MutationCreate, RecordID: "r", Body: "b", Inference: evolution.InferenceObserved},
-		"create with revision":    {Scope: scopeX, DestinationID: "d", OperationID: "o", PayloadDigest: "p", Operation: evolution.MutationCreate, ExpectedAbsent: true, ExpectedRevision: 2, RecordID: "r", Body: "b", Inference: evolution.InferenceObserved},
-		"update without revision": {Scope: scopeX, DestinationID: "d", OperationID: "o", PayloadDigest: "p", Operation: evolution.MutationUpdate, RecordID: "r", Body: "b", Inference: evolution.InferenceObserved},
-		"update flagged absent":   {Scope: scopeX, DestinationID: "d", OperationID: "o", PayloadDigest: "p", Operation: evolution.MutationTombstone, ExpectedAbsent: true, ExpectedRevision: 2, RecordID: "r", Inference: evolution.InferenceObserved},
-		"missing scope":           {DestinationID: "d", OperationID: "o", PayloadDigest: "p", Operation: evolution.MutationUpdate, ExpectedRevision: 1, RecordID: "r", Inference: evolution.InferenceObserved},
-		"unknown operation":       {Scope: scopeX, DestinationID: "d", OperationID: "o", PayloadDigest: "p", Operation: "replace", RecordID: "r", Inference: evolution.InferenceObserved},
-		"unknown inference":       {Scope: scopeX, DestinationID: "d", OperationID: "o", PayloadDigest: "p", Operation: evolution.MutationCreate, ExpectedAbsent: true, RecordID: "r", Inference: "guessed"},
+		"create without absent":   {Scope: scopeX, DestinationID: "d", OperationID: "o", Operation: evolution.MutationCreate, RecordID: "r", Body: "b", Inference: evolution.InferenceObserved},
+		"create with revision":    {Scope: scopeX, DestinationID: "d", OperationID: "o", Operation: evolution.MutationCreate, ExpectedAbsent: true, ExpectedRevision: 2, RecordID: "r", Body: "b", Inference: evolution.InferenceObserved},
+		"update without revision": {Scope: scopeX, DestinationID: "d", OperationID: "o", Operation: evolution.MutationUpdate, RecordID: "r", Body: "b", Inference: evolution.InferenceObserved},
+		"update flagged absent":   {Scope: scopeX, DestinationID: "d", OperationID: "o", Operation: evolution.MutationTombstone, ExpectedAbsent: true, ExpectedRevision: 2, RecordID: "r", Inference: evolution.InferenceObserved},
+		"missing scope":           {DestinationID: "d", OperationID: "o", Operation: evolution.MutationUpdate, ExpectedRevision: 1, RecordID: "r", Inference: evolution.InferenceObserved},
+		"unknown operation":       {Scope: scopeX, DestinationID: "d", OperationID: "o", Operation: "replace", RecordID: "r", Inference: evolution.InferenceObserved},
+		"unknown inference":       {Scope: scopeX, DestinationID: "d", OperationID: "o", Operation: evolution.MutationCreate, ExpectedAbsent: true, RecordID: "r", Inference: "guessed"},
 	}
 	for name, m := range bad {
 		if err := m.Validate(); err == nil {
@@ -56,7 +55,7 @@ func TestAuthorizedMutationValidate(t *testing.T) {
 
 func TestBoundWriterExactScope(t *testing.T) {
 	m := memory.AuthorizedMutation{
-		Scope: scopeX, DestinationID: "mentle.default", OperationID: "o", PayloadDigest: "p",
+		Scope: scopeX, DestinationID: "mentle.default", OperationID: "o",
 		Operation: evolution.MutationCreate, ExpectedAbsent: true, RecordID: "r", Body: "b",
 		Inference: evolution.InferenceObserved,
 	}
@@ -87,7 +86,7 @@ func TestBackendDTOsWireShape(t *testing.T) {
 		}
 	}
 	receipt := memory.MutationReceipt{
-		EffectReceipt:   evolution.EffectReceipt{OperationID: "op", PayloadDigest: "d", Status: evolution.StatusApplied, TargetRef: "rec-1", Revision: 3},
+		EffectReceipt:   evolution.EffectReceipt{OperationID: "op", Status: evolution.StatusApplied, TargetRef: "rec-1", Revision: 3},
 		CanonicalStatus: memory.CanonicalCompleted,
 		IndexStatus:     memory.IndexPending,
 	}
@@ -95,7 +94,7 @@ func TestBackendDTOsWireShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{`"operation_id"`, `"payload_digest"`, `"status"`, `"canonical_status"`, `"index_status"`} {
+	for _, key := range []string{`"operation_id"`, `"status"`, `"canonical_status"`, `"index_status"`} {
 		if !strings.Contains(string(encoded), key) {
 			t.Fatalf("missing %s in %s", key, encoded)
 		}
@@ -111,6 +110,20 @@ func TestBackendDTOsWireShape(t *testing.T) {
 		if !strings.Contains(string(encoded), key) {
 			t.Fatalf("evidence page must expose scope/revision/status envelopes: %s", encoded)
 		}
+	}
+}
+
+func TestMutationReceiptDoesNotExposeReplayIntent(t *testing.T) {
+	receipt := memory.MutationReceipt{
+		EffectReceipt: evolution.EffectReceipt{OperationID: "op", Status: evolution.StatusApplied},
+		IntentJSON:    []byte(`{"secret_body":"private"}`),
+	}
+	encoded, err := json.Marshal(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "intent_json") || strings.Contains(string(encoded), "secret_body") {
+		t.Fatalf("private replay intent leaked through receipt: %s", encoded)
 	}
 }
 

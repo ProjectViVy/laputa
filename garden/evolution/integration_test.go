@@ -48,7 +48,7 @@ func testInput(through uint64) laputaevolution.Input {
 	return laputaevolution.Input{
 		Binding: laputaevolution.RunBinding{
 			SubjectID: "profile_a", WorkspaceID: "", DestinationID: "dest_a",
-			PolicyRevision: "pol-1", StrategyDigest: "dig-1", MissionRevision: 0,
+			PolicyRevision: "pol-1", StrategyID: "strategy", StrategyVersion: "v1", MissionRevision: 0,
 		},
 		Window: laputaevolution.Window{SourceID: "activity", After: 0, Through: through},
 	}

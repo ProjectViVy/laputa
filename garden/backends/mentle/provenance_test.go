@@ -16,7 +16,7 @@ import (
 
 func sourceMutation(scope evolution.Scope) memory.AuthorizedMutation {
 	return memory.AuthorizedMutation{
-		Scope: scope, DestinationID: "mentle", OperationID: "source-create", PayloadDigest: "source-create-digest",
+		Scope: scope, DestinationID: "mentle", OperationID: "source-create",
 		Operation: evolution.MutationCreate, RecordID: "requested-record", ExpectedAbsent: true,
 		Body: "observed from both records", Inference: evolution.InferenceObserved,
 		Sources: []evolution.SourceRef{
@@ -90,7 +90,7 @@ func TestMutationUpdateReplacesCanonicalProvenance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mutation.Operation, mutation.OperationID, mutation.PayloadDigest = evolution.MutationUpdate, "source-update", "source-update-digest"
+	mutation.Operation, mutation.OperationID = evolution.MutationUpdate, "source-update"
 	mutation.RecordID, mutation.ExpectedRevision, mutation.ExpectedAbsent = created.TargetRef, created.Revision, false
 	mutation.Body, mutation.Inference = "corrected from newer evidence", evolution.InferenceInferred
 	mutation.Sources = []evolution.SourceRef{{SourceID: "garden.ingest", RecordID: "new-record", Revision: 11, Scope: scope}}
@@ -99,7 +99,7 @@ func TestMutationUpdateReplacesCanonicalProvenance(t *testing.T) {
 		t.Fatalf("update: %+v %v", updated, err)
 	}
 	assertCanonicalProvenance(t, svc, updated, mutation)
-	mutation.OperationID, mutation.PayloadDigest = "source-stale", "source-stale-digest"
+	mutation.OperationID = "source-stale"
 	mutation.Sources[0].RecordID = "stale-source"
 	if _, err := backend.Mutate(ctx, mutation); evolution.CodeOf(err) != evolution.ErrRevisionConflict {
 		t.Fatalf("stale correction accepted: %v", err)

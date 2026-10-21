@@ -3,10 +3,8 @@ package server
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -199,8 +197,7 @@ func (s *Server) handleCreateMemory(w http.ResponseWriter, r *http.Request) {
 	}
 	body.Actor = auditLabel(r, principal)
 	body.RequestID = w.Header().Get("X-Garden-Request-ID")
-	hash := fmt.Sprintf("sha256:%x", sha256.Sum256(raw))
-	result, err := s.Facade.CreateMemoryWithIndexStatus(r.Context(), body, r.Header.Get("Idempotency-Key"), hash)
+	result, err := s.Facade.CreateMemoryWithIndexStatus(r.Context(), body, r.Header.Get("Idempotency-Key"))
 	if err != nil {
 		writeMemoryError(w, err)
 		return

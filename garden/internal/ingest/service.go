@@ -2,9 +2,7 @@ package ingest
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -21,19 +19,19 @@ import (
 )
 
 var (
-	ErrEventConflict = errors.New("event id was already used with different content")
-	ErrNotFound      = errors.New("ingestion not found")
+	ErrEventConflict           = errors.New("event id was already used with different content")
+	ErrEventReplayUnverifiable = errors.New("legacy activity replay cannot be verified because its exact input was not retained; use capture receipt lookup by binding and provenance")
+	ErrNotFound                = errors.New("ingestion not found")
 )
 
 type SubmitRequest struct {
-	Activity    *CaptureActivity `json:"-"`
-	SessionID   string           `json:"session_id"`
-	EventID     string           `json:"event_id"`
-	Phase       string           `json:"phase"`
-	Content     string           `json:"content"`
-	ContentHash string           `json:"content_hash"`
-	Workspace   string           `json:"workspace,omitempty"`
-	OccurredAt  time.Time        `json:"occurred_at,omitempty"`
+	Activity   *CaptureActivity `json:"-"`
+	SessionID  string           `json:"session_id"`
+	EventID    string           `json:"event_id"`
+	Phase      string           `json:"phase"`
+	Content    string           `json:"content"`
+	Workspace  string           `json:"workspace,omitempty"`
+	OccurredAt time.Time        `json:"occurred_at,omitempty"`
 }
 
 type Accepted struct {
@@ -76,7 +74,54 @@ type Service struct {
 }
 
 type MemoryWriter interface {
-	CreateMemory(context.Context, facade.CreateMemoryRequest, string, string) (facade.Memory, error)
+	CreateMemory(context.Context, facade.CreateMemoryRequest, string) (facade.Memory, error)
+}
+
+func migrateIngestions(db *sql.DB) error {
+	rows, err := db.Query(`PRAGMA table_info(ingestions)`)
+	if err != nil {
+		return err
+	}
+	hasContentHash := false
+	for rows.Next() {
+		var cid, notNull, primary int
+		var name, kind string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &kind, &notNull, &defaultValue, &primary); err != nil {
+			rows.Close()
+			return err
+		}
+		hasContentHash = hasContentHash || name == "content_hash"
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if !hasContentHash {
+		return nil
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(`CREATE TABLE ingestions_new(
+ ingestion_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, event_id TEXT NOT NULL UNIQUE,
+ phase TEXT NOT NULL, content TEXT NOT NULL, workspace TEXT,
+ occurred_at TEXT NOT NULL, status TEXT NOT NULL, memory_id TEXT, trace_id TEXT,
+ warnings TEXT NOT NULL DEFAULT '', error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+ activity_json TEXT NOT NULL DEFAULT '');
+INSERT INTO ingestions_new(rowid,ingestion_id,session_id,event_id,phase,content,workspace,occurred_at,status,memory_id,trace_id,warnings,error,created_at,updated_at,activity_json)
+ SELECT rowid,ingestion_id,session_id,event_id,phase,content,workspace,occurred_at,status,memory_id,trace_id,warnings,error,created_at,updated_at,activity_json FROM ingestions;
+DROP TABLE ingestions;
+ALTER TABLE ingestions_new RENAME TO ingestions;`)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 // SessionStateStore is an optional facade capability for durable ingest
@@ -108,16 +153,23 @@ func OpenPaused(path string, memory MemoryWriter) (*Service, error) {
 	}
 	schema := `CREATE TABLE IF NOT EXISTS ingestions(
  ingestion_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, event_id TEXT NOT NULL UNIQUE,
- phase TEXT NOT NULL, content TEXT, content_hash TEXT NOT NULL, workspace TEXT,
+ phase TEXT NOT NULL, content TEXT NOT NULL, workspace TEXT,
  occurred_at TEXT NOT NULL, status TEXT NOT NULL, memory_id TEXT, trace_id TEXT,
  warnings TEXT NOT NULL DEFAULT '', error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
- UNIQUE(session_id,content_hash));
-CREATE INDEX IF NOT EXISTS ingestion_status ON ingestions(status,created_at);`
+ activity_json TEXT NOT NULL DEFAULT '');`
 	if _, err = db.Exec(schema); err != nil {
 		db.Close()
 		return nil, err
 	}
 	if err := initializeActivityColumn(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := migrateIngestions(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS ingestion_status ON ingestions(status,created_at)`); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
@@ -178,23 +230,30 @@ func (s *Service) Close() error {
 func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, error) {
 	req.SessionID = strings.TrimSpace(req.SessionID)
 	req.EventID = strings.TrimSpace(req.EventID)
-	req.ContentHash = strings.TrimSpace(req.ContentHash)
-	if req.SessionID == "" || req.EventID == "" || strings.TrimSpace(req.Content) == "" || req.ContentHash == "" {
-		return Accepted{}, errors.New("session_id, event_id, content, and content_hash are required")
+	if req.SessionID == "" || req.EventID == "" || strings.TrimSpace(req.Content) == "" {
+		return Accepted{}, errors.New("session_id, event_id, and content are required")
 	}
 	if req.Phase != "precompact" && req.Phase != "session_end" {
 		return Accepted{}, errors.New("phase must be precompact or session_end")
 	}
-	sum := sha256.Sum256([]byte(req.Content))
-	expected := "sha256:" + hex.EncodeToString(sum[:])
-	if req.ContentHash != expected {
-		return Accepted{}, errors.New("content_hash does not match content")
-	}
 	var existing Accepted
-	var savedHash string
-	err := s.db.QueryRowContext(ctx, `SELECT rowid,ingestion_id,session_id,event_id,status,content_hash FROM ingestions WHERE event_id=?`, req.EventID).Scan(&existing.Seq, &existing.IngestionID, &existing.SessionID, &existing.EventID, &existing.Status, &savedHash)
+	var phase, content, workspace, occurred, activityJSON string
+	err := s.db.QueryRowContext(ctx, `SELECT rowid,ingestion_id,session_id,event_id,phase,content,workspace,occurred_at,status,activity_json FROM ingestions WHERE event_id=?`, req.EventID).Scan(&existing.Seq, &existing.IngestionID, &existing.SessionID, &existing.EventID, &phase, &content, &workspace, &occurred, &existing.Status, &activityJSON)
 	if err == nil {
-		if savedHash != req.ContentHash {
+		activityIntentJSON, intentErr := initialActivity(req.Activity)
+		if intentErr != nil {
+			return Accepted{}, intentErr
+		}
+		parsedOccurred, _ := time.Parse(time.RFC3339Nano, occurred)
+		if existing.SessionID != req.SessionID || phase != req.Phase || content != req.Content || workspace != req.Workspace ||
+			(!req.OccurredAt.IsZero() && !parsedOccurred.Equal(req.OccurredAt.UTC())) {
+			return Accepted{}, ErrEventConflict
+		}
+		sameActivity, replayErr := sameActivitySource(activityJSON, activityIntentJSON)
+		if replayErr != nil {
+			return Accepted{}, replayErr
+		}
+		if !sameActivity {
 			return Accepted{}, ErrEventConflict
 		}
 		return existing, nil
@@ -202,14 +261,7 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, erro
 	if !errors.Is(err, sql.ErrNoRows) {
 		return Accepted{}, err
 	}
-	err = s.db.QueryRowContext(ctx, `SELECT rowid,ingestion_id,session_id,event_id,status FROM ingestions WHERE session_id=? AND content_hash=?`, req.SessionID, req.ContentHash).Scan(&existing.Seq, &existing.IngestionID, &existing.SessionID, &existing.EventID, &existing.Status)
-	if err == nil {
-		return existing, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return Accepted{}, err
-	}
-	activityJSON, err := initialActivity(req.Activity)
+	activityJSON, err = initialActivity(req.Activity)
 	if err != nil {
 		return Accepted{}, err
 	}
@@ -223,7 +275,7 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (Accepted, erro
 	id := "ing_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err = s.db.ExecContext(ctx, `INSERT INTO ingestions(ingestion_id,session_id,event_id,phase,content,content_hash,workspace,occurred_at,status,created_at,updated_at,activity_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, id, req.SessionID, req.EventID, req.Phase, req.Content, req.ContentHash, req.Workspace, req.OccurredAt.UTC().Format(time.RFC3339Nano), "accepted", now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), activityJSON)
+	_, err = s.db.ExecContext(ctx, `INSERT INTO ingestions(ingestion_id,session_id,event_id,phase,content,workspace,occurred_at,status,created_at,updated_at,activity_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, id, req.SessionID, req.EventID, req.Phase, req.Content, req.Workspace, req.OccurredAt.UTC().Format(time.RFC3339Nano), "accepted", now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), activityJSON)
 	if err != nil {
 		return Accepted{}, err
 	}
@@ -253,7 +305,6 @@ type WindowRow struct {
 	EventID     string    `json:"event_id"`
 	Phase       string    `json:"phase"`
 	Content     string    `json:"content"`
-	ContentHash string    `json:"content_hash"`
 	Workspace   string    `json:"workspace"`
 	Status      string    `json:"status"`
 	OccurredAt  time.Time `json:"occurred_at"`
@@ -263,7 +314,7 @@ type WindowRow struct {
 // in ledger order. The workspace string is the binding's raw workspace id
 // (empty selects personal-scope captures), never a decoded scope.
 func (s *Service) Window(ctx context.Context, workspace string, after, through uint64) ([]WindowRow, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT rowid,ingestion_id,session_id,event_id,phase,content,content_hash,workspace,status,occurred_at FROM ingestions WHERE rowid>? AND rowid<=? AND workspace=? ORDER BY rowid ASC`, int64(after), int64(through), workspace)
+	rows, err := s.db.QueryContext(ctx, `SELECT rowid,ingestion_id,session_id,event_id,phase,content,workspace,status,occurred_at FROM ingestions WHERE rowid>? AND rowid<=? AND workspace=? ORDER BY rowid ASC`, int64(after), int64(through), workspace)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +323,7 @@ func (s *Service) Window(ctx context.Context, workspace string, after, through u
 	for rows.Next() {
 		var row WindowRow
 		var occurred string
-		if err := rows.Scan(&row.Seq, &row.IngestionID, &row.SessionID, &row.EventID, &row.Phase, &row.Content, &row.ContentHash, &row.Workspace, &row.Status, &occurred); err != nil {
+		if err := rows.Scan(&row.Seq, &row.IngestionID, &row.SessionID, &row.EventID, &row.Phase, &row.Content, &row.Workspace, &row.Status, &occurred); err != nil {
 			return nil, err
 		}
 		row.OccurredAt, _ = time.Parse(time.RFC3339Nano, occurred)
@@ -375,13 +426,13 @@ func (s *Service) worker(ctx context.Context) {
 func (s *Service) process(ctx context.Context, id string) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, _ = s.db.ExecContext(ctx, `UPDATE ingestions SET status='running',updated_at=? WHERE ingestion_id=?`, now, id)
-	var session, event, content, hash, occurredAt, workspace string
-	if err := s.db.QueryRowContext(ctx, `SELECT session_id,event_id,content,content_hash,occurred_at,workspace FROM ingestions WHERE ingestion_id=?`, id).Scan(&session, &event, &content, &hash, &occurredAt, &workspace); err != nil {
+	var session, event, content, occurredAt, workspace string
+	if err := s.db.QueryRowContext(ctx, `SELECT session_id,event_id,content,occurred_at,workspace FROM ingestions WHERE ingestion_id=?`, id).Scan(&session, &event, &content, &occurredAt, &workspace); err != nil {
 		s.fail(ctx, id, err)
 		return
 	}
 	if s.memory == nil {
-		s.spool(ctx, id, session, event, content, hash)
+		s.spool(ctx, id, session, event, content)
 		return
 	}
 	var state SessionStateStore
@@ -389,7 +440,7 @@ func (s *Service) process(ctx context.Context, id string) {
 		state = candidate
 		acquired, err := state.AcquireSessionLease(ctx, session, s.workerID, time.Minute)
 		if err != nil {
-			s.spool(ctx, id, session, event, content, hash)
+			s.spool(ctx, id, session, event, content)
 			return
 		}
 		if !acquired {
@@ -400,9 +451,9 @@ func (s *Service) process(ctx context.Context, id string) {
 		}
 		defer func() { _ = state.ReleaseSessionLease(context.Background(), session, s.workerID) }()
 	}
-	m, err := s.memory.CreateMemory(ctx, facade.CreateMemoryRequest{Content: content, Kind: "source_artifact", Scope: s.scopeFor(workspace), Source: facade.MemorySource{Type: "session", SessionID: session, EventID: event}, Metadata: map[string]any{"content_hash": hash, "lifecycle": "stm", "collection": "working"}}, "session:"+event, hash)
+	m, err := s.memory.CreateMemory(ctx, facade.CreateMemoryRequest{Content: content, Kind: "source_artifact", Scope: s.scopeFor(workspace), Source: facade.MemorySource{Type: "session", SessionID: session, EventID: event}, Metadata: map[string]any{"lifecycle": "stm", "collection": "working"}}, "session:"+event)
 	if err != nil {
-		s.spool(ctx, id, session, event, content, hash)
+		s.spool(ctx, id, session, event, content)
 		return
 	}
 	if state != nil {
@@ -427,11 +478,11 @@ func (s *Service) scopeFor(workspace string) string {
 	return memory.EncodeScope(scope)
 }
 
-func (s *Service) spool(ctx context.Context, id, session, event, content, hash string) {
+func (s *Service) spool(ctx context.Context, id, session, event, content string) {
 	var workspace string
 	_ = s.db.QueryRowContext(ctx, `SELECT workspace FROM ingestions WHERE ingestion_id=?`, id).Scan(&workspace)
 	if s.Spool != nil {
-		_ = s.Spool.Append(ctx, activity.TransientEntry{EventID: event, SessionID: session, ContentHash: hash, Content: content, Kind: "source_artifact", Scope: s.scopeFor(workspace)})
+		_ = s.Spool.Append(ctx, activity.TransientEntry{EventID: event, SessionID: session, Content: content, Kind: "source_artifact", Scope: s.scopeFor(workspace)})
 	}
 	_, _ = s.db.ExecContext(ctx, `UPDATE ingestions SET status='spooled',error=?,updated_at=? WHERE ingestion_id=?`, "mentle unavailable; spooled", time.Now().UTC().Format(time.RFC3339Nano), id)
 }

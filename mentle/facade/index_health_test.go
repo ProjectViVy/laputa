@@ -68,7 +68,7 @@ func TestIndexHealthReportsMissingEmbeddingIdentityWithoutHidingCanonicalState(t
 func TestIndexHealthReportsDerivedDivergenceAndTombstonePressure(t *testing.T) {
 	store := &fakeStore{points: map[string]govector.SearchResult{}}
 	svc := healthTestService(t, store, healthTestIdentity)
-	created, err := svc.CreateMemory(context.Background(), CreateMemoryRequest{Content: "canonical health record", Kind: "fact"}, "", "")
+	created, err := svc.CreateMemory(context.Background(), CreateMemoryRequest{Content: "canonical health record", Kind: "fact"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}

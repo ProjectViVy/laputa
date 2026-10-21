@@ -37,7 +37,7 @@ func materialsSeedCard(t *testing.T, m *facade.Service, body string) facade.Memo
 		Content: body, Kind: "note",
 		Scope:  memory.EncodeScope(evolution.Scope{SubjectID: "profile_1", Kind: evolution.ScopePersonal}),
 		Source: facade.MemorySource{Type: "agent"},
-	}, "", "")
+	}, "")
 	if err != nil {
 		t.Fatal(err)
 	}

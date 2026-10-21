@@ -98,7 +98,7 @@ function PersonaDocumentDetail({ kind, state }: { kind: string; state?: PersonaF
     <div className="persona-detail">
       <div className="persona-detail-head"><h2 className="section-title mono">{data.file_name}</h2><span className="persona-meta mono">rev {data.revision} · {fmtTime(data.updated_at)}</span></div>
       {state?.tool_only && <p className="persona-tool-note">Tool-only document. It is never added to bootstrap, recall, or automatic context.</p>}
-      <div className="persona-meta-row"><span className="persona-meta">{current.length} / {state?.content_limit ?? "—"} chars</span><span className="persona-meta mono">{data.content_hash}</span></div>
+      <div className="persona-meta-row"><span className="persona-meta">{current.length} / {state?.content_limit ?? "—"} chars</span></div>
       {editing ? <textarea className="persona-editor mono" value={current} onChange={(event) => setDraft(event.target.value)} autoFocus /> : <pre className="persona-content mono">{data.content || "—"}</pre>}
       {editing && <>
         {kind === "user" && <select className="modules-input" value={scope} onChange={(event) => setScope(event.target.value as "document" | "observations")}><option value="document">User preference document</option><option value="observations">Agent observation append</option></select>}

@@ -2,7 +2,7 @@ package ingest
 
 import (
 	"context"
-	"crypto/sha256"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -18,7 +18,7 @@ type fakeWriter struct {
 	calls int
 }
 
-func (f *fakeWriter) CreateMemory(_ context.Context, req facade.CreateMemoryRequest, _ string, _ string) (facade.Memory, error) {
+func (f *fakeWriter) CreateMemory(_ context.Context, req facade.CreateMemoryRequest, _ string) (facade.Memory, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls++
@@ -33,10 +33,9 @@ func TestOpenPausedDoesNotProcessUntilStart(t *testing.T) {
 	}
 	defer svc.Close()
 	content := "paused session decision"
-	sum := sha256.Sum256([]byte(content))
 	accepted, err := svc.Submit(context.Background(), SubmitRequest{
 		SessionID: "paused", EventID: "paused-event", Phase: "session_end",
-		Content: content, ContentHash: fmt.Sprintf("sha256:%x", sum),
+		Content: content,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -80,10 +79,9 @@ func TestOpenPausedReplaysDurableRowsOnlyAfterStart(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := "durable session decision"
-	sum := sha256.Sum256([]byte(content))
 	accepted, err := first.Submit(context.Background(), SubmitRequest{
 		SessionID: "durable", EventID: "durable-event", Phase: "session_end",
-		Content: content, ContentHash: fmt.Sprintf("sha256:%x", sum),
+		Content: content,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -143,8 +141,7 @@ func TestStartSelectErrorCanRetry(t *testing.T) {
 	}
 	defer svc.Close()
 	content := "select retry"
-	sum := sha256.Sum256([]byte(content))
-	accepted, err := svc.Submit(context.Background(), SubmitRequest{SessionID: "select", EventID: "select-event", Phase: "session_end", Content: content, ContentHash: fmt.Sprintf("sha256:%x", sum)})
+	accepted, err := svc.Submit(context.Background(), SubmitRequest{SessionID: "select", EventID: "select-event", Phase: "session_end", Content: content})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,8 +179,7 @@ func TestStartScanErrorCanRetry(t *testing.T) {
 	}
 	defer svc.Close()
 	content := "scan retry"
-	sum := sha256.Sum256([]byte(content))
-	accepted, err := svc.Submit(context.Background(), SubmitRequest{SessionID: "scan", EventID: "scan-event", Phase: "session_end", Content: content, ContentHash: fmt.Sprintf("sha256:%x", sum)})
+	accepted, err := svc.Submit(context.Background(), SubmitRequest{SessionID: "scan", EventID: "scan-event", Phase: "session_end", Content: content})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,14 +255,18 @@ func TestSubmitProcessesOnceAndClearsTranscript(t *testing.T) {
 	}
 	defer svc.Close()
 	content := "important session decision"
-	sum := sha256.Sum256([]byte(content))
-	req := SubmitRequest{SessionID: "sess", EventID: "evt", Phase: "session_end", Content: content, ContentHash: fmt.Sprintf("sha256:%x", sum)}
+	req := SubmitRequest{SessionID: "sess", EventID: "evt", Phase: "session_end", Content: content}
 	accepted, err := svc.Submit(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.Submit(context.Background(), req); err != nil {
 		t.Fatal(err)
+	}
+	changed := req
+	changed.Content = "same event id, different exact content"
+	if _, err := svc.Submit(context.Background(), changed); !errors.Is(err, ErrEventConflict) {
+		t.Fatalf("same event with changed content error=%v, want ErrEventConflict", err)
 	}
 	deadline := time.Now().Add(3 * time.Second)
 	for {

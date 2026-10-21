@@ -278,7 +278,7 @@ func TestEmbeddedDomainCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mutate: %v", err)
 	}
-	if rc1.OperationID == "" || rc1.PayloadDigest == "" || rc1.Status != evolution.StatusApplied ||
+	if rc1.OperationID == "" || rc1.Status != evolution.StatusApplied ||
 		rc1.CanonicalStatus != memory.CanonicalCompleted || rc1.IndexStatus == "" {
 		t.Fatalf("receipt: %+v", rc1)
 	}
@@ -328,7 +328,7 @@ func TestEmbeddedDomainCapabilities(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := authority.CreateRequest(persona.ChangeRequest{
-		Kind: persona.KindIdentity, BaseRevision: doc.Revision, BaseHash: doc.ContentHash,
+		Kind: persona.KindIdentity, BaseRevision: doc.Revision, ExpectedDocument: &persona.DocumentPrecondition{Exists: doc.Exists, Content: doc.Content},
 		ProposedMarkdown: "new identity", Actor: persona.ActorAgent, Reason: "r",
 	}); err != nil {
 		t.Fatal(err)
@@ -379,7 +379,7 @@ func TestEmbeddedDomainPagingBounds(t *testing.T) {
 	// records via create-then-reject cycles.
 	for i := 0; i < 25; i++ {
 		req, err := authority.CreateRequest(persona.ChangeRequest{
-			Kind: persona.KindIdentity, BaseRevision: doc.Revision, BaseHash: doc.ContentHash,
+			Kind: persona.KindIdentity, BaseRevision: doc.Revision, ExpectedDocument: &persona.DocumentPrecondition{Exists: doc.Exists, Content: doc.Content},
 			ProposedMarkdown: fmt.Sprintf("proposal %d", i), Actor: persona.ActorAgent, Reason: "r",
 		})
 		if err != nil {
@@ -402,7 +402,7 @@ func TestEmbeddedDomainPagingBounds(t *testing.T) {
 	}
 	// A mutation between pages makes the minted cursor stale.
 	late, err := authority.CreateRequest(persona.ChangeRequest{
-		Kind: persona.KindIdentity, BaseRevision: doc.Revision, BaseHash: doc.ContentHash,
+		Kind: persona.KindIdentity, BaseRevision: doc.Revision, ExpectedDocument: &persona.DocumentPrecondition{Exists: doc.Exists, Content: doc.Content},
 		ProposedMarkdown: "late", Actor: persona.ActorAgent, Reason: "r",
 	})
 	if err != nil {
@@ -472,8 +472,7 @@ func TestEmbeddedCaptureDedupeReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := CaptureRequest{Phase: CaptureCompleted, Content: "terminal",
-		ContentHash: "sha256:" + sha256Hex("terminal"),
-		Provenance:  CaptureProvenance{RunID: "run-1", EventSeq: 1}}
+		Provenance: CaptureProvenance{RunID: "run-1", EventSeq: 1}}
 	first, err := agent.Capture(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)

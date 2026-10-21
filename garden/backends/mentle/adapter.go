@@ -66,10 +66,9 @@ func (a *Adapter) BoundScope() evolution.Scope { return a.scope }
 func (a *Adapter) BoundDestination() string { return a.destination }
 
 // CreateMemory satisfies ingest.MemoryWriter with a create on the bound
-// scope; the idempotency key maps to operation_id, the body hash to the
-// payload digest.
-func (a *Adapter) CreateMemory(ctx context.Context, req facade.CreateMemoryRequest, operationID, payloadDigest string) (facade.Memory, error) {
-	receipt, err := a.mutateCreate(ctx, operationID, payloadDigest, req)
+// scope; the operation id owns the exact request bytes for replay.
+func (a *Adapter) CreateMemory(ctx context.Context, req facade.CreateMemoryRequest, operationID string) (facade.Memory, error) {
+	receipt, err := a.mutateCreate(ctx, operationID, req)
 	if err != nil {
 		return facade.Memory{}, err
 	}
@@ -78,13 +77,17 @@ func (a *Adapter) CreateMemory(ctx context.Context, req facade.CreateMemoryReque
 
 // mutateCreate mints the canonical record id (mem_…); the caller supplies
 // only the payload, digest and idempotency key.
-func (a *Adapter) mutateCreate(ctx context.Context, operationID, payloadDigest string, req facade.CreateMemoryRequest) (facade.MutationReceipt, error) {
+func (a *Adapter) mutateCreate(ctx context.Context, operationID string, req facade.CreateMemoryRequest) (facade.MutationReceipt, error) {
 	sources := []facade.MemorySource{req.Source}
+	intent, err := json.Marshal(req)
+	if err != nil {
+		return facade.MutationReceipt{}, err
+	}
 	return a.svc.Mutate(ctx, facade.MutationRequest{
 		Scope:          memory.EncodeScope(a.scope),
 		DestinationID:  a.destination,
 		OperationID:    operationID,
-		PayloadDigest:  payloadDigest,
+		IntentJSON:     intent,
 		Operation:      "create",
 		ExpectedAbsent: true,
 		Body:           req.Content,
@@ -254,11 +257,15 @@ func (a *Adapter) Mutate(ctx context.Context, req memory.AuthorizedMutation) (me
 	if len(req.Sources) > 0 {
 		metadata["evolution_sources"] = append([]evolution.SourceRef(nil), req.Sources...)
 	}
+	intent, err := req.IntentJSON()
+	if err != nil {
+		return memory.MutationReceipt{}, err
+	}
 	receipt, err := a.svc.Mutate(ctx, facade.MutationRequest{
 		Scope:            memory.EncodeScope(req.Scope),
 		DestinationID:    req.DestinationID,
 		OperationID:      req.OperationID,
-		PayloadDigest:    req.PayloadDigest,
+		IntentJSON:       intent,
 		Operation:        op,
 		RecordID:         req.RecordID,
 		ExpectedRevision: int(req.ExpectedRevision),
@@ -327,15 +334,16 @@ func mapReceipt(r facade.MutationReceipt) memory.MutationReceipt {
 	case "not_required":
 		index = memory.IndexNotRequired
 	}
+	effectReceipt := evolution.BindReceiptIntentJSON(evolution.EffectReceipt{
+		OperationID: r.OperationID,
+		Status:      status,
+		TargetRef:   r.RecordID,
+		Revision:    uint64(r.Revision),
+		ErrorCode:   r.ErrorCode,
+	}, r.IntentJSON)
 	return memory.MutationReceipt{
-		EffectReceipt: evolution.EffectReceipt{
-			OperationID:   r.OperationID,
-			PayloadDigest: r.PayloadDigest,
-			Status:        status,
-			TargetRef:     r.RecordID,
-			Revision:      uint64(r.Revision),
-			ErrorCode:     r.ErrorCode,
-		},
+		EffectReceipt:   effectReceipt,
+		IntentJSON:      append([]byte(nil), r.IntentJSON...),
 		CanonicalStatus: canonical,
 		IndexStatus:     index,
 	}
@@ -345,6 +353,8 @@ func mapFacadeError(err error) error {
 	switch {
 	case errors.Is(err, facade.ErrIdempotencyConflict):
 		return &evolution.ContractError{Code: evolution.ErrIdempotencyConflict, Message: "operation replayed with a different payload"}
+	case errors.Is(err, facade.ErrMutationRecoveryRequired), errors.Is(err, facade.ErrIdempotencyRecoveryRequired):
+		return &evolution.ContractError{Code: evolution.ErrRecoveryRequired, Message: "operation receipt has no retained exact intent"}
 	case errors.Is(err, facade.ErrVersionConflict):
 		return &evolution.ContractError{Code: evolution.ErrRevisionConflict, Message: "record revision conflict"}
 	case errors.Is(err, facade.ErrMutationNotFound), errors.Is(err, facade.ErrMemoryNotFound):

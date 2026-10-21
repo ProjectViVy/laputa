@@ -5,18 +5,18 @@
 package inofy
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/json"
-
 	"github.com/ProjectViVy/inofy"
 	"github.com/ProjectViVy/laputa/laputa/evolution"
 	"github.com/ProjectViVy/laputa/laputa/evolution/diva"
 )
 
-// ImplementationID is the catalog identity of this strategy build. It moves
-// whenever prompts, schemas or stage code change.
-const ImplementationID = "laputa-diva/" + diva.ImplementationRevision
+// StrategyID is the stable product identity for the strategy. StrategyVersion
+// is advanced deliberately when the implementation contract changes.
+const (
+	StrategyID       = "laputa-diva"
+	StrategyVersion  = diva.ImplementationRevision
+	ImplementationID = StrategyID + "/" + StrategyVersion
+)
 
 var stageOrder = []string{
 	diva.StageCollectID,
@@ -80,26 +80,4 @@ func Descriptors() []inofy.NodeDescriptor {
 		})
 	}
 	return out
-}
-
-// StrategyDigest covers definition bytes, the prompt/schema bundle and the
-// implementation identity — a change to any of them moves the digest.
-func StrategyDigest() (string, error) {
-	def, err := Definition()
-	if err != nil {
-		return "", err
-	}
-	raw, err := json.Marshal(def)
-	if err != nil {
-		return "", err
-	}
-	return digest(raw, diva.PromptBundle()), nil
-}
-
-func digest(definition, bundle []byte) string {
-	h := sha256.New()
-	h.Write(definition)
-	h.Write([]byte{0})
-	h.Write(bundle)
-	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
 }

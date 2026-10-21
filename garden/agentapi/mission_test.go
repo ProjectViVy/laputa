@@ -15,7 +15,7 @@ func TestFrozenCoreWireIsV2(t *testing.T) {
 		SessionID:     "s1",
 		MissionStatus: evolution.MissionAssigned,
 		Sections: []evolution.FrozenSectionV2{
-			{Kind: evolution.FrozenKindMission, Content: "mission", SourceRevision: 3, SourceHash: "h"},
+			{Kind: evolution.FrozenKindMission, Content: "mission", SourceRevision: 3},
 			{Kind: evolution.FrozenKindIdentity, Content: "identity", SourceRevision: 1},
 			{Kind: evolution.FrozenKindRelationship, SourceRevision: 1},
 			{Kind: evolution.FrozenKindRedline, SourceRevision: 1},
@@ -63,7 +63,7 @@ func TestV1AdmissionCannotMasquerade(t *testing.T) {
 func TestMissionPinRejectsStaleRevision(t *testing.T) {
 	binding := evolution.RunBinding{
 		SubjectID: "sub", DestinationID: "dest", PolicyRevision: "p",
-		StrategyDigest: "d", MissionRevision: 2,
+		StrategyID: "strategy", StrategyVersion: "v1", MissionRevision: 2,
 	}
 	if err := binding.CheckMissionRevision(2); err != nil {
 		t.Fatalf("matching revision must pass: %v", err)

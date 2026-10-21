@@ -28,18 +28,19 @@ func TestCanonicalMemoryLifecycleAndIdempotency(t *testing.T) {
 	defer catalog.Close()
 	svc := &Service{Searcher: search.NewSearcher(store, embedder), Hybrid: hybrid.NewSearcher(store, embedder, .7), Catalog: catalog}
 	ctx := context.Background()
-	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "canonical decision", Kind: "decision", Tags: []string{"api"}}, "idem-1", "hash-1")
+	createInput := CreateMemoryRequest{Content: "canonical decision", Kind: "decision", Tags: []string{"api"}}
+	created, err := svc.CreateMemory(ctx, createInput, "idem-1")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if created.Status != "active" || created.Version != 1 || created.ID == "" {
 		t.Fatalf("created=%+v", created)
 	}
-	replayed, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "canonical decision"}, "idem-1", "hash-1")
+	replayed, err := svc.CreateMemory(ctx, createInput, "idem-1")
 	if err != nil || replayed.ID != created.ID {
 		t.Fatalf("replayed=%+v err=%v", replayed, err)
 	}
-	if _, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "other"}, "idem-1", "hash-2"); !errors.Is(err, ErrIdempotencyConflict) {
+	if _, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "other"}, "idem-1"); !errors.Is(err, ErrIdempotencyConflict) {
 		t.Fatalf("conflict=%v", err)
 	}
 	content := "updated decision"
@@ -149,7 +150,7 @@ func TestUninitializedServiceReportsUnavailable(t *testing.T) {
 	svc := &Service{}
 	ctx := context.Background()
 
-	if _, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "hello"}, "", ""); err == nil {
+	if _, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "hello"}, ""); err == nil {
 		t.Fatal("create should fail")
 	}
 	if _, err := svc.GetMemory(ctx, "mem_1"); err == nil {
@@ -166,7 +167,7 @@ func TestUninitializedServiceReportsUnavailable(t *testing.T) {
 func TestConcurrentUpdateUsesSingleVersionWinner(t *testing.T) {
 	svc := newTestService(t)
 	ctx := context.Background()
-	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "before", Kind: "fact"}, "cas-create", "cas-create-hash")
+	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "before", Kind: "fact"}, "cas-create")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +213,7 @@ func TestCanonicalCommitSurvivesDerivedIndexFailureAndRecovery(t *testing.T) {
 	defer catalog.Close()
 	emb := fakeEmbedder{}
 	svc := &Service{Searcher: search.NewSearcher(store, emb), Hybrid: hybrid.NewSearcher(store, emb, .7), Catalog: catalog}
-	created, err := svc.CreateMemory(context.Background(), CreateMemoryRequest{Content: "durable before index"}, "", "")
+	created, err := svc.CreateMemory(context.Background(), CreateMemoryRequest{Content: "durable before index"}, "")
 	if err != nil {
 		t.Fatalf("canonical mutation failed with derived failure: %v", err)
 	}
@@ -255,7 +256,7 @@ func TestServiceRealCRUDAndRetrieval(t *testing.T) {
 	defer catalog.Close()
 	svc := &Service{Searcher: vector, Hybrid: hybridSearcher, Catalog: catalog}
 	ctx := context.Background()
-	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "pipeline governance", Kind: "decision", Tags: []string{"technical"}}, "", "")
+	created, err := svc.CreateMemory(ctx, CreateMemoryRequest{Content: "pipeline governance", Kind: "decision", Tags: []string{"technical"}}, "")
 	if err != nil {
 		t.Fatal(err)
 	}

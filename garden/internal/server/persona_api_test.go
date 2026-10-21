@@ -107,7 +107,7 @@ func TestPersonaReviewLifecycleUsesVerifiedAgentActor(t *testing.T) {
 	srv, _ := personaCapabilityServer(t)
 	initializePersonaOverHTTP(t, srv)
 	rec := httptest.NewRecorder()
-	body := map[string]any{"kind": "identity", "base_revision": 1, "base_hash": persona.ContentHash("identity"), "proposed_markdown": "reviewed identity", "reason": "agent proposal"}
+	body := map[string]any{"kind": "identity", "base_revision": 1, "expected_document": persona.DocumentPrecondition{Exists: true, Content: "identity"}, "proposed_markdown": "reviewed identity", "reason": "agent proposal"}
 	req := personaRequest(http.MethodPost, "/v2/persona/reviews", "agent-secret", body)
 	req.Header.Set("X-Garden-Actor", "autodream")
 	srv.HTTPHandler().ServeHTTP(rec, req)

@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/ProjectViVy/laputa/laputa/persona"
 )
 
 // TestMissionHumanOnlyMutation covers the control-plane boundary: the
@@ -53,7 +55,7 @@ func TestMissionNotAnExecutableReview(t *testing.T) {
 	srv, _ := personaCapabilityServer(t)
 	initializePersonaOverHTTP(t, srv)
 	rec := httptest.NewRecorder()
-	srv.HTTPHandler().ServeHTTP(rec, personaRequest(http.MethodPost, "/v2/persona/reviews", "agent-secret", map[string]any{"kind": "mission", "base_revision": 0, "base_hash": "sha256:x", "proposed_markdown": "x", "reason": "r"}))
+	srv.HTTPHandler().ServeHTTP(rec, personaRequest(http.MethodPost, "/v2/persona/reviews", "agent-secret", map[string]any{"kind": "mission", "base_revision": 0, "expected_document": persona.DocumentPrecondition{}, "proposed_markdown": "x", "reason": "r"}))
 	if rec.Code == http.StatusCreated {
 		t.Fatalf("mission review created: %s", rec.Body.String())
 	}

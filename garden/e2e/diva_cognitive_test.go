@@ -10,14 +10,11 @@ package e2e
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"sync"
 	"testing"
-	"time"
 
 	gardenevolution "github.com/ProjectViVy/laputa/garden/evolution"
 	"github.com/ProjectViVy/laputa/garden/internal/ingest"
@@ -37,7 +34,7 @@ type divaE2EWriter struct {
 	seq   int
 }
 
-func (f *divaE2EWriter) CreateMemory(_ context.Context, req facade.CreateMemoryRequest, key, _ string) (facade.Memory, error) {
+func (f *divaE2EWriter) CreateMemory(_ context.Context, req facade.CreateMemoryRequest, key string) (facade.Memory, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.memos == nil {
@@ -74,10 +71,13 @@ func (b *divaE2EBackend) Mutate(_ context.Context, m memory.AuthorizedMutation) 
 	if r, ok := b.receipts[m.OperationID]; ok {
 		return r, nil
 	}
-	r := memory.MutationReceipt{EffectReceipt: laputaevolution.EffectReceipt{
-		OperationID: m.OperationID, PayloadDigest: m.PayloadDigest,
-		Status: laputaevolution.StatusApplied, TargetRef: "memory:" + m.RecordID, Revision: 1,
-	}, CanonicalStatus: memory.CanonicalCompleted, IndexStatus: memory.IndexReady}
+	intent, err := m.IntentJSON()
+	if err != nil {
+		return memory.MutationReceipt{}, err
+	}
+	r := memory.MutationReceipt{EffectReceipt: laputaevolution.BindReceiptIntentJSON(laputaevolution.EffectReceipt{
+		OperationID: m.OperationID, Status: laputaevolution.StatusApplied, TargetRef: "memory:" + m.RecordID, Revision: 1,
+	}, intent), CanonicalStatus: memory.CanonicalCompleted, IndexStatus: memory.IndexReady, IntentJSON: intent}
 	b.receipts[m.OperationID] = r
 	b.mutated = append(b.mutated, m)
 	return r, nil
@@ -139,11 +139,10 @@ func divaE2EOpenIngest(t *testing.T, writer *divaE2EWriter, dir string) *ingest.
 
 func divaE2ECapture(t *testing.T, svc *ingest.Service, sessionID, eventID, workspace, body string) ingest.Accepted {
 	t.Helper()
-	sum := sha256.Sum256([]byte(body))
 	accepted, err := svc.Submit(context.Background(), ingest.SubmitRequest{
 		SessionID: sessionID, EventID: eventID, Phase: "session_end",
-		Content: body, ContentHash: "sha256:" + hex.EncodeToString(sum[:]),
-		Workspace: workspace, OccurredAt: time.Now().UTC(),
+		Content:   body,
+		Workspace: workspace,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -257,7 +256,7 @@ func TestDivaCognitiveDecisiveEndToEnd(t *testing.T) {
 	input := laputaevolution.Input{
 		Binding: laputaevolution.RunBinding{
 			SubjectID: scope.SubjectID, DestinationID: "dest_a",
-			PolicyRevision: "pol-1", StrategyDigest: "dig-1",
+			PolicyRevision: "pol-1", StrategyID: "strategy", StrategyVersion: "v1",
 			MissionRevision: missionDoc.Revision,
 		},
 		Window: laputaevolution.Window{SourceID: "activity", After: 0, Through: second.Seq},

@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -149,6 +150,9 @@ func (d *Domain) MissionRevision(ctx context.Context) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
+	if !doc.Exists || strings.TrimSpace(doc.Content) == "" {
+		return 0, nil
+	}
 	return doc.Revision, nil
 }
 
@@ -201,7 +205,12 @@ func (d *Domain) Apply(ctx context.Context, e laputaevolution.Effect) (laputaevo
 	if err != nil {
 		return laputaevolution.EffectReceipt{}, err
 	}
-	if err := d.ledger.record(effectRecord{EffectReceipt: receipt, Kind: string(e.Kind)}); err != nil {
+	intent, err := e.IntentJSON()
+	if err != nil {
+		return laputaevolution.EffectReceipt{}, err
+	}
+	receipt = laputaevolution.BindReceiptIntent(receipt, e)
+	if err := d.ledger.record(effectRecord{EffectReceipt: receipt, Kind: string(e.Kind), IntentJSON: intent}); err != nil {
 		return laputaevolution.EffectReceipt{}, err
 	}
 	return receipt, nil
@@ -217,12 +226,12 @@ func (d *Domain) Lookup(ctx context.Context, operationID string) (laputaevolutio
 		return laputaevolution.EffectReceipt{}, err
 	}
 	if ok {
-		return rec.EffectReceipt, nil
+		return laputaevolution.BindReceiptIntentJSON(rec.EffectReceipt, rec.IntentJSON), nil
 	}
 	if d.deps.Memory != nil {
 		mr, merr := d.deps.Memory.MutationStatus(ctx, operationID)
 		if merr == nil && mr.OperationID != "" {
-			return mr.EffectReceipt, nil
+			return laputaevolution.BindReceiptIntentJSON(mr.EffectReceipt, mr.IntentJSON), nil
 		}
 		if merr != nil && !isNotFound(merr) {
 			return laputaevolution.EffectReceipt{}, merr
@@ -248,11 +257,10 @@ func (d *Domain) applyWorkPatch(ctx context.Context, e laputaevolution.Effect) (
 		status = laputaevolution.StatusNoChange
 	}
 	return laputaevolution.EffectReceipt{
-		OperationID:   e.OperationID,
-		PayloadDigest: e.PayloadDigest,
-		Status:        status,
-		TargetRef:     "actmem",
-		Revision:      result.Revision,
+		OperationID: e.OperationID,
+		Status:      status,
+		TargetRef:   "actmem",
+		Revision:    result.Revision,
 	}, nil
 }
 
@@ -268,7 +276,6 @@ func (d *Domain) applyMemoryMutation(ctx context.Context, e laputaevolution.Effe
 		Scope:            d.deps.Scope,
 		DestinationID:    d.deps.DestinationID,
 		OperationID:      e.OperationID,
-		PayloadDigest:    e.PayloadDigest,
 		Operation:        payload.Operation,
 		RecordID:         payload.RecordID,
 		ExpectedRevision: payload.ExpectedRevision,
@@ -286,7 +293,6 @@ func (d *Domain) applyMemoryMutation(ctx context.Context, e laputaevolution.Effe
 	}
 	out := receipt.EffectReceipt
 	out.OperationID = e.OperationID
-	out.PayloadDigest = e.PayloadDigest
 	return out, nil
 }
 
@@ -312,7 +318,7 @@ func (d *Domain) applyPersonaRequest(ctx context.Context, e laputaevolution.Effe
 	request, err := d.deps.Persona.CreateRequest(persona.ChangeRequest{
 		Kind:             kind,
 		BaseRevision:     payload.BaseRevision,
-		BaseHash:         doc.ContentHash,
+		ExpectedDocument: &persona.DocumentPrecondition{Exists: doc.Exists, Content: doc.Content},
 		ProposedMarkdown: payload.ProposedMarkdown,
 		Actor:            actor,
 		Reason:           payload.Reason,
@@ -321,11 +327,10 @@ func (d *Domain) applyPersonaRequest(ctx context.Context, e laputaevolution.Effe
 		return rejected(e, "persona_rejected", err.Error()), nil
 	}
 	return laputaevolution.EffectReceipt{
-		OperationID:   e.OperationID,
-		PayloadDigest: e.PayloadDigest,
-		Status:        laputaevolution.StatusSubmitted,
-		TargetRef:     "persona_request:" + request.ID,
-		Revision:      request.BaseRevision,
+		OperationID: e.OperationID,
+		Status:      laputaevolution.StatusSubmitted,
+		TargetRef:   "persona_request:" + request.ID,
+		Revision:    request.BaseRevision,
 	}, nil
 }
 
@@ -368,10 +373,9 @@ func (d *Domain) applyCapabilityProposal(ctx context.Context, e laputaevolution.
 		return rejected(e, "evomap_rejected", err.Error()), nil
 	}
 	return laputaevolution.EffectReceipt{
-		OperationID:   e.OperationID,
-		PayloadDigest: e.PayloadDigest,
-		Status:        laputaevolution.StatusSubmitted,
-		TargetRef:     ref,
+		OperationID: e.OperationID,
+		Status:      laputaevolution.StatusSubmitted,
+		TargetRef:   ref,
 	}, nil
 }
 
@@ -380,24 +384,22 @@ func (d *Domain) applyReflectionNote(ctx context.Context, e laputaevolution.Effe
 	if payload == nil {
 		return laputaevolution.EffectReceipt{}, &laputaevolution.ContractError{Code: laputaevolution.ErrInvalidSchema, Message: "reflection_note payload missing"}
 	}
-	noteID, err := d.ledger.recordNote(e.OperationID, e.PayloadDigest, payload)
+	noteID, err := d.ledger.recordNote(e.OperationID, payload)
 	if err != nil {
 		return laputaevolution.EffectReceipt{}, err
 	}
 	return laputaevolution.EffectReceipt{
-		OperationID:   e.OperationID,
-		PayloadDigest: e.PayloadDigest,
-		Status:        laputaevolution.StatusApplied,
-		TargetRef:     "reflection_note:" + noteID,
+		OperationID: e.OperationID,
+		Status:      laputaevolution.StatusApplied,
+		TargetRef:   "reflection_note:" + noteID,
 	}, nil
 }
 
 func rejected(e laputaevolution.Effect, code, _ string) laputaevolution.EffectReceipt {
 	return laputaevolution.EffectReceipt{
-		OperationID:   e.OperationID,
-		PayloadDigest: e.PayloadDigest,
-		Status:        laputaevolution.StatusRejected,
-		ErrorCode:     code,
+		OperationID: e.OperationID,
+		Status:      laputaevolution.StatusRejected,
+		ErrorCode:   code,
 	}
 }
 
@@ -415,15 +417,15 @@ type effectLedger struct {
 
 type effectRecord struct {
 	laputaevolution.EffectReceipt
-	Kind string `json:"kind"`
+	Kind       string `json:"kind"`
+	IntentJSON []byte `json:"intent_json,omitempty"`
 }
 
 type noteRecord struct {
-	OperationID   string                      `json:"operation_id"`
-	PayloadDigest string                      `json:"payload_digest"`
-	Body          string                      `json:"body"`
-	Sources       []laputaevolution.SourceRef `json:"sources"`
-	At            string                      `json:"at"`
+	OperationID string                      `json:"operation_id"`
+	Body        string                      `json:"body"`
+	Sources     []laputaevolution.SourceRef `json:"sources"`
+	At          string                      `json:"at"`
 }
 
 func openEffectLedger(dir string) (*effectLedger, error) {
@@ -439,18 +441,42 @@ func (l *effectLedger) record(rec effectRecord) error {
 	return appendJSONL(l.path, rec)
 }
 
-func (l *effectLedger) recordNote(operationID, digest string, payload *laputaevolution.ReflectionNotePayload) (string, error) {
+func (l *effectLedger) recordNote(operationID string, payload *laputaevolution.ReflectionNotePayload) (string, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	path := filepath.Join(filepath.Dir(l.path), "notes.jsonl")
+	data, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+	for _, line := range splitLines(data) {
+		var existing noteRecord
+		if err := json.Unmarshal(line, &existing); err != nil {
+			return "", fmt.Errorf("evolution: corrupt notes ledger: %w", err)
+		}
+		if existing.OperationID != operationID {
+			continue
+		}
+		if existing.Body != payload.Body || !equalSources(existing.Sources, payload.Sources) {
+			return "", &laputaevolution.ContractError{Code: laputaevolution.ErrIdempotencyConflict, Message: "reflection note intent changed under the same operation_id"}
+		}
+		return operationID, nil
+	}
 	rec := noteRecord{
-		OperationID: operationID, PayloadDigest: digest,
-		Body: payload.Body, Sources: payload.Sources,
+		OperationID: operationID,
+		Body:        payload.Body, Sources: payload.Sources,
 		At: time.Now().UTC().Format(time.RFC3339Nano),
 	}
-	if err := appendJSONL(filepath.Join(filepath.Dir(l.path), "notes.jsonl"), rec); err != nil {
+	if err := appendJSONL(path, rec); err != nil {
 		return "", err
 	}
 	return operationID, nil
+}
+
+func equalSources(a, b []laputaevolution.SourceRef) bool {
+	left, _ := json.Marshal(a)
+	right, _ := json.Marshal(b)
+	return string(left) == string(right)
 }
 
 func (l *effectLedger) lookup(operationID string) (effectRecord, bool, error) {
@@ -514,16 +540,15 @@ func splitLines(data []byte) [][]byte {
 // receipt or a persisted reflection note. Notes carry body; receipts carry
 // status/target. Reflection notes never re-enter evidence through this read.
 type ResultItem struct {
-	OperationID   string                      `json:"operation_id"`
-	PayloadDigest string                      `json:"payload_digest,omitempty"`
-	Kind          string                      `json:"kind"`
-	Status        string                      `json:"status,omitempty"`
-	TargetRef     string                      `json:"target_ref,omitempty"`
-	Revision      uint64                      `json:"revision,omitempty"`
-	ErrorCode     string                      `json:"error_code,omitempty"`
-	Body          string                      `json:"body,omitempty"`
-	Sources       []laputaevolution.SourceRef `json:"sources,omitempty"`
-	At            string                      `json:"at,omitempty"`
+	OperationID string                      `json:"operation_id"`
+	Kind        string                      `json:"kind"`
+	Status      string                      `json:"status,omitempty"`
+	TargetRef   string                      `json:"target_ref,omitempty"`
+	Revision    uint64                      `json:"revision,omitempty"`
+	ErrorCode   string                      `json:"error_code,omitempty"`
+	Body        string                      `json:"body,omitempty"`
+	Sources     []laputaevolution.SourceRef `json:"sources,omitempty"`
+	At          string                      `json:"at,omitempty"`
 }
 
 // ResultPage is one page of ledger results; there is deliberately no total —
@@ -591,8 +616,8 @@ func (l *effectLedger) readAll() ([]ResultItem, error) {
 				return nil, fmt.Errorf("evolution: corrupt effect ledger: %w", err)
 			}
 			items = append(items, ResultItem{
-				OperationID: rec.OperationID, PayloadDigest: rec.PayloadDigest,
-				Kind: rec.Kind, Status: string(rec.Status), TargetRef: rec.TargetRef,
+				OperationID: rec.OperationID,
+				Kind:        rec.Kind, Status: string(rec.Status), TargetRef: rec.TargetRef,
 				Revision: rec.Revision, ErrorCode: rec.ErrorCode,
 			})
 		}
@@ -607,9 +632,9 @@ func (l *effectLedger) readAll() ([]ResultItem, error) {
 				return nil, fmt.Errorf("evolution: corrupt notes ledger: %w", err)
 			}
 			items = append(items, ResultItem{
-				OperationID: rec.OperationID, PayloadDigest: rec.PayloadDigest,
-				Kind: string(laputaevolution.KindReflectionNote),
-				Body: rec.Body, Sources: rec.Sources, At: rec.At,
+				OperationID: rec.OperationID,
+				Kind:        string(laputaevolution.KindReflectionNote),
+				Body:        rec.Body, Sources: rec.Sources, At: rec.At,
 			})
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {

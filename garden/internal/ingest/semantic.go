@@ -82,7 +82,7 @@ func (s *Service) IngestSemanticUnits(ctx context.Context, units []SemanticUnit)
 			Tags:     unit.Tags,
 			Source:   facade.MemorySource{Type: "import", URI: unit.SourcePath, Revision: unit.SourceRevision},
 			Metadata: metadata,
-		}, "unit:"+unit.SourcePath+":"+hash, hash)
+		}, "unit:"+unit.SourcePath+":"+hash)
 		if err != nil {
 			return result, err
 		}

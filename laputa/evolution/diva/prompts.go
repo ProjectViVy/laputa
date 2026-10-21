@@ -39,12 +39,6 @@ const SchemaWorkPatch = `{"type":"object","required":["base_revision","changes"]
 // SchemaReflectionOutput is the reflect output schema.
 const SchemaReflectionOutput = `{"type":"object","properties":{"candidates":{"type":"array"},"no_change_reason":{"type":"string"}},"additionalProperties":false}`
 
-// ImplementationRevision identifies this strategy build; it participates
-// in the strategy digest alongside the definition and prompts.
+// ImplementationRevision is the explicit strategy version presented to the
+// host. It changes only as a deliberate product version update.
 const ImplementationRevision = "diva-cognitive/v1-review-3"
-
-// PromptBundle returns the canonical identity bytes the strategy digest
-// covers: every prompt and schema in declaration order.
-func PromptBundle() []byte {
-	return []byte(PromptReconcile + "\x00" + PromptReflect + "\x00" + SchemaWorkPatch + "\x00" + SchemaReflectionOutput + "\x00" + ImplementationRevision)
-}

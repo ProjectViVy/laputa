@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -94,9 +93,8 @@ func smoke() error {
 		return fmt.Errorf("conflicting binding was not rejected: %v", err)
 	}
 	content := "durable terminal smoke content"
-	digest := sha256.Sum256([]byte(content))
 	req := agentapi.CaptureRequest{
-		Phase: agentapi.CaptureCompleted, Content: content, ContentHash: fmt.Sprintf("sha256:%x", digest),
+		Phase: agentapi.CaptureCompleted, Content: content,
 		Provenance: agentapi.CaptureProvenance{RunID: "host-run-1", EventSeq: 1},
 	}
 	if _, err := bound.Capture(ctx, agentapi.CaptureRequest{Phase: "running"}); !codeIs(err, "invalid_request") {

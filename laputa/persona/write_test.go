@@ -1,8 +1,11 @@
 package persona
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -120,6 +123,54 @@ func TestWriteRevisionConflict(t *testing.T) {
 	}
 }
 
+func TestConcurrentPersonaEditsHaveSingleRevisionWinner(t *testing.T) {
+	dir := t.TempDir()
+	svc, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Initialize(Initialization{Identity: "v1 identity", Relationship: "r", Redline: "x", User: "u", World: "w"}, "user", SourceInit, "init"); err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	contents := []string{"winner alpha", "winner beta"}
+	errs := make([]error, len(contents))
+	var workers sync.WaitGroup
+	for i := range contents {
+		workers.Add(1)
+		go func(i int) {
+			defer workers.Done()
+			<-start
+			_, errs[i] = svc.SaveUserDocument(KindIdentity, contents[i], 1, "user", SourceUserDirect, "concurrent edit")
+		}(i)
+	}
+	close(start)
+	workers.Wait()
+	winners, conflicts := 0, 0
+	for _, err := range errs {
+		if err == nil {
+			winners++
+			continue
+		}
+		var conflict *RevisionConflictError
+		if asRevisionConflict(err, &conflict) {
+			conflicts++
+			continue
+		}
+		t.Fatalf("unexpected concurrent edit error: %v", err)
+	}
+	if winners != 1 || conflicts != 1 {
+		t.Fatalf("concurrent winners=%d conflicts=%d errors=%v", winners, conflicts, errs)
+	}
+	doc, err := svc.GetDocument(KindIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.Revision != 2 || (doc.Content != contents[0] && doc.Content != contents[1]) {
+		t.Fatalf("final authority = rev %d content %q", doc.Revision, doc.Content)
+	}
+}
+
 func TestCreateRequestAndAccept(t *testing.T) {
 	dir := t.TempDir()
 	svc, _ := Open(dir)
@@ -131,7 +182,7 @@ func TestCreateRequestAndAccept(t *testing.T) {
 	req, err := svc.CreateRequest(ChangeRequest{
 		Kind:             KindIdentity,
 		BaseRevision:     doc.Revision,
-		BaseHash:         doc.ContentHash,
+		ExpectedDocument: &DocumentPrecondition{Exists: doc.Exists, Content: doc.Content},
 		ProposedMarkdown: "v2 via agent proposal",
 		Actor:            ActorAgent,
 		Reason:           "agent suggests sharper identity",
@@ -144,7 +195,7 @@ func TestCreateRequestAndAccept(t *testing.T) {
 	}
 	// duplicate pending for same kind
 	if _, err := svc.CreateRequest(ChangeRequest{
-		Kind: KindIdentity, BaseRevision: doc.Revision, BaseHash: doc.ContentHash,
+		Kind: KindIdentity, BaseRevision: doc.Revision, ExpectedDocument: &DocumentPrecondition{Exists: doc.Exists, Content: doc.Content},
 		ProposedMarkdown: "another", Actor: ActorAgent, Reason: "dup",
 	}); err == nil {
 		t.Fatal("duplicate pending request should error")
@@ -170,6 +221,110 @@ func TestCreateRequestAndAccept(t *testing.T) {
 	}
 }
 
+func TestCreateReviewRejectsSameLengthStaleContentAndSurvivesRestart(t *testing.T) {
+	dir := t.TempDir()
+	svc, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Initialize(Initialization{Identity: "v1 identity", Relationship: "r", Redline: "x", User: "u", World: "w"}, "user", SourceInit, "init"); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := svc.GetDocument(KindIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := &DocumentPrecondition{Exists: doc.Exists, Content: "v2 identity"}
+	if len(stale.Content) != len(doc.Content) {
+		t.Fatal("test needs a same-length stale edit")
+	}
+	_, err = svc.CreateRequest(ChangeRequest{Kind: KindIdentity, BaseRevision: doc.Revision, ExpectedDocument: stale, ProposedMarkdown: "candidate identity", Actor: ActorAgent, Reason: "proposal"})
+	var conflict *RevisionConflictError
+	if !asRevisionConflict(err, &conflict) {
+		t.Fatalf("same-length stale review err=%v, want RevisionConflictError", err)
+	}
+	review, err := svc.CreateRequest(ChangeRequest{Kind: KindIdentity, BaseRevision: doc.Revision, ExpectedDocument: &DocumentPrecondition{Exists: doc.Exists, Content: doc.Content}, ProposedMarkdown: "candidate identity", Actor: ActorAgent, Reason: "proposal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc, err = Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := svc.AcceptRequest(review.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !out.Changed || out.Document.Content != "candidate identity" {
+		t.Fatalf("recovered review result = %+v", out)
+	}
+}
+
+func TestAcceptLegacyReviewMigratesFromExactHistorySnapshot(t *testing.T) {
+	dir := t.TempDir()
+	svc, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Initialize(Initialization{Identity: "legacy identity", Relationship: "r", Redline: "x", User: "u", World: "w"}, "user", SourceInit, "init"); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := svc.GetDocument(KindIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := map[string]any{
+		"id": "legacy-review", "kind": KindIdentity.String(), "base_revision": doc.Revision,
+		"base_hash": "sha256:legacy", "proposed_markdown": "accepted legacy proposal",
+		"actor": ActorAgent, "reason": "older host proposal", "created_at": "2026-10-20T00:00:00Z",
+		"state": RequestPending, "decided_at": nil,
+	}
+	raw, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(svc.requestPath("legacy-review"), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	review, err := svc.GetReview("legacy-review")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if review.ExpectedDocument == nil || !review.ExpectedDocument.Exists || review.ExpectedDocument.Content != doc.Content {
+		t.Fatalf("legacy review did not migrate from its exact base snapshot: %+v", review)
+	}
+	migrated, err := os.ReadFile(svc.requestPath("legacy-review"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(migrated, []byte("base_hash")) {
+		t.Fatalf("legacy hash was retained after migration: %s", migrated)
+	}
+	if _, err := svc.AcceptRequest("legacy-review"); err != nil {
+		t.Fatalf("accept migrated legacy review: %v", err)
+	}
+
+	// Without an owned history snapshot there is no lossless conversion; the
+	// proposal remains inspectable but is persisted stale instead of guessed.
+	unrecoverable := map[string]any{
+		"id": "legacy-without-snapshot", "kind": KindDark.String(), "base_revision": 0,
+		"base_hash": "sha256:legacy", "proposed_markdown": "dark proposal",
+		"actor": ActorAutodream, "reason": "older proposal", "created_at": "2026-10-20T00:00:00Z",
+		"state": RequestPending, "decided_at": nil,
+	}
+	raw, err = json.Marshal(unrecoverable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(svc.requestPath("legacy-without-snapshot"), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	stale, err := svc.GetReview("legacy-without-snapshot")
+	if err != nil || stale.State != RequestStale || stale.DecidedAt == nil {
+		t.Fatalf("unrecoverable legacy review = %+v, %v; want persisted stale", stale, err)
+	}
+}
+
 func TestRejectRequest(t *testing.T) {
 	dir := t.TempDir()
 	svc, _ := Open(dir)
@@ -179,7 +334,7 @@ func TestRejectRequest(t *testing.T) {
 	}
 	doc, _ := svc.GetDocument(KindIdentity)
 	req, _ := svc.CreateRequest(ChangeRequest{
-		Kind: KindIdentity, BaseRevision: doc.Revision, BaseHash: doc.ContentHash,
+		Kind: KindIdentity, BaseRevision: doc.Revision, ExpectedDocument: &DocumentPrecondition{Exists: doc.Exists, Content: doc.Content},
 		ProposedMarkdown: "should not land", Actor: ActorAgent, Reason: "reject me",
 	})
 	if _, err := svc.RejectRequest(req.ID); err != nil {
@@ -217,8 +372,8 @@ func asRevisionConflict(err error, rc **RevisionConflictError) bool {
 }
 
 func TestWriteLockedOrderHistorySynced(t *testing.T) {
-	// Verify the on-disk layout produced by writeLocked: snapshot+diff+log
-	// must all exist and log content_hash must match the file's hash.
+	// Verify the on-disk layout produced by writeLocked: snapshot, diff, and
+	// history log must all exist for a committed revision.
 	dir := t.TempDir()
 	svc, _ := Open(dir)
 	init := Initialization{Identity: "order check", Relationship: "r", Redline: "x", User: "u", World: "w"}

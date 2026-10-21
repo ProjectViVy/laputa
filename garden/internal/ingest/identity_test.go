@@ -2,9 +2,7 @@ package ingest
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
-	"fmt"
 	"path/filepath"
 	"testing"
 )
@@ -17,8 +15,7 @@ func TestGetByIdentityPersistsAcrossRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := "durable identity lookup"
-	sum := sha256.Sum256([]byte(content))
-	accepted, err := svc.Submit(ctx, SubmitRequest{SessionID: "session-a", EventID: "event-a", Phase: "session_end", Content: content, ContentHash: fmt.Sprintf("sha256:%x", sum)})
+	accepted, err := svc.Submit(ctx, SubmitRequest{SessionID: "session-a", EventID: "event-a", Phase: "session_end", Content: content})
 	if err != nil {
 		svc.Close()
 		t.Fatal(err)
@@ -48,8 +45,7 @@ func TestGetByIdentityRejectsMismatchedIdentity(t *testing.T) {
 	}
 	defer svc.Close()
 	content := "private event"
-	sum := sha256.Sum256([]byte(content))
-	accepted, err := svc.Submit(ctx, SubmitRequest{SessionID: "session-a", EventID: "event-a", Phase: "precompact", Content: content, ContentHash: fmt.Sprintf("sha256:%x", sum)})
+	accepted, err := svc.Submit(ctx, SubmitRequest{SessionID: "session-a", EventID: "event-a", Phase: "precompact", Content: content})
 	if err != nil {
 		t.Fatal(err)
 	}
