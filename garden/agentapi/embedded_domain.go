@@ -437,6 +437,9 @@ func (c *Client) BindEvolutionSource(scope evolution.Scope, destinationID string
 			if err != nil {
 				return 0, err
 			}
+			if !doc.Exists || strings.TrimSpace(doc.Content) == "" {
+				return 0, nil
+			}
 			return doc.Revision, nil
 		},
 	}, nil

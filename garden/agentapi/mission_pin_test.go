@@ -76,6 +76,58 @@ func TestOwnedMissionPinRejectsZeroAndAssignedDrift(t *testing.T) {
 	}
 }
 
+func TestClearedMissionRevisionIsUnassignedAcrossBoundPorts(t *testing.T) {
+	ctx := context.Background()
+	cfg := userEmbeddedConfig(t)
+	initAuthority(t, cfg)
+	scope := evolution.Scope{SubjectID: cfg.ProfileID, Kind: evolution.ScopePersonal}
+	cfg.BackendID, cfg.DestinationID = "fake", "fake-dest"
+	cfg.Backends = map[string]memory.Backend{memory.EncodeScope(scope): memorytest.NewFakeBackend(memorytest.NewFakeStore(), scope, cfg.DestinationID)}
+	client, err := Open(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	human, err := client.BindHumanSession("s1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := human.SavePersona(ctx, persona.KindMission, "initial mission", 0, "initial"); err != nil {
+		t.Fatal(err)
+	}
+	ports, err := client.BindEvolution(scope, cfg.DestinationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourcePorts, err := client.BindEvolutionSource(scope, cfg.DestinationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := human.SavePersona(ctx, persona.KindMission, "", 1, "clear mission"); err != nil {
+		t.Fatal(err)
+	}
+	for name, readRevision := range map[string]func(context.Context) (uint64, error){
+		"evolution": ports.MissionRevision,
+		"source":    sourcePorts.MissionRevision,
+	} {
+		t.Run(name, func(t *testing.T) {
+			revision, err := readRevision(ctx)
+			if err != nil || revision != 0 {
+				t.Fatalf("cleared Mission revision = %d, %v; want unassigned revision 0", revision, err)
+			}
+		})
+	}
+	pinned, err := ports.WithMissionRevision(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	patch := &evolution.WorkPatch{BaseRevision: 0, Changes: []evolution.WorkChange{{Kind: evolution.WorkChangeAdd, Field: evolution.FieldGoal, Body: "new goal"}}}
+	effect := mustEffect(t, "cleared-mission-pin", evolution.KindWorkPatch, patch, scope, cfg.DestinationID)
+	if receipt, err := pinned.Apply(ctx, effect); err != nil || receipt.Status != evolution.StatusApplied {
+		t.Fatalf("unassigned pin after clearing Mission: %+v %v", receipt, err)
+	}
+}
+
 type gatedMissionBackend struct {
 	memory.Backend
 	entered chan struct{}

@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -148,6 +149,9 @@ func (d *Domain) MissionRevision(ctx context.Context) (uint64, error) {
 	doc, err := d.deps.Persona.GetDocument(persona.KindMission)
 	if err != nil {
 		return 0, err
+	}
+	if !doc.Exists || strings.TrimSpace(doc.Content) == "" {
+		return 0, nil
 	}
 	return doc.Revision, nil
 }
