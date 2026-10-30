@@ -1,0 +1,190 @@
+{
+  "captured_at": "2026-10-31T03:18:25.906100+08:00",
+  "repository": "ProjectViVy/laputa",
+  "legacy_main_sha": "9acc999301d5d575da2cea902a1c6d213763f381",
+  "legacy_main_archive_branch": "archive/2026-10-31/main",
+  "legacy_main_tag": "legacy/pre-reset-20261031",
+  "source_design_sha": "48ec533a076fe868b21afacdfde2b598eea97c6d",
+  "legacy_branches": [
+    {
+      "name": "backup/issue-58-resume-20261018-27da7b9e",
+      "sha": "ccf0e253bde3b9297c2f287cfe1a809813e9aabc"
+    },
+    {
+      "name": "codex/d10-hash-free-contract",
+      "sha": "d731722cd230383142e4bc57add9d86a2933a66c"
+    },
+    {
+      "name": "docs/laputa-protocol-20261031",
+      "sha": "48ec533a076fe868b21afacdfde2b598eea97c6d"
+    },
+    {
+      "name": "docs/memory-policy-alignment-20261011",
+      "sha": "56e1d6c269d544ebf6e9b22f3c0c6e4a0b2f1b8f"
+    },
+    {
+      "name": "feat/diva-local-skill-evolution",
+      "sha": "b3a18e16a93c0b593e4a7f296b4e3ef24b040637"
+    },
+    {
+      "name": "feat/dn-closure-wave1",
+      "sha": "04b89324306099f913e8ab9d53195fb14fba3a16"
+    },
+    {
+      "name": "feat/frozen-session-discard",
+      "sha": "a7b83f281677953c5bf3e506270374a42f1e49b0"
+    },
+    {
+      "name": "feat/garden-standalone-v1",
+      "sha": "a68c173cb3fe9109e29ec315be14bdca9d6edd19"
+    },
+    {
+      "name": "feat/issue32-mission-pinned-effect",
+      "sha": "30fa208e3cded4af43f8cb226d80b225b1910854"
+    },
+    {
+      "name": "feat/issue83-laputa-closure",
+      "sha": "0d787277f521dee0d88d1beb522c34681e3ba57e"
+    },
+    {
+      "name": "feat/issue-58-recap",
+      "sha": "8c5328daa7a4e9cdd089d78858de087a36fb0843"
+    },
+    {
+      "name": "feat/issue-58-recovery-native-20261016",
+      "sha": "07bb342e2dac853220d470a2d7f4f972dbafae9d"
+    },
+    {
+      "name": "main",
+      "sha": "9acc999301d5d575da2cea902a1c6d213763f381"
+    },
+    {
+      "name": "test/diva-memory-loop-20261009",
+      "sha": "1c791ea20e553cecf588b12526c959028ffc9cb1"
+    }
+  ],
+  "archived_refs": [
+    {
+      "branch": "archive/2026-10-31/backup/issue-58-resume-20261018-27da7b9e",
+      "sha": "ccf0e253bde3b9297c2f287cfe1a809813e9aabc",
+      "kind": "legacy-branch",
+      "original": "backup/issue-58-resume-20261018-27da7b9e"
+    },
+    {
+      "branch": "archive/2026-10-31/codex/d10-hash-free-contract",
+      "sha": "d731722cd230383142e4bc57add9d86a2933a66c",
+      "kind": "legacy-branch",
+      "original": "codex/d10-hash-free-contract"
+    },
+    {
+      "branch": "archive/2026-10-31/docs/laputa-protocol-20261031",
+      "sha": "48ec533a076fe868b21afacdfde2b598eea97c6d",
+      "kind": "legacy-branch",
+      "original": "docs/laputa-protocol-20261031"
+    },
+    {
+      "branch": "archive/2026-10-31/docs/memory-policy-alignment-20261011",
+      "sha": "56e1d6c269d544ebf6e9b22f3c0c6e4a0b2f1b8f",
+      "kind": "legacy-branch",
+      "original": "docs/memory-policy-alignment-20261011"
+    },
+    {
+      "branch": "archive/2026-10-31/feat/diva-local-skill-evolution",
+      "sha": "b3a18e16a93c0b593e4a7f296b4e3ef24b040637",
+      "kind": "legacy-branch",
+      "original": "feat/diva-local-skill-evolution"
+    },
+    {
+      "branch": "archive/2026-10-31/feat/dn-closure-wave1",
+      "sha": "04b89324306099f913e8ab9d53195fb14fba3a16",
+      "kind": "legacy-branch",
+      "original": "feat/dn-closure-wave1"
+    },
+    {
+      "branch": "archive/2026-10-31/feat/frozen-session-discard",
+      "sha": "a7b83f281677953c5bf3e506270374a42f1e49b0",
+      "kind": "legacy-branch",
+      "original": "feat/frozen-session-discard"
+    },
+    {
+      "branch": "archive/2026-10-31/feat/garden-standalone-v1",
+      "sha": "a68c173cb3fe9109e29ec315be14bdca9d6edd19",
+      "kind": "legacy-branch",
+      "original": "feat/garden-standalone-v1"
+    },
+    {
+      "branch": "archive/2026-10-31/feat/issue32-mission-pinned-effect",
+      "sha": "30fa208e3cded4af43f8cb226d80b225b1910854",
+      "kind": "legacy-branch",
+      "original": "feat/issue32-mission-pinned-effect"
+    },
+    {
+      "branch": "archive/2026-10-31/feat/issue83-laputa-closure",
+      "sha": "0d787277f521dee0d88d1beb522c34681e3ba57e",
+      "kind": "legacy-branch",
+      "original": "feat/issue83-laputa-closure"
+    },
+    {
+      "branch": "archive/2026-10-31/feat/issue-58-recap",
+      "sha": "8c5328daa7a4e9cdd089d78858de087a36fb0843",
+      "kind": "legacy-branch",
+      "original": "feat/issue-58-recap"
+    },
+    {
+      "branch": "archive/2026-10-31/feat/issue-58-recovery-native-20261016",
+      "sha": "07bb342e2dac853220d470a2d7f4f972dbafae9d",
+      "kind": "legacy-branch",
+      "original": "feat/issue-58-recovery-native-20261016"
+    },
+    {
+      "branch": "archive/2026-10-31/test/diva-memory-loop-20261009",
+      "sha": "1c791ea20e553cecf588b12526c959028ffc9cb1",
+      "kind": "legacy-branch",
+      "original": "test/diva-memory-loop-20261009"
+    },
+    {
+      "branch": "archive/2026-10-31/pr-12",
+      "sha": "23977d934306ca4929b8874b0daaeba1cde237d9",
+      "kind": "legacy-pr-head",
+      "pr": 12
+    },
+    {
+      "branch": "archive/2026-10-31/pr-11",
+      "sha": "0d787277f521dee0d88d1beb522c34681e3ba57e",
+      "kind": "legacy-pr-head",
+      "pr": 11
+    },
+    {
+      "branch": "archive/2026-10-31/pr-10",
+      "sha": "ccf0e253bde3b9297c2f287cfe1a809813e9aabc",
+      "kind": "legacy-pr-head",
+      "pr": 10
+    },
+    {
+      "branch": "archive/2026-10-31/pr-9",
+      "sha": "b3a18e16a93c0b593e4a7f296b4e3ef24b040637",
+      "kind": "legacy-pr-head",
+      "pr": 9
+    }
+  ],
+  "open_issue_numbers": [
+    1,
+    7,
+    8,
+    14
+  ],
+  "open_pr_numbers": [
+    9,
+    10,
+    11,
+    12
+  ],
+  "local_bundle": {
+    "filename": "laputa-pre-reset-20261031.bundle",
+    "bytes": 86120717,
+    "sha256": "895d2abe778683b999d04dc32368e185242ab642c259a6946f2849e8eabcb9b8"
+  },
+  "original_non_main_branches": "Retained; no source branches deleted",
+  "implementation_authorized": false,
+  "archive_ref_verification": "17 non-main/PR refs and legacy tag verified; legacy-main rename pending cutover"
+}

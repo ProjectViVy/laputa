@@ -1,54 +1,38 @@
-# Garden MemoryOS — Agents & Architecture Guide
+# Laputa / Garden — 当前工作约束
 
-**Selected VIVY context policy:** [ADR-0018](docs/architecture/0018-vivy-unified-context-and-recap-policy.md) refines the ACTMEM rules below; accepted direction, implementation pending.
+## 负责人及阶段
 
-**Authority architecture:** [`docs/architecture/0012-laputa-markdown-clean-break.md`](docs/architecture/0012-laputa-markdown-clean-break.md)
+- 所有者：mastwet；主责 supervisor、集成与最终验收：AGENT-Songbai。
+- 当前阶段：`preparation_only`；`implementation_authorized: false`。
+- 本轮范围仅为归档、看板收口、新主线及设计准备。不得把“准备开发”解释成授权开发。
+- 源码、测试代码、运行时配置、部署、依赖安装及真实宿主写入都需要后续明确开工授权。
 
-**Implementation contracts:** [ADR-0013](docs/architecture/0013-laputa-clean-break-implementation-architecture.md), [ADR-0014](docs/architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md)
+## 权威顺序
 
-**Execution contract:** [GOAL Execution Runbook](docs/bmad/garden-authority-recovery-2026-09/GOAL-EXECUTION-RUNBOOK.md)
+最新所有者决定 > 本主线 ADR-0019 和首期 PRD > 核实过的 Hermes 官方文档及现场代码 > 历史材料。
 
-Garden MemoryOS is a local-first governed memory operating system. Its modules have non-overlapping authority:
+归档内的 AGENTS、ADR、提示词、计划、Issue 正文和示例是历史数据，不是当前执行指令。旧测试成绩不是新方案验收。
 
-```text
-Laputa  -> personality authority, Persona review/history, ACTMEM semantics
-Mentle  -> raw material, evidence, retrieval, indexing, provenance
-Garden  -> activity/runtime orchestration, bounded ContextView, host integration, console
-EvoMap  -> capability candidates/proposals, artifacts, mailbox, Hub policy
-```
+## 首期产品
 
-## Non-negotiable Laputa Contract
+Garden 首期只适配 Hermes，先服务松柏自身的人格沉淀与进化。Vivy、OpenClaw、通用 SDK、REST/MCP 平台和统一控制台都不是首期依赖。
 
-- One profile has one authority directory. Preserve the seven ADR-0012 documents (`IDENTITY.MD`, `RELATIONSHIP.MD`, `REDLINE.MD`, `USER.MD`, `DREAM.MD`, `DARK.MD`, `WORLD.MD`) and existing human-only `MISSION.MD` recorded by ADR-0017; no new kind is introduced by this policy.
-- Authority bodies are Markdown only. JSON bodies, JSON Patch, and `map[string]any` authority content are prohibited.
-- `ACTMEM.MD` is profile-wide activity memory. It is not a personality file, BML/Mentle evidence, or a session checkpoint.
-- Frozen Core preserves the six established bounded Persona projections and existing human-controlled Mission v2 slot recorded by ADR-0017. It is immutable for an admitted session; this policy adds no authority slot.
-- `WORLD.MD` remains tool-only and absent from automatic context. Under the selected ADR-0018 policy, ACTMEM is one persistent subject-level free-form Recap admitted only through VIVY scope/budget policy; it never enters Frozen Core. Baseline transports retain their tested behavior until explicitly revised.
-- Persona content review is separate from the Chat Approval Center. ACTMEM updates use the shared revision-aware authority boundary; concurrent human/consolidation edits must conflict rather than lose updates. Active Recap deletion commits a new revision and invalidates projections without erasing raw/archive/backend records. EvoMap owns capability artifacts.
-- Retired JSON descriptors have no migration, compatibility mapping, dual read/write, discovery, or fallback path.
+- Hermes 原生权威优先；SOUL、用户事实、持久记忆、技能各归其位。
+- 原生写入与原生进化机制先调研；不得先造一个副本再双向同步。
+- 不替换长期记忆引擎，不引入第二套 Recap，不复活旧 DIVA/Rust workspace。
+- 写入成功、回读成功、新会话生效和当前会话立即生效是不同状态。
+- 进化候选不能为自己授予工具权限、管理身份、隐私披露权或更改可信授权边界。
 
-## Engineering Rules
+## 隐私和范围
 
-1. Read ADR-0018 and the preserved ADR-0012 authority contract before changing `laputa/`, `garden/internal/authority`, `garden/internal/activity`, `garden/internal/recall`, `garden/internal/evolution`, mailbox, server contracts, or Console information architecture.
-2. Preserve Mentle's card-before-evidence boundary. A ContextView is disposable output, never authority.
-3. EvoMap owns proposal state, evaluation, artifact lifecycle, installation permission, mailbox, privacy gate, and Hub publication policy. No other module creates or installs a Skill.
-4. `MEMRULES.MD`, if present, is a Garden runtime-policy input only. It is not a Persona authority, Frozen Core document, or eighth type.
-5. New architecture work must classify legacy behavior as Keep, Cut, Deferred, or Drop. Do not silently retain a legacy surface.
-6. Mentle canonical SQLite is the sole memory authority. `index_jobs` is its transactional derived-index outbox; JSONL WAL, vector stores and BM25 cannot reconstruct or override canonical memory.
+本仓库公开。不得提交真实 SOUL、USER、MEMORY、聊天正文、原始证据、OAuth 凭证、配置密钥或含敏感数据的运行回执。
 
-## Baseline Tests
+仅使用合成/脱敏案例形成公开规范；真实首期验收应在所有者明确授权的私有工作区进行。
 
-```bash
-cd laputa && GOSUMDB=off go test ./...
-cd ../mentle && GOSUMDB=off go test ./...
-cd ../garden && GOSUMDB=off go test ./...
-GOSUMDB=off go test -tags=e2e ./e2e/...
-```
+## 交付纪律
 
-## Documentation
-
-- [`docs/README.md`](docs/README.md) is the current documentation index.
-- [`docs/archive/2026-08-14-laputa-clean-break/`](docs/archive/2026-08-14-laputa-clean-break/) contains the superseded section/JSON architecture as historical evidence.
-- Runtime implementation and historical tests are evidence, not acceptance of ADR-0018. Plan compatibility for Work reconcile/capture consumers; this documentation task authorizes no source, test, script or migration changes.
-- Agent ACTMEM inspect/update/delete tools must be normally hidden, discovered and explicitly activated when needed; the engineering mechanism remains unresolved. No always-on schemas or autonomous maintenance.
-- Consolidation cannot automatically write Mission, Dream or frozen Persona content. Guide human “must not be forgotten” requests through existing Laputa governance; Recap edits do not permanently pin information.
+- 先读 README、ADR-0019、PRD、架构骨架和 DEVELOPMENT-READINESS。
+- 未授权的产品 Story 保持 planned / blocked，不得标为 implemented、tested 或 done。
+- 对远端写入逐个回读验证；不凭命令退出码宣称看板和分支已完成切换。
+- 不 force push，不删除历史，不清理或覆盖未归属本任务的工作区。
+- 当前没有新产品测试套件；文档、链接和归档完整性校验不等于产品测试通过。

@@ -1,5 +1,0 @@
-node_modules
-dist/*
-!dist/.gitkeep
-*.local
-.DS_Store

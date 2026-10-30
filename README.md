@@ -1,87 +1,34 @@
-# LAPUTA
+# Laputa · Garden
 
-[中文文档](README_CN.md)
+> 新主线：开发准备阶段。没有交付新运行时、适配器或自动进化服务。
 
-Garden MemoryOS is a governed operating system for continuous agents. It connects material evidence, bounded working context, personality authority, and reusable capability without treating any one of them as another.
+**Laputa** 是人格与记忆治理的规范与协议；**Garden** 是把证据转化为可验证更新的治理闭环。
 
-## Go modules
+**首期宿主只有 Hermes，首个真实对象是 AGENT-Songbai（松柏）自身的人格沉淀与进化系统。** 不先做 Vivy 适配，不以跨宿主框架或统一 Web 控制台作为首期前提。
 
-The repository owns three Go modules:
+## 当前边界
 
-| Directory | Import path |
-| --- | --- |
-| `garden/` | `github.com/ProjectViVy/laputa/garden` |
-| `mentle/` | `github.com/ProjectViVy/laputa/mentle` |
-| `laputa/` | `github.com/ProjectViVy/laputa/laputa` |
+- 复用 Hermes 原生人格、记忆、技能及上下文机制，不制造第二套权威文件或长期记忆引擎。
+- 人格沉淀不是把全部聊天写入 SOUL；人格、用户事实、长期记忆和程序性技能必须分流。
+- 进化闭环必须区分：证据收集、候选生成、按宿主策略应用、持久化回读、运行时生效验证及结果留存。
+- 当前只允许仓库整理、归档和设计准备；产品实现、测试代码、运行时配置、真实人格/记忆修改与定时任务尚未授权。
+- 项目所有者：mastwet；主责维护与验收：AGENT-Songbai。产品方向和高风险边界仍由所有者决定。
 
-Clone this repository once to obtain all three modules. Garden's local
-replacements resolve inside this checkout. Laputa pins INOFY to a published
-revision; no sibling `INOFY/` directory is needed. Build `garden/console` before
-building or testing the standalone Garden application because it embeds the
-console's `dist/` output.
+## 从这里开始
 
-## Current Architecture
+1. [当前决策 ADR-0019](docs/architecture/0019-hermes-first-persona-evolution.md)
+2. [首期 PRD](docs/planning/PRD.md)
+3. [架构骨架](docs/planning/ARCHITECTURE-SPINE.md)
+4. [开发准备、路线与准入](docs/planning/DEVELOPMENT-READINESS.md)
+5. [归档入口与恢复](docs/archive/README.md)
+6. [文档索引](docs/README.md)
 
-[ADR-0012: Laputa Markdown Clean Break](docs/architecture/0012-laputa-markdown-clean-break.md) is the preserved authority contract. [ADR-0018](docs/architecture/0018-vivy-unified-context-and-recap-policy.md) records the current selected VIVY context direction; implementation is pending.
+## 旧架构
 
-[ADR-0013](docs/architecture/0013-laputa-clean-break-implementation-architecture.md) defines the clean-break implementation order. [ADR-0014](docs/architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md) makes canonical SQLite the sole Mentle memory authority and treats vector/BM25 indexes as rebuildable projections.
+原 Go `laputa/`、`mentle/`、`garden/`、Console、旧 ADR、执行计划及其测试记录均退出新主线，在 Git 归档中完整保留。
 
-```text
-Laputa  = governed Markdown personality authorities + Persona review/history + ACTMEM semantics
-Mentle  = raw material, evidence, retrieval, index, provenance
-Garden  = activity/runtime orchestration, bounded ContextView, host integration, console
-EvoMap  = capability candidates, proposal review, artifact lifecycle, mailbox, Hub policy
-```
+- 旧 main 固定提交：`9acc999301d5d575da2cea902a1c6d213763f381`
+- 固定标签：`legacy/pre-reset-20261031`
+- 归档命名空间：`archive/2026-10-31/`
 
-Laputa authority is one profile, one directory, and the original seven uppercase Markdown files:
-
-```text
-IDENTITY.MD      RELATIONSHIP.MD  REDLINE.MD  USER.MD
-DREAM.MD         DARK.MD          WORLD.MD
-```
-
-The existing cognitive implementation additionally supports human-only `MISSION.MD` and its versioned Mission slot (ADR-0017). This policy adds no new Persona kind or Frozen Core slot.
-
-`ACTMEM.MD` remains separate from personality authority and backend evidence. The selected VIVY policy uses one persistent, free-form AI-organized Recap per subject, shared across its sessions. LIFE is the first default-enabled pilot; coding is excluded from phase 1.
-
-## Context Discipline
-
-| Lane | Content |
-| --- | --- |
-| Frozen Core | Existing Mission v2 slot and bounded session-frozen projections of `IDENTITY`, `RELATIONSHIP`, `REDLINE`, `USER`, `DREAM`, and `DARK` |
-| Dynamic loading | Baseline empty; selected VIVY policy may admit a bounded Recap through authorized scope/budget policy |
-| Tool access | Full `WORLD.MD`, full `ACTMEM.MD`, full authority documents, Mentle evidence, reports, and history |
-
-`WORLD.MD` remains tool-only. ACTMEM stays outside Frozen Core and is admitted only by the selected policy. Commit revision-aware Recap consolidation before retiring raw CONTEXT; retained raw evidence is preserved. A dedicated UI must allow full human inspection/edit/delete; clearing active Recap invalidates projections without cascade deletion. Agent inspect/update/delete tools require deferred discovery and explicit activation; the exact mechanism remains unresolved.
-
-## EvoMap
-
-EvoMap is retained and owns all capability-artifact lifecycle: evolution candidates, proposals, evaluation, versioning, installation permission, mailbox, privacy gate, and Hub publication policy. Laputa does not produce, install, or publish Skills.
-
-## Clean Break
-
-The following are retired and must not appear in new runtime design: JSON Persona descriptors, `.laputa/sections/*.json` authority state, `Commitment`, `Preferences`, `MemoryMD`, `MEMORY.MD`, `memory_md`, JSON Patch, generic Persona governance mutation, automatic WORLD projection, and ACTMEM projection outside the selected policy.
-
-There is no migration, dual read/write, descriptor mapping, or fallback to retired JSON authority data.
-
-## Build and Test
-
-```bash
-cd laputa && GOSUMDB=off go test ./...
-cd ../mentle && GOSUMDB=off go test ./...
-cd ../garden && GOSUMDB=off go test ./...
-GOSUMDB=off go test -tags=e2e ./e2e/...
-```
-
-## Documentation
-
-- [Selected VIVY Context Policy: ADR-0018](docs/architecture/0018-vivy-unified-context-and-recap-policy.md)
-- [Alignment and Evidence Inventory](docs/dev/memory-policy-alignment-2026-10-11.md)
-- [Preserved Authority Architecture: ADR-0012](docs/architecture/0012-laputa-markdown-clean-break.md)
-- [Implementation Architecture: ADR-0013](docs/architecture/0013-laputa-clean-break-implementation-architecture.md)
-- [Mentle Recovery Authority: ADR-0014](docs/architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md)
-- [Authority & Recovery GOAL Runbook](docs/bmad/garden-authority-recovery-2026-09/GOAL-EXECUTION-RUNBOOK.md)
-- [Documentation Index](docs/README.md)
-- [EvoMap Mailbox](docs/architecture/0007-evomap-mailbox.md)
-- [EvoMap Hub Transport](docs/architecture/0010-evomap-hub-transport-provider.md)
-- [Archived Previous Laputa Contract](docs/archive/2026-08-14-laputa-clean-break/)
+历史代码和旧测试通过记录不证明新架构已经实现。原有已部署服务、其他仓库和其他机器的工作区不在此次整理范围内。
