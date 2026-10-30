@@ -2,6 +2,14 @@
 
 状态：计划稿 / CONCERNS；产品实现未授权。源码依据 [HERMES-SOURCE-AUDIT.md](HERMES-SOURCE-AUDIT.md)，内部合同见 [CONTRACTS.md](CONTRACTS.md)。本文是唯一详细架构，不另起通用框架。
 
+## 旧Go闭环是优先参考，不从零重造
+
+所有者补充：最近一次Go版Laputa应已具备完整闭环。归档表示退出新主线，不表示其闭环实现无效或应被丢弃。
+
+已定位旧main `9acc999301d5d575da2cea902a1c6d213763f381`：`laputa/evolution/inofy/definition.go`、`laputa/evolution/effects.go`，以及 `garden/evolution/domain.go` 的 Collect / Apply / Lookup、精确intent重放核验和持久回执；相关未合并PR head也已归档。当前只核实了这些实现入口存在，没有重新执行旧版端到端验收。
+
+进入实施前必须对旧main与最后候选分支做“旧Go实现/验收证据 → 保留语义 → Hermes原生能力 → 最小缺口”的映射。优先复用已验证的闭环步骤、出处/作用域、结果回执、幂等/对账与故障验收；先查是否已有方案，再决定是否新增。不得因为换成Python插件而把同一套闭环从零再设计，也不直接移植旧Go服务、存储或审核策略。旧闭环已经能工作不等于Hermes的人格写入/加载适配已经验收。
+
 ## 选择
 
 **独立分发的薄原生Python插件 + 操作技能 + 显式本地命令。** 不修改当前Hermes core，不注册memory/context provider，不建立Web/MCP/REST；初始候选切片不提供模型可调用apply工具，不自动订阅hook。
