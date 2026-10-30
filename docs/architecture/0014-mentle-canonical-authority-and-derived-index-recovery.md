@@ -1,5 +1,10 @@
 # ADR-0014: Mentle Canonical Authority and Derived-Index Recovery
 
+> **Scope refinement, 2026-10-31:** [ADR-0016](0016-laputa-protocol-and-native-agent-governance.md)
+> permits host-specific long-term engines. This ADR still governs canonical
+> writes/recovery inside Mentle; it does not require every Laputa consumer to
+> adopt Mentle SQLite or copy another backend into it.
+
 **Status:** accepted
 **Date:** 2026-09-03
 **Decision owner:** project owner

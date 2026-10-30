@@ -2,7 +2,9 @@
 
 # docs/architecture — Current Architecture Decisions
 
-**Current source of truth:** [ADR-0012: Laputa Markdown Clean Break](./0012-laputa-markdown-clean-break.md)
+**Current direction:** [ADR-0016: Laputa Protocol and Native Agent Governance](./0016-laputa-protocol-and-native-agent-governance.md)
+
+**Existing Go profile:** [ADR-0012: Laputa Markdown Clean Break](./0012-laputa-markdown-clean-break.md)
 
 **Implementation architecture:** [ADR-0013: Laputa Clean-Break Implementation Architecture](./0013-laputa-clean-break-implementation-architecture.md)
 
@@ -10,12 +12,16 @@
 
 ## Use
 
-Read ADR-0012 before implementing any Laputa, Persona, ACTMEM, ContextView, Evolution, or EvoMap change. It establishes the authority-file contract, context lanes, clean-break deletion rules, and module boundaries.
+Read ADR-0016 first for new architecture. Read ADR-0012 before changing the
+existing Go profile; it establishes that profile's authority files, context lanes,
+deletion rules and module boundaries. Native adapters do not automatically
+inherit its file layout, Recap engine or review policy.
 
 ## Active ADRs
 
 | ADR | Status | Scope |
 | --- | --- | --- |
+| 0016 | Accepted direction; implementation pending | Laputa specification/protocol, host-owned persona/Recap, replaceable long-term engine, Garden closed-loop native governance, optional later console |
 | 0012 | Accepted | Garden-Laputa contract: seven Markdown authority files, `ACTMEM.MD`, tool-only WORLD/ACTMEM, EvoMap ownership of capability artifacts, deletion-first implementation |
 | 0013 | Accepted design | Replacement packages, deletion order, HTTP/Console boundary, EvoMap candidate input, and first vertical-slice acceptance matrix |
 | 0014 | Accepted | Canonical SQLite memory authority, transactional index outbox, disposable indexes, safe staged rebuild and Facade-only mutation |
@@ -32,7 +38,9 @@ ADRs 0001, 0002, 0003, 0004, 0005, and 0008 are preserved at [`../archive/2026-0
 
 ## Documentation Rule
 
-A new active ADR must not reintroduce any of the following without explicitly superseding ADR-0012:
+A new active ADR must not reintroduce these retired Go-profile behaviors without
+explicitly superseding ADR-0012. Native host files under ADR-0016 are not legacy
+Go fallbacks; their write policy is defined by the owning host:
 
 - JSON authority bodies, JSON Patch, or `.laputa/sections/*.json` Persona state.
 - `Commitment`, `Preferences`, `MemoryMD`, `MEMORY.MD`, `memory_md`, or `LONGMEM.MD` as target authority concepts.

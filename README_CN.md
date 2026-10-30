@@ -2,6 +2,14 @@
 
 [English](README.md)
 
+> **Direction update, 2026-10-31:** [ADR-0016](docs/architecture/0016-laputa-protocol-and-native-agent-governance.md)
+> now governs the new architecture: Laputa is a persona/memory-governance
+> specification/protocol; Garden supplies a reusable closed-loop workflow adapted
+> to native agent files, memory/Recap engines and evolution. A complete Garden
+> runtime is not mandatory. Implementation is pending. The Chinese description
+> below is an older implementation overview; use ADR-0016 and the English README
+> for current direction and `docs/README.md` for current document links.
+
 面向持续运行 AI Agent 的治理型记忆操作系统。LAPUTA 将个人工作材料连接到可召回的上下文和可复用的能力——同时不把存储、检索或演化输出本身当作权威。
 
 ## 核心理念
@@ -109,9 +117,9 @@ docs/      架构决策、迁移计划、历史归档
 
 ## 文档
 
-- [架构计划 (vNext)](docs/architecture/0001-memoryos-vnext-architecture.md)
-- [ADR-0002：认知分区决策](docs/architecture/0002-laputa-cognitive-partition-decision.md)
-- [ADR-0003：运维控制台设计](docs/architecture/0003-operations-console-design.md)
+- [Current direction: ADR-0016](docs/architecture/0016-laputa-protocol-and-native-agent-governance.md)
+- [Existing Go profile: ADR-0012](docs/architecture/0012-laputa-markdown-clean-break.md)
+- [Existing implementation architecture: ADR-0013](docs/architecture/0013-laputa-clean-break-implementation-architecture.md)
 - [文档索引](docs/README.md)
 - [历史归档](docs/archive/2026-08-01-pre-memoryos-redesign/)
 

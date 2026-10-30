@@ -1,5 +1,17 @@
 # Garden MemoryOS Status
 
+## Owner direction checkpoint, 2026-10-31
+
+[ADR-0016](docs/architecture/0016-laputa-protocol-and-native-agent-governance.md)
+now governs new design: Laputa becomes a specification/protocol, native agents
+retain persona files and memory/Recap engines, and Garden provides a reusable
+collection-to-effective-update workflow. Exact protocol, adapters, workflow
+packaging and optional management console remain design work, not delivered
+features. Earlier service/SDK plans must be read with this refinement.
+
+The completed items and dates below describe the existing Go baseline. They are
+not acceptance evidence or a ready implementation plan for the new direction.
+
 > **Last updated:** 2026-09-03
 > **Current contract:** [ADR-0012: Laputa Markdown Clean Break](docs/architecture/0012-laputa-markdown-clean-break.md)
 > **Implementation architecture:** [ADR-0013: Laputa Clean-Break Implementation Architecture](docs/architecture/0013-laputa-clean-break-implementation-architecture.md)

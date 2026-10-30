@@ -1,11 +1,17 @@
 # Garden Documentation
 
-> **Current architecture:** [ADR-0012: Laputa Markdown Clean Break](./architecture/0012-laputa-markdown-clean-break.md)
-> **Status:** architecture and GOAL execution contract accepted; implementation readiness = PASS; Waves 0–3 complete
+> **Current direction:** [ADR-0016: Laputa Protocol and Native Agent Governance](./architecture/0016-laputa-protocol-and-native-agent-governance.md)
+> **Status:** direction accepted; protocol/native adapters/workflow implementation pending.
+> **Existing Go baseline:** Authority & Recovery Waves 0–3 complete; those gates do not verify ADR-0016.
 
 This directory is the canonical entry point for Garden MemoryOS documentation.
 
 ## Read First
+
+Read [ADR-0016](./architecture/0016-laputa-protocol-and-native-agent-governance.md)
+first for new design. Earlier files below describe the existing Go/service
+profile and its recorded delivery; their universal adoption assumptions are
+refined by ADR-0016.
 
 1. [ADR-0012: Laputa Markdown Clean Break](./architecture/0012-laputa-markdown-clean-break.md) — authority files, ACTMEM, context lanes, EvoMap boundary, deletions, and implementation gate.
 2. [ADR-0013: Laputa Clean-Break Implementation Architecture](./architecture/0013-laputa-clean-break-implementation-architecture.md) — replacement packages, deletion order, API boundary, Console workspaces, and acceptance matrix.
@@ -23,7 +29,8 @@ This directory is the canonical entry point for Garden MemoryOS documentation.
 
 | Document | Purpose | Status |
 | --- | --- | --- |
-| [ADR-0012: Laputa Markdown Clean Break](./architecture/0012-laputa-markdown-clean-break.md) | Current Garden-Laputa product contract: seven Markdown authority files, `ACTMEM.MD`, tool-only WORLD/ACTMEM, EvoMap capability ownership, clean-break deletion rules | accepted |
+| [ADR-0016: Laputa Protocol and Native Agent Governance](./architecture/0016-laputa-protocol-and-native-agent-governance.md) | Portable governance semantics, host-native persona/Recap, replaceable long-term engine and Garden's closed-loop workflow | accepted direction; implementation pending |
+| [ADR-0012: Laputa Markdown Clean Break](./architecture/0012-laputa-markdown-clean-break.md) | Existing Go profile: seven Markdown authority files, `ACTMEM.MD`, tool-only WORLD/ACTMEM, EvoMap ownership and deletion rules | accepted; scope refined by 0016 |
 | [ADR-0013: Laputa Clean-Break Implementation Architecture](./architecture/0013-laputa-clean-break-implementation-architecture.md) | Accepted implementation design: Markdown store, Persona review/history, ACTMEM tools, Frozen Core, deletion order, HTTP and Console replacement | accepted design |
 | [ADR-0014: Mentle Canonical Authority](./architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md) | Canonical SQLite authority, transactional index outbox, rebuildable derived indexes and non-destructive repair | accepted |
 | [ADR-0015: Laputa External Agent Contract](./architecture/0015-laputa-external-agent-contract.md) | `laputa-agent/1` access-plane: canonical REST, thin MCP, typed SDK and native lifecycle adapters | accepted; implementation partial in separate worktree |
@@ -45,4 +52,8 @@ This directory is the canonical entry point for Garden MemoryOS documentation.
 
 ## Rule
 
-No active document may introduce or recommend a JSON personality descriptor, `01-05` authority-section model, `MEMORY.MD`/`memory_md`, automatic WORLD or ACTMEM ContextView projection, a generic Persona governance workflow, or any legacy fallback. Those concepts exist only in the archives.
+Do not revive retired Go JSON descriptors, numbered authority sections,
+`memory_md`, automatic Go WORLD/ACTMEM projection or legacy fallback. ADR-0016's
+native host file layout, write policy and Recap engine belong to that host/profile;
+they are not competing Go authority or compatibility paths. New architecture
+does not inherit a mandatory seven-file layout, ACTMEM engine or Garden REST server.

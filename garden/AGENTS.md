@@ -1,6 +1,15 @@
-# Garden — HTTP Gateway and Runtime Orchestration
+# Garden — Governance Workflow and Existing HTTP Application
 
-**Current contract:** [`../docs/architecture/0012-laputa-markdown-clean-break.md`](../docs/architecture/0012-laputa-markdown-clean-break.md)
+**Current direction:** [ADR-0016](../docs/architecture/0016-laputa-protocol-and-native-agent-governance.md)
+
+Garden's new role is a reusable governance workflow: collect corpus, invoke a
+selected agent/native evolution path, apply updates to the host's actual
+authority, verify effective changes and retain outcomes. Reuse native persona
+files, Recap and memory engines. A unified Web console and management of Vivy's
+internal Laputa remain later discussion. Do not treat this direction as a
+delivered workflow or require Garden for every Laputa consumer.
+
+**Existing Go contract:** [`../docs/architecture/0012-laputa-markdown-clean-break.md`](../docs/architecture/0012-laputa-markdown-clean-break.md)
 
 Garden is the local HTTP and runtime orchestration module. It delivers bounded ContextViews, accepts activity and raw-first ingestion, exposes Mentle evidence, aggregates console state, and hosts EvoMap integration. It does not own personality authority or capability-artifact authority.
 

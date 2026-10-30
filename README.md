@@ -2,11 +2,36 @@
 
 [中文文档](README_CN.md)
 
-Garden MemoryOS is a governed operating system for continuous agents. It connects material evidence, bounded working context, personality authority, and reusable capability without treating any one of them as another.
+Laputa is a specification/protocol for persona and memory governance, with small
+implementations adapted to each agent. Garden supplies a reusable governance
+workflow and optional management application. The owner's 2026-10-31 direction
+is recorded in [ADR-0016](docs/architecture/0016-laputa-protocol-and-native-agent-governance.md);
+the new adapters and workflow are not implemented by this documentation update.
 
-## Current Architecture
+## Current Direction
 
-[ADR-0012: Laputa Markdown Clean Break](docs/architecture/0012-laputa-markdown-clean-break.md) is the current contract.
+| Part | Responsibility |
+| --- | --- |
+| Laputa | Persona ownership, read/update and context-delivery semantics; integration boundaries for memory and Recap |
+| Host agent | Its authoritative persona files/APIs, working-context engine, execution and native evolution |
+| Long-term backend | Canonical memory and retrieval; replaceable without another persona authority |
+| Garden | Collect corpus, invoke an agent, apply governed updates, verify effective results and retain outcomes |
+
+Prefer updating the agent's existing authority over creating parallel Laputa
+files. Hermes and OpenClaw are intended adapter examples, not verified
+integrations. The new Vivy prefers a small Rust persona implementation, retains
+full MemPalace for now and owns Recap in its harness. A later backend such as
+Mem0 remains a design possibility. Garden need not run for Vivy AutoDream to work.
+
+A unified Web console and Garden management of Vivy's internal Laputa remain
+later discussion. Protocol messages, adapters and workflow packaging need
+detailed design; no universal Go runtime, file layout or REST deployment is required.
+
+## Existing Go Implementation
+
+The following describes the existing Garden MemoryOS profile, not requirements
+for all Laputa consumers. [ADR-0012: Laputa Markdown Clean Break](docs/architecture/0012-laputa-markdown-clean-break.md)
+remains its contract, scoped by ADR-0016.
 
 [ADR-0013](docs/architecture/0013-laputa-clean-break-implementation-architecture.md) defines the clean-break implementation order. [ADR-0014](docs/architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md) makes canonical SQLite the sole Mentle memory authority and treats vector/BM25 indexes as rebuildable projections.
 
@@ -57,7 +82,8 @@ GOSUMDB=off go test -tags=e2e ./e2e/...
 
 ## Documentation
 
-- [Current Architecture: ADR-0012](docs/architecture/0012-laputa-markdown-clean-break.md)
+- [Current Direction: ADR-0016](docs/architecture/0016-laputa-protocol-and-native-agent-governance.md)
+- [Existing Go Profile: ADR-0012](docs/architecture/0012-laputa-markdown-clean-break.md)
 - [Implementation Architecture: ADR-0013](docs/architecture/0013-laputa-clean-break-implementation-architecture.md)
 - [Mentle Recovery Authority: ADR-0014](docs/architecture/0014-mentle-canonical-authority-and-derived-index-recovery.md)
 - [Authority & Recovery GOAL Runbook](docs/bmad/garden-authority-recovery-2026-09/GOAL-EXECUTION-RUNBOOK.md)

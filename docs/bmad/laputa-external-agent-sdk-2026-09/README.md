@@ -1,5 +1,12 @@
 # Laputa External Agent SDK
 
+> **Owner direction update, 2026-10-31:** [ADR-0016](../../architecture/0016-laputa-protocol-and-native-agent-governance.md)
+> refines the scope of this service-specific package. Its recorded authorization
+> and evidence do not make Garden REST, a typed Go SDK, the old Vivy MemoryPort,
+> seven Persona files or Garden ACTMEM mandatory for native hosts. Review those
+> assumptions before reusing this plan for the new architecture. Existing source
+> changes in the separate SDK worktree are preserved by this documentation update.
+
 BMAD project-sized planning package for the post-clean-break external Agent access plane.
 
 **Status:** Wave 0 complete; Wave 1 in progress (per `sprint-status.yaml`)  

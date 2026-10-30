@@ -1,8 +1,17 @@
-# Laputa — Markdown Authority Module
+# Laputa — Protocol Direction and Existing Markdown Module
 
-**Current contract:** [`../docs/architecture/0012-laputa-markdown-clean-break.md`](../docs/architecture/0012-laputa-markdown-clean-break.md)
+**Current direction:** [ADR-0016](../docs/architecture/0016-laputa-protocol-and-native-agent-governance.md)
 
-Laputa is Garden MemoryOS's personality authority and Persona history subsystem. It will be rebuilt around one profile-level directory containing exactly these Markdown authority files:
+New Laputa is a persona/memory-governance specification/protocol. Reuse native
+persona files/APIs, long-term backend and agent-owned Recap. Garden may provide
+a closed-loop governance workflow. Do not impose a Go library/server, seven-file
+layout, ACTMEM engine or review policy on every host. This is a design decision,
+not an implemented module replacement.
+
+**Existing Go contract:** [`../docs/architecture/0012-laputa-markdown-clean-break.md`](../docs/architecture/0012-laputa-markdown-clean-break.md)
+
+The existing Go module is Garden's personality authority and Persona history
+subsystem, with one profile-level directory containing these Markdown files:
 
 ```text
 IDENTITY.MD      RELATIONSHIP.MD  REDLINE.MD  USER.MD
@@ -11,7 +20,7 @@ DREAM.MD         DARK.MD          WORLD.MD
 
 `ACTMEM.MD` is a separate profile-level cross-session activity file. It is not a Persona authority and is tool-only.
 
-## Target Behavior
+## Existing Go Profile Behavior
 
 - Authority files use uppercase names, Markdown bodies, fixed body limits, atomic writes, and complete revision history with textual diffs.
 - Initial setup atomically creates `IDENTITY.MD`, `RELATIONSHIP.MD`, `REDLINE.MD`, `USER.MD`, and `WORLD.MD` only when all five are absent. It does not create `DREAM.MD`.
@@ -21,7 +30,7 @@ DREAM.MD         DARK.MD          WORLD.MD
 
 ## Retired Implementation
 
-The existing `.laputa/sections/*.json` registry, section names, JSON Patch, `map[string]any` bodies, `memory_md`, `Commitment`, `Preferences`, and generic `GovernedService` Persona mutation are retired. They remain in source only as deletion targets until the clean-break implementation starts.
+The `.laputa/sections/*.json` registry, section names, JSON Patch, `map[string]any` bodies, `memory_md`, `Commitment`, `Preferences`, and generic `GovernedService` Persona mutation are retired and are not supported authority paths in the existing Go contract.
 
 Do not add compatibility code, migration code, or fallback reads for them.
 

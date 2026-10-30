@@ -1,5 +1,9 @@
 # ADR-0013: Laputa Clean-Break Implementation Architecture
 
+> **Scope refinement, 2026-10-31:** [ADR-0016](0016-laputa-protocol-and-native-agent-governance.md)
+> controls the new direction. This remains an implementation design/record for
+> the existing Go profile, not a mandatory native-agent adapter or new Vivy plan.
+
 **Status:** accepted design
 **Date:** 2026-08-14
 **Decision owner:** project owner

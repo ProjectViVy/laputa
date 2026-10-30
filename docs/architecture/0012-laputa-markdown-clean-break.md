@@ -1,5 +1,10 @@
 # ADR-0012: Laputa Markdown Clean Break and EvoMap Capability Boundary
 
+> **Scope refinement, 2026-10-31:** [ADR-0016](0016-laputa-protocol-and-native-agent-governance.md)
+> governs new portable architecture. This ADR remains the existing Go profile;
+> its seven files, ACTMEM engine, context lanes and review policy are not universal
+> host-adoption requirements.
+
 **Status:** accepted
 **Date:** 2026-08-14
 **Decision owner:** project owner

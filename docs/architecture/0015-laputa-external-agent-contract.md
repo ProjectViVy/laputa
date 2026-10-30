@@ -1,5 +1,11 @@
 # ADR-0015: Laputa External Agent Contract and Lifecycle SDK
 
+> **Scope refinement, 2026-10-31:** [ADR-0016](0016-laputa-protocol-and-native-agent-governance.md)
+> governs new cross-agent design. This remains a service-specific access profile
+> and planning record; its canonical Garden REST, typed Go SDK, Persona/ACTMEM
+> layout and old AGENT-VIVY bridge are not prerequisites for the new Rust Vivy
+> or native-file adapters. Recorded service work is not new-architecture acceptance.
+
 **Status:** accepted  
 **Date:** 2026-09-04  
 **Decision owner:** project owner  
