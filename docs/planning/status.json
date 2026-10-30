@@ -1,6 +1,7 @@
 {
   "project": "ProjectViVy/laputa",
   "phase": "preparation_only",
+  "planning_mode": true,
   "implementation_authorized": false,
   "product_owner": "mastwet",
   "primary_supervisor": "AGENT-Songbai",
@@ -30,34 +31,157 @@
   },
   "stories": [
     {
-      "id": "S01",
+      "id": "G01",
+      "depends_on": [],
+      "requirements": [
+        "R01",
+        "R04",
+        "R07",
+        "R08"
+      ],
       "status": "planned",
-      "implementation_authorized": false
+      "implementation_authorized": false,
+      "blockers": [
+        "implementation_authorization"
+      ],
+      "plan": "plans/G01.md"
     },
     {
-      "id": "S02",
+      "id": "G02",
+      "depends_on": [
+        "G01"
+      ],
+      "requirements": [
+        "R02",
+        "R03",
+        "R07",
+        "R08"
+      ],
       "status": "planned",
-      "implementation_authorized": false
+      "implementation_authorized": false,
+      "blockers": [
+        "implementation_authorization"
+      ],
+      "plan": "plans/G02.md"
     },
     {
-      "id": "S03",
-      "status": "planned",
-      "implementation_authorized": false
-    },
-    {
-      "id": "S04",
-      "status": "planned",
-      "implementation_authorized": false
-    },
-    {
-      "id": "S05",
+      "id": "G03",
+      "depends_on": [
+        "G01"
+      ],
+      "requirements": [
+        "R04"
+      ],
       "status": "blocked",
-      "implementation_authorized": false
+      "implementation_authorized": false,
+      "blockers": [
+        "implementation_authorization",
+        "D01"
+      ],
+      "plan": "plans/G03.md"
     },
     {
-      "id": "S06",
+      "id": "G04",
+      "depends_on": [
+        "G02",
+        "G03"
+      ],
+      "requirements": [
+        "R01",
+        "R05",
+        "R06"
+      ],
       "status": "blocked",
-      "implementation_authorized": false
+      "implementation_authorized": false,
+      "blockers": [
+        "implementation_authorization",
+        "D02"
+      ],
+      "plan": "plans/G04.md"
+    },
+    {
+      "id": "G05",
+      "depends_on": [
+        "G01"
+      ],
+      "requirements": [
+        "R06",
+        "R07"
+      ],
+      "status": "planned",
+      "implementation_authorized": false,
+      "blockers": [
+        "implementation_authorization"
+      ],
+      "plan": "plans/G05.md"
+    },
+    {
+      "id": "G06",
+      "depends_on": [
+        "G04",
+        "G05"
+      ],
+      "requirements": [
+        "R01",
+        "R02",
+        "R03",
+        "R04",
+        "R05",
+        "R06",
+        "R07",
+        "R08"
+      ],
+      "status": "blocked",
+      "implementation_authorized": false,
+      "blockers": [
+        "implementation_authorization",
+        "D01",
+        "D02",
+        "real_data_and_activation_authorization"
+      ],
+      "plan": "plans/G06.md"
     }
+  ],
+  "design_readiness": "CONCERNS",
+  "source_audit": {
+    "hermes_sha": "bf0203a794a07aac3ff764972ab9087baa4e4f4e",
+    "laputa_preparation_sha": "425a15b02d4975954362a91515f95709f46d3bfb",
+    "static_audit_complete": true,
+    "source_tree_clean_at_audit": true,
+    "runtime_acceptance_performed": false,
+    "live_persona_or_memory_read": false,
+    "product_tests_run": false,
+    "memory_provider_config_explicit": false,
+    "installed_source_not_same_as_proven_loaded_process": true
+  },
+  "decisions": [
+    {
+      "id": "D01",
+      "status": "owner_decision_pending",
+      "topic": "explicit adoption vs bounded automatic adoption"
+    },
+    {
+      "id": "D02",
+      "status": "owner_decision_pending",
+      "topic": "exclusive maintenance window vs cross-writer native versioned contract; do not lower R05 silently"
+    }
+  ],
+  "requirements": [
+    "R01",
+    "R02",
+    "R03",
+    "R04",
+    "R05",
+    "R06",
+    "R07",
+    "R08"
+  ],
+  "preparation_placeholder_stories_retired": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S05",
+    "S06"
   ]
 }

@@ -5,8 +5,12 @@
 | 文档 | 用途 | 状态 |
 | --- | --- | --- |
 | [ADR-0019](architecture/0019-hermes-first-persona-evolution.md) | 归档重启、职责边界、Hermes-first 决策 | 方向接受；实现未授权 |
-| [PRD](planning/PRD.md) | 松柏人格沉淀与进化首期目标 | 准备稿；验收尚未执行 |
-| [架构骨架](planning/ARCHITECTURE-SPINE.md) | 原生权威、证据和应用/生效边界 | 设计约束；具体接口待核实 |
+| [PRD](planning/PRD.md) | R01–R08与首期范围 | 源码核对后计划稿；验收未执行 |
+| [架构骨架](planning/ARCHITECTURE-SPINE.md) | 薄原生插件、单一权威、写入/激活边界 | CONCERNS；D01/D02待决 |
+| [源码核对](planning/HERMES-SOURCE-AUDIT.md) | 固定Hermes源码的能力/风险证据 | 静态审计完成；不等于运行验收 |
+| [内部合同](planning/CONTRACTS.md) | 绑定、候选、许可、应用及激活状态 | 拟议；未实现 |
+| [Story计划索引](planning/plans/index.md) | G01–G06、DAG及逐项执行计划 | 全部实施未授权 |
+| [验收矩阵](planning/CONFORMANCE.md) | C01–C15与需求/Story映射 | 全部待执行 |
 | [开发准入](planning/DEVELOPMENT-READINESS.md) | 依赖波次、待决项、开工门槛 | 仓库准备与产品实现分开记录 |
 | [阶段状态](planning/status.json) | 机器可读授权与范围 | 产品实现始终 false，直到另行授权 |
 | [整理验收回执](planning/preparation-verification.json) | 归档、关闭和主线切换的真实回读证据 | 仓库准备完成；不是产品验收 |
@@ -27,4 +31,4 @@
 - [原生 Context Files](https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files)
 - [原生技能 Curator](https://hermes-agent.nousresearch.com/docs/user-guide/features/curator)
 
-入口存在不代表接口、热加载、写入或适配已经验收。实际版本和首期可复用能力在 H0 调研中固定。
+源码核对基线与已查明的文档/实现差异见 HERMES-SOURCE-AUDIT；尚未做真实写入或生效验收。
