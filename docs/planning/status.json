@@ -53,41 +53,47 @@
       ],
       "requirements": [
         "R02",
-        "R03",
         "R07",
-        "R08"
+        "R08",
+        "R09"
       ],
-      "status": "planned",
+      "status": "blocked",
       "implementation_authorized": false,
       "blockers": [
-        "implementation_authorization"
+        "implementation_authorization",
+        "D03"
       ],
       "plan": "plans/G02.md"
     },
     {
       "id": "G03",
       "depends_on": [
-        "G01"
+        "G02"
       ],
       "requirements": [
-        "R04"
+        "R02",
+        "R03",
+        "R04",
+        "R07",
+        "R08"
       ],
-      "status": "blocked",
+      "status": "planned",
       "implementation_authorized": false,
       "blockers": [
         "implementation_authorization",
-        "D01"
+        "G02_acceptance",
+        "D01_for_adoption"
       ],
       "plan": "plans/G03.md"
     },
     {
       "id": "G04",
       "depends_on": [
-        "G02",
         "G03"
       ],
       "requirements": [
         "R01",
+        "R04",
         "R05",
         "R06"
       ],
@@ -95,6 +101,7 @@
       "implementation_authorized": false,
       "blockers": [
         "implementation_authorization",
+        "D01",
         "D02"
       ],
       "plan": "plans/G04.md"
@@ -105,6 +112,7 @@
         "G01"
       ],
       "requirements": [
+        "R01",
         "R06",
         "R07"
       ],
@@ -129,7 +137,8 @@
         "R05",
         "R06",
         "R07",
-        "R08"
+        "R08",
+        "R09"
       ],
       "status": "blocked",
       "implementation_authorized": false,
@@ -137,6 +146,7 @@
         "implementation_authorization",
         "D01",
         "D02",
+        "D03",
         "real_data_and_activation_authorization"
       ],
       "plan": "plans/G06.md"
@@ -158,12 +168,17 @@
     {
       "id": "D01",
       "status": "owner_decision_pending",
-      "topic": "explicit adoption vs bounded automatic adoption"
+      "topic": "adoption mode, approved evolvable SOUL region, evidence maturity and revocation policy"
     },
     {
       "id": "D02",
       "status": "owner_decision_pending",
-      "topic": "exclusive maintenance window vs cross-writer native versioned contract; do not lower R05 silently"
+      "topic": "exclusive maintenance window with explicitly narrowed R05 vs native shared versioned writer contract"
+    },
+    {
+      "id": "D03",
+      "status": "owner_decision_pending",
+      "topic": "minimal native review bridge scope, maintenance and separate future core modification authorization"
     }
   ],
   "requirements": [
@@ -174,7 +189,8 @@
     "R05",
     "R06",
     "R07",
-    "R08"
+    "R08",
+    "R09"
   ],
   "preparation_placeholder_stories_retired": [
     "S01",
@@ -183,5 +199,23 @@
     "S04",
     "S05",
     "S06"
-  ]
+  ],
+  "design_revision": "2026-10-31-native-review-v2",
+  "planned_architecture": {
+    "language": "Python",
+    "legacy_go": "design_reference_only",
+    "trigger": "native_background_review_attempt_lifecycle",
+    "host_bridge": "proposed_not_implemented",
+    "evidence": "consented_current_visible_turn_projection",
+    "persona_analysis": "at_most_one_bounded_ctx_llm_logical_call_per_new_eligible_batch",
+    "second_agent": false,
+    "second_scheduler": false,
+    "cron_required": false,
+    "default_adoption": "candidate_only",
+    "writer_contract": "D02_pending",
+    "event_delivery": "in_process_fail_open_not_crash_durable",
+    "strict_event_outbox_in_scope": false,
+    "remote_and_qq_evidence_enabled": false,
+    "runtime_enabled": false
+  }
 }

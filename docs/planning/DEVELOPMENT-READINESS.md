@@ -1,37 +1,28 @@
-# 开发准入与计划状态
+# 开发准入：详细设计完成，执行仍 NO-GO
 
-## 已完成的准备，不是产品实现
+修订 `2026-10-31-native-review-v2`；设计 CONCERNS；`implementation_authorized: false`。仓库整理证据见 [preparation-verification](preparation-verification.json)，源码事实见 [HERMES-SOURCE-AUDIT](HERMES-SOURCE-AUDIT.md)。静态文档校验不是产品测试。
 
-- 旧架构归档、看板收口与main切换：见 [preparation-verification.json](preparation-verification.json)。
-- 本轮已完成固定源码的三路只读审计及父代理关键路径复核：见 [HERMES-SOURCE-AUDIT.md](HERMES-SOURCE-AUDIT.md)。
-- 源码存在能力不等于真实宿主适配验收；未读真实人格/聊天/数据库，未运行产品测试。
+## 唯一设计与计划
 
-## 当前判断
+Python 重写；旧 Go 仅参考。主路径为原生 review 实际 attempt 生命周期 + 获准可见证据投影 + 有界人格归纳 + 原生 SOUL 应用/新会话验证。不保留手动候选主流程，不另加反思 Agent/时钟/记忆引擎。
 
-**计划完整性：CONCERNS；产品执行：NO-GO。** `implementation_authorized: false`。
+[PRD](PRD.md) R01–R09 → [详细架构](ARCHITECTURE-SPINE.md) / [bridge](HERMES-REVIEW-BRIDGE.md) → [内部合同](CONTRACTS.md) → [G01–G06](plans/index.md) → [C01–C32](CONFORMANCE.md)。状态和 DAG 的唯一机器源为 [status.json](status.json)；旧 S01–S06/旧版 G 职责均不再派工。
 
-首期Hermes/松柏自身人格沉淀与进化。采用薄原生插件、显式本地入口和原生SOUL权威，不做跨宿主平台。
+## 关卡
 
-## 唯一执行清单
-
-原始准备阶段S01–S06是占位研究顺序，不再作为产品执行任务。源代码核对结果已收敛为 [plans/index.md](plans/index.md) 中G01–G06；每个Story有独立计划，状态/依赖的机器源是 [status.json](status.json)。不要并行维护第二套任务表。
-
-[PRD](PRD.md)定义R01–R08；[架构骨架](ARCHITECTURE-SPINE.md)负责设计选择；[CONTRACTS.md](CONTRACTS.md)负责内部类型/状态；[CONFORMANCE.md](CONFORMANCE.md)负责验收映射。
-
-## P0关卡
-
-| 决策/授权 | 影响 | 当前状态 |
+| 决策/授权 | 需要冻结的内容 | 影响 |
 | --- | --- | --- |
-| D01：显式确认采纳还是有限自动采纳 | G03/G04/G06 | 待所有者冻结，默认不自动写 |
-| D02：独占维护窗口还是跨原生写者CAS | G04/G06，关系R05验收范围 | 待所有者决定；不以原子rename冒充CAS |
-| 明确产品开工授权 | 全部产品Story | 未授权 |
-| 真实persona/证据与模型使用范围、私有位置、保留策略 | G02真实调用、G06 | 未授权；合成规划不授予真实数据使用 |
-| 真正的新验收会话与当前运行版本绑定 | G05/G06 | 待运行验证；不直接改当前QQ会话 |
+| D01（待所有者） | candidate_only/人工采纳/有限自动；允许片段、成熟/否决、策略撤回 | G03 采纳、G04/G06；未定只产候选 |
+| D02（待所有者） | 独占维护窗口及明确 R05 缩窄，或另行设计原生共享版本写入 | G04/G06；原子替换不是 CAS |
+| D03（待所有者） | 最小原生 bridge 范围/维护方式；未来隔离 core 修改授权 | G02；当前 core 不改，不承诺已有事件 |
+| 产品开工 | 精确允许代码/测试/依赖及隔离目录 | 全部 Story；当前无 Ready |
+| 真实数据/预算 | 本地入口、可见证据与基线读取、用途、模型、私有位置/保留 | 真实模型与首次采集；QQ/群/远程默认拒绝 |
+| 安装/启用/写入/激活 | 确切宿主版本、配置、D01/D02 条件、新验收 session | 真实松柏闭环；不能改当前 QQ 工作会话来验收 |
 
-这些关卡不阻止继续完善设计，但不能把Blocked计划交给实现代理“自行决定”。
+这些不阻止继续设计，但实现者不得自行填空。D03 的最小 bridge 不自动授权 D02 的全写者合同，更不代表 core/生产部署获准。
 
-## 交付监督
+## 执行监督
 
-松柏负责拆解、派工、审查和最终验收；当前只允许只读审计子代理。开工后按DAG和文件所有权分派；独立Story通过不自动等于完整闭环通过。
+主链 G01 → G02 → G03 → G04 → G06；并行分支 G01 → G05 → G06（严格依赖见计划）。松柏管理合同、派工、审查、集成与最终验证。共享文件按所有权串行，实施先测后写；前置证据/授权未到不派实现者。
 
-本轮不安装依赖、不生成产品代码/测试、不启用插件、Observer或cron，不写人格/记忆/运行配置，不发布或push计划，不操作远端Issue/PR。
+本轮仅 Markdown/状态文档与其静态验证，不创建产品代码、测试或依赖，不读真实人格/历史/凭据，不调真实模型，不启用 hook/plugin/cron，不改运行配置或远端看板，不 push。

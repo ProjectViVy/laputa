@@ -1,42 +1,40 @@
-# Garden × Hermes Story计划索引
+# Garden × Hermes 唯一 Story 执行计划
 
-授权、状态与依赖的机器源：[../status.json](../status.json)。本表按该源生成/校验；正文合同只在 [../CONTRACTS.md](../CONTRACTS.md) 与 [../ARCHITECTURE-SPINE.md](../ARCHITECTURE-SPINE.md) 维护。
+修订 `2026-10-31-native-review-v2`；状态/授权/依赖唯一机器源：[../status.json](../status.json)。本轮重写 G01–G06 的职责和依赖，旧“手动候选主路径”不再有效。所有 Story `implementation_authorized=false`，无 Ready/Done。
 
-基线：Hermes `bf0203a794a07aac3ff764972ab9087baa4e4f4e`；Laputa `425a15b02d4975954362a91515f95709f46d3bfb`。所有产品Story `implementation_authorized=false`，没有任何Ready/implemented/tested/done声明。
+架构：[详细架构](../ARCHITECTURE-SPINE.md)；共享字段：[CONTRACTS](../CONTRACTS.md)；宿主合同：[bridge](../HERMES-REVIEW-BRIDGE.md)。源码基线 Hermes `bf0203a794a07aac3ff764972ab9087baa4e4f4e`；Laputa 整理基线 `425a15b02d4975954362a91515f95709f46d3bfb`。
 
-| Story | Epic / 需求 | 成果 | 直接前置及消费输出 | 计划 | 状态 |
+| Story | Epic / 需求 | 可观察成果 | 直接前置与消费输出 | 计划 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| G01 | E1基础 / R01,R04,R07,R08 | 薄插件绑定、严格类型与私有记录底座 | 无；先获开工授权 | [G01](G01.md) | planned |
-| G02 | E1候选 / R02,R03,R07,R08 | 显式证据分类、候选与no-op，无人格写入 | G01：绑定、类型、store | [G02](G02.md) | planned |
-| G03 | E1采纳 / R04 | 独立审阅/许可、默认拒绝的策略 | G01：可信上下文与Candidate合同 | [G03](G03.md) | blocked：D01 |
-| G04 | E2应用 / R01,R05,R06 | 原生SOUL应用、未知状态对账、有条件回滚 | G02：候选；G03：可信许可 | [G04](G04.md) | blocked：D02及写入边界 |
-| G05 | E2生效 / R06,R07 | 能力检测与新验收会话激活探针 | G01：绑定、ActivationReceipt合同 | [G05](G05.md) | planned |
-| G06 | E2闭环 / R01-R08 | 接线、隔离集成与获准真实松柏闭环 | G04：持久化/恢复结果；G05：激活证据 | [G06](G06.md) | blocked：实施/真实数据授权 |
+| G01 | E1 底座 / R01,R04,R07,R08 | 可信范围、严格类型、私有状态/锁和无隐式副作用底座 | 无；开工授权仍缺 | [G01](G01.md) | planned |
+| G02 | E1 原生接缝 / R02,R07,R08,R09 | 隔离宿主 start/end + 证据投影 + 惰性工作器/撤权 | G01：绑定、RunRecord、store/锁合同 | [G02](G02.md) | blocked：D03 |
+| G03 | E1 人格候选 / R02,R03,R04,R07,R08 | 有界归纳、反例/分流、no-op、严格采纳策略 | G02：可信 ready run、投影、生命周期/取消合同 | [G03](G03.md) | planned；D01 未定则仅 candidate_only |
+| G04 | E2 应用恢复 / R01,R04,R05,R06 | SOUL 应用/对账/有条件回滚 | G03：精确候选/基线与可信决策 | [G04](G04.md) | blocked：D01/D02 |
+| G05 | E2 生效 / R01,R06,R07 | 新验收会话的实际身份块证明 | G01：home 绑定、ActivationReceipt 与隔离 fixture | [G05](G05.md) | planned |
+| G06 | E2 集成 / R01–R09 | 自动接线、负例/故障矩阵与获准真实闭环 | G04：应用/恢复结果；G05：有效性证明 | [G06](G06.md) | blocked：实施/决策/真实试验授权 |
 
-## 拓扑波次（逻辑，不代表当前可执行）
+## 拓扑波次（逻辑，不代表允许开工）
 
 - W0：G01。
-- W1：G02、G03、G05。
-- W2：G04。
-- W3：G06。
+- W1：G02、G05。
+- W2：G03。
+- W3：G04。
+- W4：G06。
 
 ```mermaid
 flowchart LR
  G01 --> G02
- G01 --> G03
  G01 --> G05
- G02 --> G04
+ G02 --> G03
  G03 --> G04
  G04 --> G06
  G05 --> G06
 ```
 
-D01、D02和开工/真实数据许可是外部门槛，不伪装成已经完成的Story依赖。拓扑属于同一波不代表Ready。
+依赖只记录直接前置；继承的共享基础不加冗余传递边。D01/D02/D03 和开工/数据许可是外部门槛，不伪装为 Story 成果。关键阻塞在原生 bridge、写者合同与真实生效，不虚构工期。
 
-## 文件冲突与派工
+## 文件所有权与派工
 
-G01先冻结domain/host/store合同；W1各自只拥有proposal.py、review.py、activation.py及对应测试，不并行编辑__init__.py、共享类型或配置。G06统一接线与package/操作技能文档。需要改合同由松柏先改合同并使下游计划失效，不让工作者偷偷另选架构。
+G01 独占 domain/host/store/初始 package；合同先冻结。W1 的 G02 独占 lifecycle 与获准的隔离 Hermes bridge，G05 仅 activation；两者不并行改共享模块/注册入口。G03 独占 proposal/review，G04 独占 apply。G06 最终统一 __init__/plugin manifest/skill/操作文档和集成测试；共享合同修改由松柏先处理并重校所有下游。
 
-## 交付准则
-
-每个Story提供精确差异、验证命令真实输出、失败/未覆盖项与授权边界。所有验证命令均是开工后的计划，不是本轮已执行记录。只读源码核对证据见 [../HERMES-SOURCE-AUDIT.md](../HERMES-SOURCE-AUDIT.md)。
+当前只做文档，不派实现者。未来 handoff 必须包含本修订、计划、共享合同、已验收前置、精确允许文件、停止条件及授权范围；每项真实命令输出需回交 supervisor。规划中的测试命令不是已运行结果。

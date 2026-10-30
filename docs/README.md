@@ -5,12 +5,14 @@
 | 文档 | 用途 | 状态 |
 | --- | --- | --- |
 | [ADR-0019](architecture/0019-hermes-first-persona-evolution.md) | 归档重启、职责边界、Hermes-first 决策 | 方向接受；实现未授权 |
-| [PRD](planning/PRD.md) | R01–R08与首期范围 | 源码核对后计划稿；验收未执行 |
-| [架构骨架](planning/ARCHITECTURE-SPINE.md) | 薄原生插件、单一权威、写入/激活边界 | CONCERNS；D01/D02待决 |
+| [ADR-0020](architecture/0020-native-review-driven-garden.md) | Python 重写、原生 review 驱动与取舍 | 提议；D01–D03 待决 |
+| [PRD](planning/PRD.md) | R01–R09与首期范围 | 详细设计稿；验收未执行 |
+| [详细架构](planning/ARCHITECTURE-SPINE.md) | 原生触发、证据/模块/生命周期、写入/恢复/激活 | CONCERNS；D01–D03待决 |
+| [Hermes review 接缝](planning/HERMES-REVIEW-BRIDGE.md) | 最小宿主扩展、正常终态、可信投影与可靠性边界 | 拟议，不是现成功能 |
 | [源码核对](planning/HERMES-SOURCE-AUDIT.md) | 固定Hermes源码的能力/风险证据 | 静态审计完成；不等于运行验收 |
 | [内部合同](planning/CONTRACTS.md) | 绑定、候选、许可、应用及激活状态 | 拟议；未实现 |
 | [Story计划索引](planning/plans/index.md) | G01–G06、DAG及逐项执行计划 | 全部实施未授权 |
-| [验收矩阵](planning/CONFORMANCE.md) | C01–C15与需求/Story映射 | 全部待执行 |
+| [验收矩阵](planning/CONFORMANCE.md) | C01–C32与需求/Story映射 | 全部待执行 |
 | [开发准入](planning/DEVELOPMENT-READINESS.md) | 依赖波次、待决项、开工门槛 | 仓库准备与产品实现分开记录 |
 | [阶段状态](planning/status.json) | 机器可读授权与范围 | 产品实现始终 false，直到另行授权 |
 | [整理验收回执](planning/preparation-verification.json) | 归档、关闭和主线切换的真实回读证据 | 仓库准备完成；不是产品验收 |
