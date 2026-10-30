@@ -9,6 +9,7 @@
 | [架构骨架](planning/ARCHITECTURE-SPINE.md) | 原生权威、证据和应用/生效边界 | 设计约束；具体接口待核实 |
 | [开发准入](planning/DEVELOPMENT-READINESS.md) | 依赖波次、待决项、开工门槛 | 仓库准备与产品实现分开记录 |
 | [阶段状态](planning/status.json) | 机器可读授权与范围 | 产品实现始终 false，直到另行授权 |
+| [整理验收回执](planning/preparation-verification.json) | 归档、关闭和主线切换的真实回读证据 | 仓库准备完成；不是产品验收 |
 
 ## 历史证据
 

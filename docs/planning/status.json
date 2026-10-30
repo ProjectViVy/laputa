@@ -14,23 +14,50 @@
   "live_persona_or_memory_writes_authorized": false,
   "private_data_allowed_in_public_repository": false,
   "repository_preparation": {
-    "local_branch": "bootstrap/protocol-reset-20261031",
-    "remote_main_changed": false,
+    "local_branch": "main",
+    "remote_main_changed": true,
     "legacy_git_bundle_verified": true,
     "non_main_and_pr_archive_refs_verified": 17,
     "legacy_main_tag_verified": "legacy/pre-reset-20261031",
-    "issues_closed": false,
-    "prs_closed": false,
-    "cutover_verified": false,
+    "issues_closed": true,
+    "prs_closed": true,
+    "cutover_verified": true,
     "protected_instruction_files_authorized": true,
-    "blocker": null
+    "blocker": null,
+    "default_branch": "main",
+    "archive_branch_count_verified": 18,
+    "repository_preparation_complete": true
   },
   "stories": [
-    {"id": "S01", "status": "planned", "implementation_authorized": false},
-    {"id": "S02", "status": "planned", "implementation_authorized": false},
-    {"id": "S03", "status": "planned", "implementation_authorized": false},
-    {"id": "S04", "status": "planned", "implementation_authorized": false},
-    {"id": "S05", "status": "blocked", "implementation_authorized": false},
-    {"id": "S06", "status": "blocked", "implementation_authorized": false}
+    {
+      "id": "S01",
+      "status": "planned",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S02",
+      "status": "planned",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S03",
+      "status": "planned",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S04",
+      "status": "planned",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S05",
+      "status": "blocked",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S06",
+      "status": "blocked",
+      "implementation_authorized": false
+    }
   ]
 }

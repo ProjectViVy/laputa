@@ -165,6 +165,12 @@
       "sha": "b3a18e16a93c0b593e4a7f296b4e3ef24b040637",
       "kind": "legacy-pr-head",
       "pr": 9
+    },
+    {
+      "branch": "archive/2026-10-31/main",
+      "sha": "9acc999301d5d575da2cea902a1c6d213763f381",
+      "kind": "legacy-main",
+      "original": "main"
     }
   ],
   "open_issue_numbers": [
@@ -186,5 +192,6 @@
   },
   "original_non_main_branches": "Retained; no source branches deleted",
   "implementation_authorized": false,
-  "archive_ref_verification": "17 non-main/PR refs and legacy tag verified; legacy-main rename pending cutover"
+  "archive_ref_verification": "All 18 archive branches and the legacy tag read back and verified after cutover; all 13 original non-main branches preserved",
+  "main_cutover_verified": true
 }

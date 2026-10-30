@@ -1,0 +1,152 @@
+{
+  "recorded_at": "2026-10-31T03:49:19.544653+08:00",
+  "repository": "ProjectViVy/laputa",
+  "preparation_verified": true,
+  "baseline_commit_verified": "8bd6f3b46f50cfa1a0ce2eaa8fb254506fda009b",
+  "baseline_commit_is_not_final_receipt_commit": true,
+  "default_branch_verified": "main",
+  "local_branch_verified": "main",
+  "archive_branch_count_verified": 18,
+  "legacy_main_sha_verified": "9acc999301d5d575da2cea902a1c6d213763f381",
+  "legacy_tag_verified": "legacy/pre-reset-20261031",
+  "full_git_bundle_verified": true,
+  "closure_results": [
+    {
+      "kind": "issue",
+      "number": 1,
+      "url": "https://github.com/ProjectViVy/laputa/issues/1",
+      "state": "closed",
+      "state_reason": "not_planned",
+      "merged": false,
+      "comment_url": "https://github.com/ProjectViVy/laputa/issues/1#issuecomment-6532046956",
+      "verified_at": "2026-10-31T03:45:23.145993+08:00"
+    },
+    {
+      "kind": "issue",
+      "number": 7,
+      "url": "https://github.com/ProjectViVy/laputa/issues/7",
+      "state": "closed",
+      "state_reason": "not_planned",
+      "merged": false,
+      "comment_url": "https://github.com/ProjectViVy/laputa/issues/7#issuecomment-6532049403",
+      "verified_at": "2026-10-31T03:45:32.077602+08:00"
+    },
+    {
+      "kind": "issue",
+      "number": 8,
+      "url": "https://github.com/ProjectViVy/laputa/issues/8",
+      "state": "closed",
+      "state_reason": "not_planned",
+      "merged": false,
+      "comment_url": "https://github.com/ProjectViVy/laputa/issues/8#issuecomment-6532051604",
+      "verified_at": "2026-10-31T03:45:38.150999+08:00"
+    },
+    {
+      "kind": "pr",
+      "number": 9,
+      "url": "https://github.com/ProjectViVy/laputa/pull/9",
+      "state": "closed",
+      "state_reason": null,
+      "merged": false,
+      "comment_url": "https://github.com/ProjectViVy/laputa/pull/9#issuecomment-6532053446",
+      "verified_at": "2026-10-31T03:45:45.248303+08:00"
+    },
+    {
+      "kind": "pr",
+      "number": 10,
+      "url": "https://github.com/ProjectViVy/laputa/pull/10",
+      "state": "closed",
+      "state_reason": null,
+      "merged": false,
+      "comment_url": "https://github.com/ProjectViVy/laputa/pull/10#issuecomment-6532055474",
+      "verified_at": "2026-10-31T03:45:51.963619+08:00"
+    },
+    {
+      "kind": "pr",
+      "number": 11,
+      "url": "https://github.com/ProjectViVy/laputa/pull/11",
+      "state": "closed",
+      "state_reason": null,
+      "merged": false,
+      "comment_url": "https://github.com/ProjectViVy/laputa/pull/11#issuecomment-6532057696",
+      "verified_at": "2026-10-31T03:45:58.917921+08:00"
+    },
+    {
+      "kind": "pr",
+      "number": 12,
+      "url": "https://github.com/ProjectViVy/laputa/pull/12",
+      "state": "closed",
+      "state_reason": null,
+      "merged": false,
+      "comment_url": "https://github.com/ProjectViVy/laputa/pull/12#issuecomment-6532059472",
+      "verified_at": "2026-10-31T03:46:05.278025+08:00"
+    },
+    {
+      "kind": "issue",
+      "number": 14,
+      "url": "https://github.com/ProjectViVy/laputa/issues/14",
+      "state": "closed",
+      "state_reason": "completed",
+      "merged": false,
+      "comment_url": "https://github.com/ProjectViVy/laputa/issues/14#issuecomment-6532061607",
+      "verified_at": "2026-10-31T03:46:10.977598+08:00"
+    }
+  ],
+  "open_issues_verified": 0,
+  "open_prs_verified": 0,
+  "all_closed_prs_unmerged": true,
+  "original_non_main_branches_retained": 13,
+  "history_rewrite_or_force_push": false,
+  "other_repositories_or_worktrees_modified": false,
+  "live_hermes_persona_memory_or_runtime_modified": false,
+  "first_host": "Hermes",
+  "first_subject": "AGENT-Songbai",
+  "phase": "preparation_only",
+  "implementation_authorized": false,
+  "product_test_suite_run": false,
+  "verification_scope": [
+    "JSON syntax",
+    "active relative documentation links",
+    "git diff --check",
+    "only documentation/data/license in new main",
+    "each closure and closing comment read back",
+    "each archived ref and tag SHA read back",
+    "default branch and local upstream read back",
+    "legacy commit retained as ancestor",
+    "git bundle verify"
+  ],
+  "cutover_steps": [
+    {
+      "step": "TEMPORARY_DEFAULT_VERIFIED",
+      "verified_at": "2026-10-31T03:47:52.391381+08:00",
+      "default_branch": "bootstrap/protocol-reset-20261031"
+    },
+    {
+      "step": "LEGACY_MAIN_ARCHIVE_VERIFIED",
+      "verified_at": "2026-10-31T03:47:55.107971+08:00",
+      "branch": "archive/2026-10-31/main",
+      "sha": "9acc999301d5d575da2cea902a1c6d213763f381"
+    },
+    {
+      "step": "NEW_MAIN_DEFAULT_VERIFIED",
+      "verified_at": "2026-10-31T03:47:59.998049+08:00",
+      "branch": "main",
+      "sha": "8bd6f3b46f50cfa1a0ce2eaa8fb254506fda009b"
+    },
+    {
+      "step": "LOCAL_MAIN_SYNC_VERIFIED",
+      "verified_at": "2026-10-31T03:48:02.621545+08:00",
+      "branch": "main",
+      "head": "8bd6f3b46f50cfa1a0ce2eaa8fb254506fda009b",
+      "clean": true,
+      "old_main_is_ancestor": true
+    },
+    {
+      "step": "ALL_ARCHIVES_AND_SOURCE_BRANCHES_VERIFIED",
+      "verified_at": "2026-10-31T03:48:17.558910+08:00",
+      "archive_branch_count": 18,
+      "original_non_main_branches_preserved": 13,
+      "legacy_tag": "legacy/pre-reset-20261031"
+    }
+  ]
+}

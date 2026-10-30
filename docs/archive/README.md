@@ -6,7 +6,7 @@
 
 - 原 main：`9acc999301d5d575da2cea902a1c6d213763f381`
 - 固定标签：`legacy/pre-reset-20261031`
-- 旧 main 归档目标：`archive/2026-10-31/main`
+- 旧 main 归档分支（已回读核验）：`archive/2026-10-31/main`
 - [按固定提交浏览完整旧实现](https://github.com/ProjectViVy/laputa/tree/9acc999301d5d575da2cea902a1c6d213763f381)
 
 该完整树保留 Go `laputa/`、`mentle/`、`garden/`、Console、旧 ADR、旧计划、脚本和既有测试记录。没有把它们复制进新主线再制造两套架构。
