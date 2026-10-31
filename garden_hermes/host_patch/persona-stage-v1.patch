@@ -1,0 +1,633 @@
+diff --git a/agent/background_review.py b/agent/background_review.py
+index bc1d9a33f4..bbaa9b9149 100644
+--- a/agent/background_review.py
++++ b/agent/background_review.py
+@@ -34,6 +34,22 @@ class _BackgroundReviewRun:
+         self._lock = threading.Lock()
+         self._review_agent = None
+         self._request_finished = self._cancel_dispatched = False
++        self.persona_pending = False
++        self._persona_commit_started = False
++
++    def detach_request(self) -> None:
++        """Release a closed fork without ending its managed persona continuation."""
++        with self._lock:
++            self._review_agent = None
++
++    def try_enter_persona_commit(self, is_current) -> bool:
++        """Linearize cancellation vs one short file commit; never hold over IO."""
++        with self._lock:
++            if (self.cancel_requested.is_set() or self._request_finished
++                    or self._persona_commit_started or not is_current()):
++                return False
++            self._persona_commit_started = True
++            return True
+ 
+     def begin_request(self, review_agent: Any) -> bool:
+         """Atomically admit the first provider-capable review phase."""
+@@ -1135,6 +1151,7 @@ class _ReviewForkState:
+     review_agent: Any = None
+     review_messages: list[dict] = field(default_factory=list)
+     review_usage: dict[str, Any] = field(default_factory=dict)
++    review_result: Any = None
+ 
+ 
+ def _release_fork_clients(review_agent: Any) -> None:
+@@ -1183,7 +1200,7 @@ def _run_review_fork(
+     try:
+         if review_run is None or review_run.begin_request(st.review_agent):
+             # Routed -> digest (cache cold anyway); same model -> full snapshot (warm cache reads).
+-            st.review_agent.run_conversation(
++            st.review_result = st.review_agent.run_conversation(
+                 user_message=(
+                     prompt + "\n\nYou can only call " + memory_phrase_prompt +
+                     "management tools. Other tools will be denied "
+@@ -1202,7 +1219,10 @@ def _run_review_fork(
+         # Publish completion as soon as the provider-capable phase has returned or startup
+         # cancellation has fenced it out (unregister + finish are identity-scoped and idempotent).
+         _track_review_fork(agent, st.review_agent, register=False)
+-        finish_background_review_run(agent, review_run)
++        if review_run is not None and review_run.persona_pending:
++            review_run.detach_request()
++        else:
++            finish_background_review_run(agent, review_run)
+     st.review_messages = list(getattr(st.review_agent, "_session_messages", []))
+     _release_fork_clients(st.review_agent)
+     st.review_agent = None
+@@ -1219,7 +1239,7 @@ def _publish_review_summary(agent: Any, actions: list[str]) -> None:
+ def _run_review_in_thread(
+     agent: Any, messages_snapshot: list[dict], prompt: str,
+     task_cfg: Optional[dict[str, Any]] = None, review_run: Optional[_BackgroundReviewRun] = None,
+-    review_memory: bool = False, explicit: bool = False,
++    review_memory: bool = False, explicit: bool = False, persona_request=None,
+ ) -> None:
+     """Daemon-thread worker: build the fork, run the prompt, surface the action summary via
+     ``agent._safe_print`` / ``background_review_callback``. ``review_run`` (from
+@@ -1228,24 +1248,25 @@ def _run_review_in_thread(
+ 
+     See #84423.
+     """
++    if review_run is not None:
++        review_run.persona_pending = persona_request is not None
+     if review_run is not None and review_run.cancel_requested.is_set():
+         finish_background_review_run(agent, review_run)
+         return
+     _set_thread_approval_callback(_bg_review_auto_deny)
+-    # A client that can't carry Hermes tool calls back would spawn a fork that cannot write
+-    # anything. Checked BEFORE the thread-scoped silence so the warning is not swallowed; cheap
+-    # check first so the normal path never resolves the runtime twice.
+-    if not _parent_can_emit_tool_calls(agent) and not _resolve_review_runtime(agent, task_cfg).get("routed"):
+-        logger.warning(
+-            "Background review skipped: provider %r cannot emit Hermes tool calls, "
+-            "so the review fork could not write memories or skills. Set "
+-            "auxiliary.background_review.{provider,model} to route the review to a normal model.",
+-            getattr(agent, "provider", "?"),
+-        )
+-        _set_thread_approval_callback(None)
+-        return
+     st = _ReviewForkState()
+     try:
++        # A client that can't carry Hermes tool calls back would spawn a fork that cannot write
++        # anything. Checked BEFORE the thread-scoped silence so the warning is not swallowed; cheap
++        # check first so the normal path never resolves the runtime twice.
++        if not _parent_can_emit_tool_calls(agent) and not _resolve_review_runtime(agent, task_cfg).get("routed"):
++            logger.warning(
++                "Background review skipped: provider %r cannot emit Hermes tool calls, "
++                "so the review fork could not write memories or skills. Set "
++                "auxiliary.background_review.{provider,model} to route the review to a normal model.",
++                getattr(agent, "provider", "?"),
++            )
++            return
+         # Silence stdout/stderr for THIS thread only: a process-global redirect would blank every
+         # other thread's console for the whole review.
+         # A process-global ``contextlib.redirect_stdout(devnull)`` here would also blank
+@@ -1255,6 +1276,9 @@ def _run_review_in_thread(
+         # to devnull and leaves all other threads on the real streams.
+         with thread_scoped_silence():
+             _run_review_fork(agent, messages_snapshot, prompt, task_cfg, review_run, st, review_memory, explicit)
++        if persona_request is not None:
++            from agent.persona_stage import invoke
++            agent._last_persona_review_status = invoke(persona_request, review_run, st.review_result)
+         # A buggy/legacy tool response shape must NOT take down the whole review (the outer
+         # except would discard every action the fork DID complete), so coerce to an empty list.
+         try:
+@@ -1311,7 +1335,7 @@ def spawn_background_review_thread(
+     agent: Any, messages_snapshot: list[dict], review_memory: bool = False,
+     review_skills: bool = False, focus: Optional[str] = None,
+     task_cfg: Optional[dict[str, Any]] = None, review_run: Optional[_BackgroundReviewRun] = None,
+-    explicit: bool = False,
++    explicit: bool = False, persona_request=None,
+ ):
+     """Return ``(target, prompt)``; the caller builds the ``threading.Thread`` so test patches of
+     ``run_agent.threading.Thread`` keep working. ``focus`` (``/refine [instructions]``) is appended
+@@ -1333,7 +1357,8 @@ def spawn_background_review_thread(
+     def _target() -> None:  # resolves _run_review_in_thread at call time (tests patch it)
+         _run_review_in_thread(
+             agent, messages_snapshot, prompt, task_cfg=task_cfg, review_run=review_run,
+-            review_memory=review_memory, explicit=explicit)
++            review_memory=review_memory, explicit=explicit,
++            **({"persona_request": persona_request} if persona_request is not None else {}))
+ 
+     return _target, prompt
+ 
+diff --git a/agent/persona_stage.py b/agent/persona_stage.py
+new file mode 100644
+index 0000000000..b410d6bb9d
+--- /dev/null
++++ b/agent/persona_stage.py
+@@ -0,0 +1,163 @@
++"""Opt-in persona continuation of an existing background review, scoped by home.
++
++No executor, new worker, persistence or model calls live in this module.
++"""
++from __future__ import annotations
++from dataclasses import dataclass
++from pathlib import Path
++from types import MappingProxyType
++from typing import Protocol
++import threading
++
++_lock = threading.RLock()
++_entries = {}
++
++class ReviewRunToken(Protocol):
++    cancel_requested: threading.Event
++
++
++class StageRegistration:
++    def __init__(self, home, plugin_id, callback, authorize, local_cli, max_chars):
++        self.home = Path(home).resolve()
++        self.plugin_id = plugin_id
++        self.callback = callback
++        self.authorize = authorize
++        self.local_cli = local_cli
++        self.max_chars = max_chars
++        self.active = True
++
++    def is_current(self):
++        with _lock:
++            return self.active and _entries.get(self.home) is self
++
++    def dispose(self):
++        with _lock:
++            self.active = False
++            if _entries.get(self.home) is self:
++                del _entries[self.home]
++
++def register_stage(home, plugin_id, callback, *, authorize, local_cli=False, max_chars=16000):
++    if not callable(callback) or not callable(authorize):
++        raise TypeError('stage and consent callbacks must be callable')
++    if type(max_chars) is not int or not 0 < max_chars <= 65536:
++        raise ValueError('invalid visible-evidence budget')
++    entry = StageRegistration(home, plugin_id, callback, authorize, local_cli, max_chars)
++    with _lock:
++        if entry.home in _entries:
++            raise ValueError('a persona stage is already registered for this home')
++        _entries[entry.home] = entry
++    return entry
++
++def capture_current_turn(agent, user_text, assistant_text, turn_id):
++    """Capture at the foreground boundary, never from a later worker's ambient identity."""
++    with _lock:
++        if not _entries:
++            return None
++    from agent.system_prompt import _agent_home
++    from hermes_cli.plugin_session import session_surface
++    home = _agent_home(agent)
++    if home is None:
++        return None
++    with _lock:
++        entry = _entries.get(Path(home).resolve())
++    if entry is None:
++        return None
++    surface = session_surface()
++    local_cli = entry.local_cli() if callable(entry.local_cli) else entry.local_cli
++    if not surface and local_cli and getattr(agent, 'platform', None) in (None, 'cli', 'local'):
++        surface = 'cli'
++    try:
++        return capture_turn(home=home, surface=surface, session_id=getattr(agent, 'session_id', ''),
++                            turn_id=turn_id, user_text=user_text, assistant_text=assistant_text)
++    except Exception:
++        # Bad opt-in configuration must not suppress the native memory/skills review.
++        return None
++
++
++def capture_turn(*, home, surface, session_id, turn_id, user_text, assistant_text):
++    if home is None:
++        return None
++    with _lock:
++        entry = _entries.get(Path(home).resolve())
++    if entry is None or surface not in ('cli', 'local') or not session_id or not turn_id:
++        return None
++    meta = MappingProxyType(dict(home=str(entry.home), surface=surface,
++                                 session_id=str(session_id), turn_id=str(turn_id)))
++    if entry.authorize(meta) is not True:
++        return None
++    if (not isinstance(user_text, str) or not isinstance(assistant_text, str)
++            or not user_text or len(user_text) + len(assistant_text) > entry.max_chars):
++        return None
++    import uuid
++    request_id = uuid.uuid4().hex
++    items = (VisibleItem(request_id + ':user', 'user', user_text),
++             VisibleItem(request_id + ':assistant', 'assistant', assistant_text))
++    return PersonaRequest(entry, request_id, entry.home, surface, str(session_id), str(turn_id), items)
++
++
++@dataclass(frozen=True)
++class VisibleItem:
++    item_id: str
++    role: str
++    text: str
++
++
++@dataclass(frozen=True)
++class PersonaRequest:
++    entry: StageRegistration
++    request_id: str
++    home: Path
++    surface: str
++    session_id: str
++    turn_id: str
++    items: tuple[VisibleItem, ...]
++
++
++@dataclass(frozen=True)
++class PersonaStageContext:
++    request: PersonaRequest
++    run: ReviewRunToken
++
++    @property
++    def home(self):
++        return self.request.home
++
++    @property
++    def surface(self):
++        return self.request.surface
++
++    @property
++    def items(self):
++        return self.request.items
++
++    @property
++    def request_id(self):
++        return self.request.request_id
++
++    def cancelled(self):
++        return (not self.request.entry.is_current()
++                or self.run.cancel_requested.is_set())
++
++    def try_enter_commit(self):
++        enter = getattr(self.run, 'try_enter_persona_commit', None)
++        return bool(enter and enter(self.request.entry.is_current))
++
++
++def invoke(request, run, native_result):
++    if request is None or run is None:
++        return 'unsupported'
++    ctx = PersonaStageContext(request, run)
++    if ctx.cancelled():
++        return 'cancelled'
++    if (not isinstance(native_result, dict) or native_result.get('completed') is not True
++            or native_result.get('failed') or native_result.get('interrupted')
++            or native_result.get('error')):
++        return 'native_not_completed'
++    try:
++        outcome = request.entry.callback(ctx)
++        return outcome if outcome in ('no_change', 'persisted_verified', 'source_saved_host_pending',
++                                      'rejected', 'needs_user_authorization', 'cancelled',
++                                      'analysis_failed', 'unknown_outcome') else 'persona_failed'
++    except Exception:
++        # Do not put private text/provider exception strings in host logs.
++        return 'persona_failed'
+diff --git a/agent/turn_finalizer.py b/agent/turn_finalizer.py
+index c882efb7d6..e028386619 100644
+--- a/agent/turn_finalizer.py
++++ b/agent/turn_finalizer.py
+@@ -786,9 +786,12 @@ def finalize_turn(
+         and (_should_review_memory or _should_review_skills)
+     ):
+         with suppress(Exception):
++            from agent.persona_stage import capture_current_turn
++            request = capture_current_turn(agent, original_user_message, final_response, turn_id) if completed and not failed else None
+             agent._spawn_background_review(
+                 messages_snapshot=list(messages), review_memory=_should_review_memory,
+                 review_skills=_should_review_skills,
++                **({'persona_request': request} if request is not None else {}),
+             )
+ 
+     # Memory provider on_session_end()/shutdown_all() are NOT called here:
+diff --git a/hermes_cli/plugins.py b/hermes_cli/plugins.py
+index 14e13ab00e..f55e285c68 100644
+--- a/hermes_cli/plugins.py
++++ b/hermes_cli/plugins.py
+@@ -229,6 +229,9 @@ class LoadedPlugin:
+ class PluginContext:
+     """Facade given to plugins so they can register tools and hooks."""
+ 
++    background_review_persona_stage_version = 1
++    from hermes_cli.plugins_persona import register_background_review_persona_stage
++
+     def __init__(self, manifest: PluginManifest, manager: PluginManager):
+         self.manifest = manifest
+         self._manager = manager
+diff --git a/hermes_cli/plugins_persona.py b/hermes_cli/plugins_persona.py
+new file mode 100644
+index 0000000000..3853ef8ffb
+--- /dev/null
++++ b/hermes_cli/plugins_persona.py
+@@ -0,0 +1,30 @@
++"""Optional, profile-owned continuation inside the native background review worker."""
++from .plugins_loader import _plugin_home_scope, _serialized_replacement
++
++@_serialized_replacement
++def register_background_review_persona_stage(self, callback, *, authorize, max_evidence_chars=16000):
++    """Register one synchronous stage for this home; no inputs until explicit consent.
++
++    authorize receives immutable metadata only. Unload invalidates late commit admission.
++    This continuation is in-process only, not a fire-and-forget observer callback.
++    """
++    if self._load_abandoned:
++        return None
++    if not callable(callback) or not callable(authorize):
++        raise TypeError('stage and authorization callbacks must be callable')
++    from agent.persona_stage import register_stage
++    home = self._manager.home_path
++    def bound_authorize(metadata):
++        with _plugin_home_scope(home):
++            return authorize(metadata)
++    def bound_callback(stage_context):
++        with _plugin_home_scope(home):
++            return callback(stage_context)
++    entry = register_stage(home, self.plugin_id, bound_callback, authorize=bound_authorize,
++                           local_cli=lambda: getattr(self._manager, '_cli_ref', None) is not None,
++                           max_chars=max_evidence_chars)
++    try:
++        return self._track('background_review_persona_stage', self.plugin_id, entry.dispose)
++    except Exception:
++        entry.dispose()
++        raise
+diff --git a/run_agent.py b/run_agent.py
+index eda287031f..dd801a3aa4 100644
+--- a/run_agent.py
++++ b/run_agent.py
+@@ -755,7 +755,7 @@ class AIAgent(
+     _summarize_background_review_actions = _forward_static("agent.background_review", "summarize_background_review_actions")
+ 
+     def _spawn_background_review(self, messages_snapshot: list[dict], review_memory: bool = False,
+-                                 review_skills: bool = False, focus: Optional[str] = None, explicit: bool = False) -> None:
++                                 review_skills: bool = False, focus: Optional[str] = None, explicit: bool = False, persona_request=None) -> None:
+         """Post-turn review entry point: decide WHEN, then spawn.
+ 
+         A review whose runtime is the MANAGED LOCAL llama-server is queued for machine idle (``defer: auto``)
+@@ -780,6 +780,8 @@ class AIAgent(
+         kwargs = dict(messages_snapshot=_clone_background_review_messages(messages_snapshot),
+                       review_memory=review_memory, review_skills=review_skills, focus=focus, task_cfg=task_cfg,
+                       explicit=explicit)
++        if persona_request is not None:
++            kwargs["persona_request"] = persona_request
+         if focus is None and not explicit and _review_should_defer(self, task_cfg):
+             from agent.review_idle_queue import QUEUE
+             QUEUE.enqueue(self, _review_queue_key(self), kwargs)
+@@ -789,7 +791,7 @@ class AIAgent(
+     def _spawn_background_review_now(self, messages_snapshot: list[dict], review_memory: bool = False,
+                                      review_skills: bool = False, focus: Optional[str] = None,
+                                      task_cfg: Optional[dict[str, Any]] = None, _requeue_attempts: int = 0,
+-                                     explicit: bool = False) -> None:
++                                     explicit: bool = False, persona_request=None) -> None:
+         """Spawn the background memory/skill review thread.
+ 
+         ``threading.Thread`` is constructed here so tests patching ``run_agent.threading.Thread`` keep working.
+@@ -810,6 +812,7 @@ class AIAgent(
+             target, _prompt = spawn_background_review_thread(
+                 self, messages_snapshot, review_memory=review_memory, review_skills=review_skills,
+                 focus=focus, task_cfg=task_cfg, review_run=review_run, explicit=explicit,
++                **({"persona_request": persona_request} if persona_request is not None else {}),
+             )
+ 
+             def _target_with_requeue() -> None:
+@@ -817,7 +820,7 @@ class AIAgent(
+                 self._maybe_requeue_preempted_review(review_run, dict(
+                     messages_snapshot=messages_snapshot, review_memory=review_memory, review_skills=review_skills,
+                     focus=focus, task_cfg=task_cfg, _requeue_attempts=_requeue_attempts + 1,
+-                    explicit=explicit))
++                    explicit=explicit, **({"persona_request": persona_request} if persona_request is not None else {})))
+ 
+             # Carry the active profile into the review thread so MEMORY.md / skill review writes land in the
+             # right profile.
+diff --git a/tests/agent/test_persona_stage.py b/tests/agent/test_persona_stage.py
+new file mode 100644
+index 0000000000..f21536f78c
+--- /dev/null
++++ b/tests/agent/test_persona_stage.py
+@@ -0,0 +1,211 @@
++"""Behavior contracts for the opt-in, same-review persona extension."""
++import importlib
++from types import SimpleNamespace
++import threading
++import pytest
++
++
++def test_frozen_projection_reaches_real_spawn_and_same_worker(tmp_path, monkeypatch):
++    from agent import background_review as review, persona_stage as stage
++    from hermes_cli.plugins import PluginContext, PluginManager, PluginManifest
++    from tests.agent.test_background_review import _bare_agent, ImmediateThread
++    import run_agent
++    parent = _bare_agent()
++    parent._session_db = SimpleNamespace(db_path=tmp_path / 'state.db')
++    parent.platform = 'cli'
++    manager = PluginManager(scope_key=str(tmp_path))
++    manager._cli_ref = object()
++    ctx = PluginContext(PluginManifest(name='synthetic-persona'), manager)
++    observed = []
++    handle = ctx.register_background_review_persona_stage(
++        lambda c: observed.append(tuple(i.text for i in c.items)) or 'no_change',
++        authorize=lambda meta: True)
++    class Fork:
++        _session_messages = []
++        def run_conversation(self, **kwargs):
++            return {'completed': True}
++        def release_clients(self):
++            pass
++    try:
++        request = stage.capture_current_turn(parent, 'visible user', 'visible reply', 't')
++        assert request is not None
++        monkeypatch.setattr(run_agent.threading, 'Thread', ImmediateThread)
++        monkeypatch.setattr(run_agent, '_review_should_defer', lambda *a: False)
++        monkeypatch.setattr(review, 'load_background_review_settings', lambda: (True, {}))
++        monkeypatch.setattr(review, '_parent_can_emit_tool_calls', lambda *a: True)
++        monkeypatch.setattr(review, 'build_cache_parity_fork', lambda *a, **k: (Fork(), None, False))
++        monkeypatch.setattr(review, '_review_tool_whitelist', lambda *a: (set(), set()))
++        monkeypatch.setattr(review, '_snapshot_review_usage', lambda *a: {})
++        monkeypatch.setattr(review, '_record_review_usage_to_parent', lambda *a: None)
++        parent._spawn_background_review([], persona_request=request)
++        assert observed == [('visible user', 'visible reply')]
++        assert parent._background_review_run is None
++    finally:
++        handle.dispose()
++
++
++def test_real_plugin_context_registers_profile_scoped_stage_and_disposes(tmp_path):
++    from hermes_cli.plugins import PluginContext, PluginManager, PluginManifest
++    from hermes_constants import get_hermes_home
++    from agent import persona_stage as stage
++    manager = PluginManager(scope_key=str(tmp_path))
++    ctx = PluginContext(PluginManifest(name='synthetic-persona'), manager)
++    observed = []
++    def authorize(meta):
++        assert get_hermes_home().resolve() == tmp_path.resolve()
++        return True
++    def callback(stage_context):
++        assert get_hermes_home().resolve() == tmp_path.resolve()
++        observed.append(stage_context.home)
++        return 'no_change'
++    handle = ctx.register_background_review_persona_stage(callback, authorize=authorize)
++    try:
++        request = stage.capture_turn(home=tmp_path, surface='cli', session_id='s', turn_id='t',
++                                     user_text='visible', assistant_text='response')
++        assert stage.invoke(request, SimpleNamespace(cancel_requested=threading.Event()),
++                            {'completed': True}) == 'no_change'
++        assert observed == [tmp_path.resolve()]
++    finally:
++        handle.dispose()
++    assert stage.capture_turn(home=tmp_path, surface='cli', session_id='s', turn_id='t',
++                              user_text='visible', assistant_text='response') is None
++
++
++def test_real_review_worker_keeps_persona_inside_parent_lifecycle(tmp_path, monkeypatch):
++    from agent import background_review as review
++    from agent import persona_stage as stage
++    parent = SimpleNamespace(_background_review_lock=threading.Lock(),
++        _background_review_run=None, _background_review_agent=None,
++        _safe_print=lambda *a: None, background_review_callback=None,
++        memory_notifications='off', _emit_auxiliary_failure=lambda *a: None)
++    class Fork:
++        _session_messages = []
++        released = False
++        def run_conversation(self, **kwargs):
++            return {'completed': True, 'failed': False, 'interrupted': False}
++        def release_clients(self):
++            self.released = True
++    fork = Fork()
++    monkeypatch.setattr(review, '_parent_can_emit_tool_calls', lambda *a: True)
++    monkeypatch.setattr(review, 'build_cache_parity_fork', lambda *a, **kw: (fork, None, False))
++    monkeypatch.setattr(review, '_review_tool_whitelist', lambda *a: (set(), set()))
++    monkeypatch.setattr(review, '_snapshot_review_usage', lambda *a: {})
++    monkeypatch.setattr(review, '_record_review_usage_to_parent', lambda *a: None)
++    run = review.prepare_background_review_run(parent)
++    observed = []
++    def callback(ctx):
++        assert parent._background_review_run is run
++        assert not run.request_done.is_set()
++        assert fork.released
++        observed.append(threading.get_ident())
++        return 'no_change'
++    entry = stage.register_stage(tmp_path, 'fixture-plugin', callback, authorize=lambda meta: True)
++    try:
++        request = stage.capture_turn(home=tmp_path, surface='cli', session_id='s', turn_id='t',
++                                     user_text='visible', assistant_text='response')
++        review._run_review_in_thread(parent, [], 'review', review_run=run, persona_request=request)
++        assert observed == [threading.get_ident()]
++        assert run.request_done.is_set()
++        assert parent._background_review_run is None
++        assert parent._last_persona_review_status == 'no_change'
++    finally:
++        entry.dispose()
++
++
++def test_native_cancel_token_fences_commit_and_detaches_closed_fork():
++    from agent.background_review import _BackgroundReviewRun
++    run = _BackgroundReviewRun()
++    assert run.begin_request(object())
++    run.detach_request()
++    assert not run.request_done.is_set()
++    assert run.cancel() is None
++    assert not run.try_enter_persona_commit(lambda: True)
++    fresh = _BackgroundReviewRun()
++    assert fresh.try_enter_persona_commit(lambda: True)
++    assert not fresh.try_enter_persona_commit(lambda: True)
++
++
++def test_projection_requires_consent_before_plaintext_is_delivered(tmp_path):
++    stage = importlib.import_module('agent.persona_stage')
++    seen = []
++    entry = stage.register_stage(tmp_path, 'fixture-plugin', lambda ctx: None,
++                                 authorize=lambda meta: seen.append(dict(meta)) or False)
++    try:
++        request = stage.capture_turn(home=tmp_path, surface='cli', session_id='s', turn_id='t',
++                                     user_text='private user', assistant_text='private assistant')
++        assert request is None
++        assert seen and not any('private' in str(v) for v in seen[0].values())
++    finally:
++        entry.dispose()
++
++
++def test_authorized_visible_projection_runs_in_same_task_and_revokes(tmp_path):
++    stage = importlib.import_module('agent.persona_stage')
++    seen = []
++    thread_id = threading.get_ident()
++    def callback(ctx):
++        assert threading.get_ident() == thread_id
++        assert not ctx.cancelled()
++        seen.extend(item.text for item in ctx.items)
++        return 'no_change'
++    entry = stage.register_stage(tmp_path, 'fixture-plugin', callback, authorize=lambda meta: True)
++    try:
++        request = stage.capture_turn(home=tmp_path, surface='cli', session_id='s', turn_id='t',
++                                     user_text='visible user', assistant_text='visible assistant')
++        assert request is not None
++        run = SimpleNamespace(cancel_requested=threading.Event())
++        assert stage.invoke(request, run, {'completed': True}) == 'no_change'
++        assert seen == ['visible user', 'visible assistant']
++        entry.dispose()
++        assert stage.invoke(request, run, {'completed': True}) == 'cancelled'
++    finally:
++        entry.dispose()
++def test_actual_finalizer_projects_only_original_visible_turn(tmp_path,monkeypatch):
++    from agent.turn_finalizer import finalize_turn
++    from hermes_cli.plugins import PluginContext,PluginManager,PluginManifest
++    from tests.agent.test_turn_finalizer_final_response_persistence import FakeAgent
++    parent=FakeAgent()
++    parent._session_db=SimpleNamespace(db_path=tmp_path/'state.db')
++    manager=PluginManager(scope_key=str(tmp_path));manager._cli_ref=object()
++    sdk=PluginContext(PluginManifest(name='synthetic-persona'),manager)
++    handle=sdk.register_background_review_persona_stage(lambda c:'no_change',authorize=lambda m:True)
++    launched=[]
++    parent._spawn_background_review=lambda **kw:launched.append(kw)
++    monkeypatch.setattr('hermes_cli.plugins.invoke_hook',lambda *a,**kw:[])
++    try:
++        result=finalize_turn(parent,final_response='visible final',api_call_count=1,
++            interrupted=False,failed=False,messages=[{'role':'user','content':'augmented hidden history'}],
++            conversation_history=[],effective_task_id='task',turn_id='turn',
++            user_message='augmented hidden history',original_user_message='original visible user',
++            _should_review_memory=True,_turn_exit_reason='fallback_prior_turn_content')
++        assert not result['failed']
++        assert len(launched)==1
++        request=launched[0].get('persona_request')
++        assert request is not None
++        assert tuple(i.text for i in request.items)==('original visible user','visible final')
++    finally:
++        handle.dispose()
++@pytest.mark.parametrize('raises',[False,True])
++def test_early_native_gate_always_acknowledges_managed_task(monkeypatch,raises):
++    from agent import background_review as review
++    parent=SimpleNamespace(_background_review_lock=threading.Lock(),_background_review_run=None,
++        _background_review_agent=None,provider='fixture',_emit_auxiliary_failure=lambda *a:None)
++    run=review.prepare_background_review_run(parent)
++    def gate(*args):
++        if raises: raise ValueError('synthetic route failure')
++        return False
++    monkeypatch.setattr(review,'_parent_can_emit_tool_calls',gate)
++    monkeypatch.setattr(review,'_resolve_review_runtime',lambda *a:{'routed':False})
++    review._run_review_in_thread(parent,[],'review',review_run=run)
++    assert run.request_done.is_set()
++    assert parent._background_review_run is None
++@pytest.mark.parametrize('platform',['qqbot','telegram','cron','api'])
++def test_missing_surface_never_promotes_remote_agent_to_classic_cli(tmp_path,monkeypatch,platform):
++    from agent import persona_stage as stage
++    entry=stage.register_stage(tmp_path,'synthetic',lambda c:'no_change',authorize=lambda m:True,local_cli=True)
++    parent=SimpleNamespace(platform=platform,session_id='s',_session_db=SimpleNamespace(db_path=tmp_path/'state.db'))
++    monkeypatch.setattr('hermes_cli.plugin_session.session_surface',lambda:'')
++    try:
++        assert stage.capture_current_turn(parent,'visible','reply','t') is None
++    finally:
++        entry.dispose()

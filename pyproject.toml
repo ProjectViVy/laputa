@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "laputa-garden-hermes"
+version = "0.1.0"
+description = "Plain-text, role-scoped persona governance for Hermes"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8", "build>=1", "ruff>=0.17,<0.18"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["garden_hermes"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

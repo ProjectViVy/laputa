@@ -1,0 +1,3 @@
+# A distributed patch is byte-preserving data, not source to normalize.
+# Its context includes intentionally blank single-space lines; inner SDK code was checked separately.
+garden_hermes/host_patch/persona-stage-v1.patch -text -whitespace

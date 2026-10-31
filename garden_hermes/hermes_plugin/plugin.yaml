@@ -1,0 +1,10 @@
+manifest_version: 2
+api_version: 1
+name: garden-persona
+version: 0.1.0
+description: Role-scoped Markdown persona evolution inside native background review
+kind: standalone
+author: ProjectViVy
+license: MIT
+provides_tools: []
+provides_hooks: []

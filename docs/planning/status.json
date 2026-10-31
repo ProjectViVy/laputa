@@ -1,8 +1,8 @@
 {
   "project": "ProjectViVy/laputa",
-  "phase": "preparation_only",
-  "planning_mode": true,
-  "implementation_authorized": false,
+  "phase": "development_verified_not_installed",
+  "planning_mode": false,
+  "implementation_authorized": true,
   "product_owner": "mastwet",
   "primary_supervisor": "AGENT-Songbai",
   "first_host": "Hermes",
@@ -39,12 +39,17 @@
         "R08",
         "R10"
       ],
-      "status": "planned",
-      "implementation_authorized": false,
-      "blockers": [
-        "implementation_authorization"
-      ],
-      "plan": "plans/G01.md"
+      "status": "done",
+      "implementation_authorized": true,
+      "blockers": [],
+      "plan": "plans/G01.md",
+      "authorized_scope": "development_and_synthetic_verification_only",
+      "verification": {
+        "layer": "synthetic_development_only",
+        "evidence": "DEVELOPMENT-ACCEPTANCE.md",
+        "live_data_used": false,
+        "scope": "authorized_development_and_synthetic_layer_only"
+      }
     },
     {
       "id": "G02",
@@ -56,12 +61,17 @@
         "R07",
         "R09"
       ],
-      "status": "planned",
-      "implementation_authorized": false,
-      "blockers": [
-        "implementation_authorization"
-      ],
-      "plan": "plans/G02.md"
+      "status": "done",
+      "implementation_authorized": true,
+      "blockers": [],
+      "plan": "plans/G02.md",
+      "authorized_scope": "development_and_synthetic_verification_only",
+      "verification": {
+        "layer": "synthetic_development_only",
+        "evidence": "DEVELOPMENT-ACCEPTANCE.md",
+        "live_data_used": false,
+        "scope": "authorized_development_and_synthetic_layer_only"
+      }
     },
     {
       "id": "G03",
@@ -74,12 +84,17 @@
         "R04",
         "R07"
       ],
-      "status": "planned",
-      "implementation_authorized": false,
-      "blockers": [
-        "implementation_authorization"
-      ],
-      "plan": "plans/G03.md"
+      "status": "done",
+      "implementation_authorized": true,
+      "blockers": [],
+      "plan": "plans/G03.md",
+      "authorized_scope": "development_and_synthetic_verification_only",
+      "verification": {
+        "layer": "synthetic_development_only",
+        "evidence": "DEVELOPMENT-ACCEPTANCE.md",
+        "live_data_used": false,
+        "scope": "authorized_development_and_synthetic_layer_only"
+      }
     },
     {
       "id": "G04",
@@ -94,12 +109,17 @@
         "R08",
         "R10"
       ],
-      "status": "planned",
-      "implementation_authorized": false,
-      "blockers": [
-        "implementation_authorization"
-      ],
-      "plan": "plans/G04.md"
+      "status": "done",
+      "implementation_authorized": true,
+      "blockers": [],
+      "plan": "plans/G04.md",
+      "authorized_scope": "development_and_synthetic_verification_only",
+      "verification": {
+        "layer": "synthetic_development_only",
+        "evidence": "DEVELOPMENT-ACCEPTANCE.md",
+        "live_data_used": false,
+        "scope": "authorized_development_and_synthetic_layer_only"
+      }
     },
     {
       "id": "G05",
@@ -111,12 +131,17 @@
         "R06",
         "R07"
       ],
-      "status": "planned",
-      "implementation_authorized": false,
-      "blockers": [
-        "implementation_authorization"
-      ],
-      "plan": "plans/G05.md"
+      "status": "done",
+      "implementation_authorized": true,
+      "blockers": [],
+      "plan": "plans/G05.md",
+      "authorized_scope": "development_and_synthetic_verification_only",
+      "verification": {
+        "layer": "synthetic_development_only",
+        "evidence": "DEVELOPMENT-ACCEPTANCE.md",
+        "live_data_used": false,
+        "scope": "authorized_development_and_synthetic_layer_only"
+      }
     },
     {
       "id": "G06",
@@ -136,17 +161,21 @@
         "R09",
         "R10"
       ],
-      "status": "blocked",
-      "implementation_authorized": false,
-      "blockers": [
-        "implementation_authorization",
-        "real_data_model_and_activation_authorization",
-        "approved_shared_root_and_initial_persona_binding"
-      ],
-      "plan": "plans/G06.md"
+      "status": "done",
+      "implementation_authorized": true,
+      "blockers": [],
+      "plan": "plans/G06.md",
+      "authorized_scope": "development_and_synthetic_verification_only",
+      "real_pilot_status": "not_authorized",
+      "verification": {
+        "layer": "synthetic_development_only",
+        "evidence": "DEVELOPMENT-ACCEPTANCE.md",
+        "live_data_used": false,
+        "scope": "authorized_development_and_synthetic_layer_only"
+      }
     }
   ],
-  "design_readiness": "SPECIFIED_NOT_IMPLEMENTED",
+  "design_readiness": "IMPLEMENTED_SYNTHETIC_VERIFIED",
   "source_audit": {
     "hermes_sha": "bf0203a794a07aac3ff764972ab9087baa4e4f4e",
     "laputa_preparation_sha": "425a15b02d4975954362a91515f95709f46d3bfb",
@@ -157,7 +186,8 @@
     "product_tests_run": false,
     "memory_provider_config_explicit": false,
     "installed_source_not_same_as_proven_loaded_process": true,
-    "parent_review_cancel_statically_verified": true
+    "parent_review_cancel_statically_verified": true,
+    "snapshot_scope": "pre-implementation design audit; current verification is recorded separately"
   },
   "decisions": [
     {
@@ -227,7 +257,7 @@
     "second_scheduler": false,
     "cron_required": false,
     "trigger": "persona_stage_inside_native_managed_review_lifecycle",
-    "host_bridge": "accepted_design_not_implemented",
+    "host_bridge": "implemented_in_isolated_copy_not_installed",
     "default_adoption": "bounded_automatic_by_file_policy",
     "mission_automatic_changes_allowed": false,
     "mission_change_requires": "explicit_user_grant_for_exact_version_and_change",
@@ -274,6 +304,57 @@
     "cross_persona_assembly_allowed": false,
     "persona_fallback_allowed": false,
     "recovery_directory_pattern": "<home>/plugin-data/garden/last-apply/<persona_id>/",
-    "multi_persona_runtime_in_scope": false
-  }
+    "multi_persona_runtime_in_scope": false,
+    "shared_directory_created_scope": "real profile only; tests created synthetic scratch fixtures"
+  },
+  "execution_mode": "songbai_direct_serial",
+  "deployment_authorized": false,
+  "plugin_installation_authorized": false,
+  "implementation_authorization": {
+    "local_date": "2026-11-01",
+    "execution_correction": "songbai_direct_serial_no_default_delegation",
+    "scope": [
+      "project_code_and_tests",
+      "development_dependencies_in_isolated_environment",
+      "isolated_hermes_source_changes",
+      "synthetic_fake_provider_integration",
+      "packaging_verification"
+    ],
+    "excluded": [
+      "active_hermes_modification",
+      "plugin_installation_or_enablement",
+      "real_persona_read_migration_or_write",
+      "product_model_calls_on_private_material",
+      "public_push_or_release"
+    ],
+    "laputa_branch": "dev/markdown-persona-20261101",
+    "isolated_hermes_directory": "../laputa-hermes-dev"
+  },
+  "verification": {
+    "source_component_passed": 87,
+    "isolated_host_passed": 218,
+    "fresh_wheel": {
+      "passed": true,
+      "component": {
+        "cases": 87,
+        "failed": 0,
+        "skipped": 0,
+        "exit_code": 0
+      },
+      "host": {
+        "cases": 218,
+        "failed": 0,
+        "skipped": 0,
+        "exit_code": 0
+      },
+      "import_origin_checked": true,
+      "source_shadowing_disallowed": true
+    },
+    "real_pilot": "not_authorized",
+    "independent_reviewer_used": false,
+    "native_patch_commit": "e8236cc2a606820880968260f3e056cccfcfe8bb",
+    "ruff": "passed",
+    "real_private_model_acceptance": "not_authorized_not_performed"
+  },
+  "protected_instruction_files_modified": false
 }
