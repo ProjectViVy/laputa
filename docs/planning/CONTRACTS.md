@@ -10,11 +10,15 @@
 
 本期 SOUL 顺序：MISSION→IDENTITY→RELATIONSHIP→REDLINE→DREAM→DARK，空可选文件跳过，加可选私有 HOST。只有输出可以加组装标题，源原文不被重写/裁剪。未初始化必要源不得由模型编造。
 
+角色目录固定为 `<approved_shared_root>/personas/<persona_id>/`。每次宿主绑定只能选择一个明确角色；缺失/未知角色拒绝，不能扫描目录猜角色、回退共享根/default/songbai，或拼接多个角色。绑定必须固定 persona_id、解析目录、home、binding_revision；模型/正文不能选择角色。提交时再确认当前绑定相同，旧任务不能借缓存覆盖新角色输出。
+
+MissionChangeGrant/文件版本/候选/恢复结果都绑定 persona_id，不可因文件名或内容摘要相同跨角色复用。恢复目录为 `<home>/plugin-data/garden/last-apply/<persona_id>/`，仅供该角色/宿主使用；不是新角色注册表或数据库。本期只实际服务松柏，不实现热切换/并行人格。
+
 ## 2. 类型（任务内，不是运行数据库）
 
 | 类型 | 必须字段/职责 |
 | --- | --- |
-| BoundScope | persona_id、approved_source_directory、resolved_home、固定 file_key→路径映射、assembly_order、auto_writable_files、soul_path、可选 HOST、consent/policy、approved_mission_digest、原生 attempt/cancel guard |
+| BoundScope | persona_id、approved_source_directory、resolved_home、固定 file_key→路径映射、assembly_order、auto_writable_files、soul_path、可选 HOST、binding_revision、consent/policy、approved_mission_digest、原生 attempt/cancel guard |
 | SourceSnapshot | file_bytes: file_key→原文字节、source_versions、完整读集、host_bytes/version?、soul_before/version；由真实获准文件读取，不解析段 |
 | VisibleEvidence | 获准当前回合 item_id/turn/role/text/source_ref，不含整段历史/system/tool/reasoning |
 | FileReplacement | candidate_id、file_key、expected_file_version、replacement_text、source_item_ids、rationale、counterevidence；每 actual attempt 至多一个自动可写目标 |
@@ -52,7 +56,7 @@ Laputa 自己完成源文件修改后同轮重组装 SOUL。人类手改在下�
 
 本期一次自动更新最多一个源文档；未变文件不重写。全部新文本先在锁外准备，短互斥区核验完整源读集/HOST/SOUL/使命 pin 后，持久必要 Markdown 恢复材料，再各自 atomic replace/readback。
 
-没有目录整体事务/跨文件 ACID/全写者 CAS。检测漂移拒绝，非合作外部编辑器最后检查后的竞态本期不消除。私有 last-apply/：APPLY.md、before/<changed_file_key>、after/<changed_file_key>、SOUL.before.md/SOUL.after.md；其他输入的版本记录在附属回执，不写入源正文。未知上笔不能覆盖，清理不级联原生数据。
+没有目录整体事务/跨文件 ACID/全写者 CAS。检测漂移拒绝，非合作外部编辑器最后检查后的竞态本期不消除。私有 last-apply/<persona_id>/：APPLY.md、before/<changed_file_key>、after/<changed_file_key>、SOUL.before.md/SOUL.after.md；其他输入的版本记录在附属回执，不写入源正文。未知上笔不能覆盖，清理不级联原生数据。
 
 源 after、其余输入仍匹配、SOUL before：source_saved_host_pending，只允许在许可有效下重组装 host；都 after：persisted_verified；都 before：observed_before；其他/第三种内容：inconsistent_conflict，停止。回滚须新授权且当前仍等于原 after；不覆盖后续合法编辑。
 

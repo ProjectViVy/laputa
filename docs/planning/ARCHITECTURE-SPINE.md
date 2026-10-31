@@ -17,15 +17,20 @@ Python 重写，旧 Go 只参考适用语义。无 Laputa 数据库、JSON 运�
 逻辑目录（未创建）：
 
 ```text
-<shared_root>/personas/songbai/
-  MISSION.MD
-  IDENTITY.MD
-  RELATIONSHIP.MD
-  REDLINE.MD
-  DREAM.MD
-  DARK.MD
-  USER.MD      （历史职责保留，首期不进 SOUL/不自动写）
-  WORLD.MD     （历史职责保留，首期不进 SOUL/不自动写）
+<shared_root>/personas/
+├── songbai/                 # 角色 ID：松柏；本期唯一真实对象
+│   ├── MISSION.MD
+│   ├── IDENTITY.MD
+│   ├── RELATIONSHIP.MD
+│   ├── REDLINE.MD
+│   ├── DREAM.MD
+│   ├── DARK.MD
+│   ├── USER.MD              # 首期不自动读取/写入/拼进 SOUL
+│   └── WORLD.MD             # 首期不自动读取/写入/拼进 SOUL
+└── another-role/            # 仅未来目录示意，不创建/启用该人格
+    ├── MISSION.MD
+    ├── IDENTITY.MD
+    └── ...
 ```
 
 | 文件 | 内容 | 自动修改 | 首期 SOUL 组装 |
@@ -40,6 +45,10 @@ Python 重写，旧 Go 只参考适用语义。无 Laputa 数据库、JSON 运�
 | WORLD.MD | 当前环境/世界描述职责 | 本期保留为可选人工资料，不建第二记忆库 | 不默认包含 |
 
 USER/WORLD 的排除是 Hermes-first 职责分工，不是把它们合进别的源文件。Hermes 原生 USER/MEMORY/skills 继续拥有各自运行数据；首期不为兼容旧目录同步两套用户事实。可选文件无需填假内容；未初始化的必要源由用户初始化，不由模型推测使命。
+
+**角色目录是必需边界，不是可选展示层。** 一个角色一个稳定 persona_id 文件夹，角色显示名不作为自动寻找目录的依据。宿主绑定明确指定 persona_id、该目录的解析路径、home 与 binding_revision；缺失/未知时拒绝，不回退到共享根或 songbai。读取、归纳、写入、使命授权与组装只针对绑定角色，禁止递归扫描或合并其他角色文件。
+
+同名 MISSION.MD 属于不同角色，不可互用授权/版本。恢复材料按 `<home>/plugin-data/garden/last-apply/<persona_id>/` 隔离；persona_id、源目录、home 与绑定版本必须共同匹配。发生绑定变更，旧任务不能覆盖新绑定角色的 SOUL。目录层次为未来留边界，本期不实现角色列表管理/热切换/多人格并行运行。
 
 以上是拟议首期映射，旧布局为来源，当前映射不是旧 Go 实现/限额照搬。实际 shared_root、初始化内容与绑定在真实部署前批准，其他 profile 不因共享路径而获自动写权限。
 
@@ -99,7 +108,7 @@ Laputa 自动修改源成功后立即进行本轮重组装；用户手动编辑�
 
 目录内多个独立文件不是一个原子事务；两个 replace 不是 ACID。检测到人工编辑漂移就停；本期不保证防住最后核验后的非合作外部竞写，不做全局 CAS/长维护窗口。取消先于短提交准入不写；已进入提交则报告真实结果，不能声称撤销已写文件。模型阶段不持文件锁，提交阶段无模型/人工等待。
 
-私有 last-apply/ 只保留最后一笔 APPLY.md、before/<原文件名>、after/<原文件名> 与 SOUL.before.md/SOUL.after.md。文件正文备份仍是原文，路径/版本/结果元数据只在附属回执或宿主绑定中，不插入人格文件。未知上笔不能被新操作覆盖；无长期任务/候选/事件数据库。
+私有 last-apply/<persona_id>/ 只保留该角色最后一笔 APPLY.md、before/<原文件名>、after/<原文件名> 与 SOUL.before.md/SOUL.after.md。文件正文备份仍是原文，路径/版本/结果元数据只在附属回执或宿主绑定中，不插入人格文件。未知上笔不能被新操作覆盖；无长期任务/候选/事件数据库。
 
 本轮源文件 after 且所有其他输入仍匹配、SOUL before：source_saved_host_pending，可在许可仍有效时只重组装 SOUL；都 after：persisted_verified；都 before：observed_before；第三种内容/其他组合：conflict，停止。回滚新授权且当前仍匹配该笔 after，不能覆盖后续手改。没有持久依据的骤死不假称可完整重放。
 

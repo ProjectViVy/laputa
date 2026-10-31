@@ -11,7 +11,7 @@
 | [宿主阶段](planning/HERMES-REVIEW-BRIDGE.md) | 同一个 review 任务内的 persona callback/取消 | 最小扩展方向接受，接口未实现 |
 | [源码核对](planning/HERMES-SOURCE-AUDIT.md) | 固定源码与旧 Mission 讨论的定向证据 | 静态，不是运行验收 |
 | [G01–G06](planning/plans/index.md) | 唯一 DAG/文件所有权/逐 Story 计划 | 全部实施未授权 |
-| [验收矩阵](planning/CONFORMANCE.md) | C01–C40 / 需求映射 | 全部待执行 |
+| [验收矩阵](planning/CONFORMANCE.md) | C01–C41 / 需求映射 | 全部待执行 |
 | [开发准入](planning/DEVELOPMENT-READINESS.md) | 已决定原则与未来开工/真实使用授权分开 | 无 Ready |
 | [status.json](planning/status.json) | 仅仓库计划元数据，不部署为业务数据库 | 实施/运行 false |
 | [ADR-0019](architecture/0019-hermes-first-persona-evolution.md) | 历史重启/Hermes-first 上位方向 | 后续细节由 ADR-0020 补充 |
@@ -28,3 +28,4 @@
 - https://hermes-agent.nousresearch.com/docs/developer-guide/plugin-llm-access
 
 没有创建/搬运真实共享人格文件，未安装/启用/修改运行实例；源码能力、拟议接口和真实验收分开记录。
+角色隔离：共享目录必须是 personas/<persona_id>/ 分层；每个角色独立纯文档，绑定/使命授权/恢复按角色区分。本期只服务松柏，不做多角色运行管理。

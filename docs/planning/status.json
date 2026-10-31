@@ -184,6 +184,11 @@
       "id": "D05",
       "status": "owner_accepted",
       "topic": "separate source documents with opaque human-editable text; permissions/order outside bodies, no required blocks/headings/markers/frontmatter"
+    },
+    {
+      "id": "D06",
+      "status": "owner_accepted",
+      "topic": "mandatory separate role directory per persona_id; role-bound source/assembly/mission authorization/recovery, no mixed-persona flat directory"
     }
   ],
   "requirements": [
@@ -262,6 +267,13 @@
     "source_sections_required": false,
     "embedded_source_metadata_required": false,
     "max_automatically_changed_source_files_per_attempt": 1,
-    "user_world_runtime_mapping": "optional_human_documents_not_in_SOUL_not_mirrored_to_native_USER_MEMORY"
+    "user_world_runtime_mapping": "optional_human_documents_not_in_SOUL_not_mirrored_to_native_USER_MEMORY",
+    "role_directory_required": true,
+    "source_directory_pattern": "<approved_shared_root>/personas/<persona_id>/",
+    "current_planned_persona_id": "songbai",
+    "cross_persona_assembly_allowed": false,
+    "persona_fallback_allowed": false,
+    "recovery_directory_pattern": "<home>/plugin-data/garden/last-apply/<persona_id>/",
+    "multi_persona_runtime_in_scope": false
   }
 }
