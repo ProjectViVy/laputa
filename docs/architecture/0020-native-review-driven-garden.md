@@ -1,29 +1,30 @@
-# ADR-0020：原生 review 驱动的 Garden Python 详细设计
+# ADR-0020：原生受管 review、共享 Markdown 人格与组装
 
-日期 2026-10-31；状态：提议 / 待所有者确认 D01–D03；产品实施未授权。承接 [ADR-0019](0019-hermes-first-persona-evolution.md)，细节唯一源为 [详细架构](../planning/ARCHITECTURE-SPINE.md)。
+日期 2026-10-31；修订 `2026-10-31-markdown-shared-persona-v3`；状态：所有者设计原则接受，产品实施未授权。承接 [ADR-0019](0019-hermes-first-persona-evolution.md)，细节唯一源为 [详细架构](../planning/ARCHITECTURE-SPINE.md)。v2 独立 worker/JSON 台账方案退出当前计划。
 
-## 已接受的上位方向
+## 所有者决定
 
-首期 Hermes/松柏、单一原生 SOUL 权威。旧 Go 可参考架构，但语言/宿主/最新边界已变，新 Python 代码重写；不把归档理解为旧闭环失败，也不把旧实现作为兼容基线。
+- 新 Python 代码重写，旧 Go/DIVA/VIVY 仅参考架构/经验。
+- 使命不允许自动改写，必须用户明确授权；普通人格在允许段有界自动演化。
+- 并发先轻量，短时一次性编辑文件，暂不做全写者 CAS 或长期维护窗口。
+- 运行数据纯 Markdown + 组装，不建 Laputa 数据库或 JSON 业务台账。
+- Laputa 必须有本机共享目录的人格文件；已澄清不是公开 GitHub。
+- 最小宿主扩展接受；控制台查看/编辑入口未来可能提供，但不在本期。
 
-## 提议
+## 技术收敛
 
-选择原生 background review 实际 attempt 为时机；一个最小宿主 bridge 投影获准当前可见回合并发完整正常终态，Garden 通过薄 Python 插件管理候选、采纳、应用/恢复与新会话生效。手动入口只控制/调试，cron 只可选恢复，不建第二反思 Agent/时钟/记忆库。
+共享 PERSONA.md 是编辑源，Hermes SOUL.md 为确定性组装输出；可选 HOST.md 保存获准私有宿主补充，无双向同步/额外人格注入。首次接管/真实资料移动另行批准。
 
-因原生 fork 继承完整快照/摘要，不直接把其输入或 completion 导出为 persona evidence。合格新增证据至多一次独立 ctx.llm 人格归纳，允许 no_change；这是明确的额外辅助成本，不承诺零费用。
+persona 阶段留在同一个原生 review 的受管任务内，继承主任务取消/有界前台优先，不能在 end 后另起独立工作器。只处理获准可见证据；有需要时一次有界辅助人格归纳，模型/交互在文件临界区外。
 
-## 未选择
+共享源与宿主 SOUL 各一次替换，不声称跨文件 ACID；只保留最后一笔必要 Markdown 恢复材料。检测漂移拒绝，外部编辑器最后检查后的竞态暂不解决，不能拿瞬时编辑当全局文件锁。
 
-| 方案 | 不选理由 |
-| --- | --- |
-| 只用 extra_tools 让原生模型提交提案 | 工具可调用不保证调用/终态；完整上下文与证据边界不等价 |
-| 轮询 review 摘要/日志或扫历史回填 | no-action/取消/异常不完整，隐私与归因不稳 |
-| 独立定时反思 Agent | 重复宿主调度/上下文/预算与记忆责任 |
-| 仅手动候选命令 | 保留作调试，不满足原生 review 驱动的首期体验 |
-| 普通文件锁 + rename 宣称全局 CAS | 无法约束所有原生入口和外部编辑器 |
+## 已否决/退出
 
-## 成本/限制
+持久 RunRecord/ControlState、JSON 索引、durable queue、独立 persona worker、第二梦境时钟、v2 将 SOUL 同时作为唯一编辑源的设计。仓库 status.json 仍只是计划元数据，不作为运行存储。
 
-需要最小 core 接缝而不是纯零 core 变更插件；正常事件 fail-open，骤死前未交付事件不保证恢复。有限自动采纳和 writer 并发支持范围尚待 D01/D02；bridge 范围/维护与未来 core 修改需 D03。无产品实现、部署、真实数据或费用授权。
+归档 ADR-0017 的 mission verbatim/no generated Mission 只作原则证据，不重新引入旧 FrozenCore schema、八文件 roster 或旧数据库。
 
-原 ADR-0019 的未选技术栈属于整理当时状态；后续 Python 重写方向由本记录及详细计划补充，不改写历史为已实施。
+## 授权
+
+接受设计不等于开工。当前产品代码、测试、依赖/core 修改、真实数据/模型费用、配置/安装/启用、源目录初始化、SOUL 接管/修改和新验收会话均未授权。D01/D02/D03 不再重复等待用户选择，部署与运行参数在实际启用前确认。

@@ -1,37 +1,29 @@
 # Laputa · Garden
 
-> 新主线：开发准备阶段。没有交付新运行时、适配器或自动进化服务。
+> 当前为详细设计阶段；没有交付新运行实现、安装插件或启用自动进化。
 
-**Laputa** 是人格与记忆治理的规范与协议；**Garden** 是把证据转化为可验证更新的治理闭环。
+首期仅 **Hermes / AGENT-Songbai（松柏）自身的人格沉淀与进化**。Python 重写，旧 Go/DIVA/VIVY 仅参考设计经验。
 
-**首期宿主只有 Hermes，首个真实对象是 AGENT-Songbai（松柏）自身的人格沉淀与进化系统。** 不先做 Vivy 适配，不以跨宿主框架或统一 Web 控制台作为首期前提。
+## 已接受方向
 
-## 当前边界
+- 本机共享目录有一份 PERSONA.md 人格编辑源；与可选私有 HOST.md 确定性组装为原生 SOUL.md。共享不是公开 GitHub，无双向同步/第二人格注入。
+- 普通允许段可自动进化；**使命的新增、删除、改写必须用户明确授权**，不能扩大管理员/工具/隐私权限。
+- **纯 Markdown + 组装，不建 Laputa 数据库、JSON 运行台账、持久任务队列或独立 persona worker。** 现有 Hermes 原生会话/记忆存储不更换。
+- 同一原生 review 受管任务内运行 persona 阶段；最小宿主扩展方向已接受，代码/安装尚未授权。
+- 文件写入采用单实例单 writer 的短时一次性提交，检测漂移拒绝；当前不承诺任意外部写者 CAS/跨文件 ACID。
+- 未来 Garden 控制台可能支持查看/编辑，但不在本期，不预建 Web/API/服务/数据库。
 
-- 新代码按 Python/Hermes 最新决策重写；旧 Go 仅作架构/经验参考，不机械移植。
-- 复用 Hermes 原生人格、记忆、技能及上下文机制，不制造第二套权威文件或长期记忆引擎。
-- 详细设计采用原生 background review 生命周期驱动；最小宿主接缝尚待授权，手动为控制/调试入口，cron 不是第二反思时钟。
-- 人格沉淀不是把全部聊天写入 SOUL；人格、用户事实、长期记忆和程序性技能必须分流。
-- 进化闭环必须区分：证据收集、候选生成、按宿主策略应用、持久化回读、运行时生效验证及结果留存。
-- 当前只允许仓库整理、归档和设计准备；产品实现、测试代码、运行时配置、真实人格/记忆修改与定时任务尚未授权。
-- 项目所有者：mastwet；主责维护与验收：AGENT-Songbai。产品方向和高风险边界仍由所有者决定。
+## 入口
 
-## 从这里开始
-
-1. [当前决策 ADR-0019](docs/architecture/0019-hermes-first-persona-evolution.md)
-2. [首期 PRD](docs/planning/PRD.md)
+1. [当前详细决定 ADR-0020](docs/architecture/0020-native-review-driven-garden.md)
+2. [PRD](docs/planning/PRD.md)
 3. [详细架构](docs/planning/ARCHITECTURE-SPINE.md)
-4. [开发准备、路线与准入](docs/planning/DEVELOPMENT-READINESS.md)
-5. [归档入口与恢复](docs/archive/README.md)
-6. [文档索引](docs/README.md)
+4. [内部合同](docs/planning/CONTRACTS.md) / [最小宿主阶段](docs/planning/HERMES-REVIEW-BRIDGE.md)
+5. [Story 计划](docs/planning/plans/index.md) / [开发准入](docs/planning/DEVELOPMENT-READINESS.md)
+6. [文档索引](docs/README.md) / [归档](docs/archive/README.md)
 
-## 旧架构
+修订 `2026-10-31-markdown-shared-persona-v3`。所有产品 Story `implementation_authorized=false`。目录/真实人格初始化与迁移、模型/数据、代码/测试/core、配置/安装/启用/写入和新会话验收仍待各自授权；本轮只改文档，不创建真实人格源。
 
-原 Go `laputa/`、`mentle/`、`garden/`、Console、旧 ADR、执行计划及其测试记录均退出新主线，在 Git 归档中完整保留。
+## 历史
 
-- 旧 main 固定提交：`9acc999301d5d575da2cea902a1c6d213763f381`
-- 固定标签：`legacy/pre-reset-20261031`
-- 归档命名空间：`archive/2026-10-31/`
-
-历史代码和旧测试通过记录不证明新架构已经实现。原有已部署服务、其他仓库和其他机器的工作区不在此次整理范围内。
-详细设计修订：`2026-10-31-native-review-v2`；参见 [ADR-0020](docs/architecture/0020-native-review-driven-garden.md) 与 [拟议 Hermes review 接缝](docs/planning/HERMES-REVIEW-BRIDGE.md)。D01–D03 待决，实施/运行仍未授权。
+[ADR-0019](docs/architecture/0019-hermes-first-persona-evolution.md) 保留重启方向。旧 main `9acc999301d5d575da2cea902a1c6d213763f381`、标签 `legacy/pre-reset-20261031` 与 `archive/2026-10-31/` 完整保留。旧测试通过不等于新实现完成，既有部署/其他机器不会随此设计改变。

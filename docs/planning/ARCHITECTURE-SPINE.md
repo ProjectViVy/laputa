@@ -1,172 +1,136 @@
-# 详细架构：Garden × Hermes 原生反思驱动的人格沉淀
+# 详细架构：共享 Markdown 人格源 + Hermes 受管进化与组装
 
-设计修订：`2026-10-31-native-review-v2`。状态：CONCERNS / 仅设计；`implementation_authorized: false`。本稿替换“手动候选命令为主路径”的初稿，不保留两套执行计划。规范字段在 [CONTRACTS](CONTRACTS.md)，宿主接缝在 [HERMES-REVIEW-BRIDGE](HERMES-REVIEW-BRIDGE.md)，任务源在 [status.json](status.json)。
+修订 `2026-10-31-markdown-shared-persona-v3`。依据所有者最新决定及“公共目录指本机共享目录”的确认，替换 v2。只改设计，`implementation_authorized: false`；未创建共享目录/真实人格文件，未改运行实例。
 
-## 1. 目标与权威
+## 1. 已冻结的方向
 
-Laputa 定义权威、证据、采纳、冲突、恢复和有效性语义；Garden 是首个 Python 实现，服务 Hermes 中松柏自身的人格沉淀与进化。不先抽出通用 SDK、独立服务或多宿主框架。
+- 首期仅 Hermes/松柏；Python 重写，旧 Go/DIVA/VIVY 只参考架构与经验。
+- **使命不能自动新增、删除、改写或重新解释成另一使命，必须取得用户明确授权。** 权限、管理员身份、隐私红线也不能由人格候选扩大。
+- 自动进化只覆盖已声明的可演化人格/表达/自我认识段；使命不在可写段内。默认采用这一有界自动模式，candidate_only 只是调试/关闭写入选项，不再要求每轮人工批准普通人格变化。
+- **本机共享目录必须有一份人格 Markdown 编辑源。** 不是公开 GitHub，不意味着给所有 OS 用户写权限。
+- **纯 Markdown + 确定性组装**；不建 Laputa 数据库、JSON 运行台账、持久队列、游标索引、通用状态引擎或第二反思时钟。
+- 并发先轻量化：一个运行实例/一个 persona writer，模型与人工交互在写入临界区之外；准备完整内容后短时核验、一次替换每个目标文件。暂不解决任意外部编辑器竞写问题，冲突能检测到就拒绝，不冒充全局 CAS。
+- 接受最小宿主扩展的设计；实现、安装、启用、真实数据/费用与写入仍另行授权。
+- 未来 Garden 控制台可以查看/编辑，但不在本期：不新增 Web/API/控制台数据库，也不为它提前造服务层。
 
-旧 Go 版仅用于定向参考架构、闭环经验和故障案例。按最新决策重写 Python 代码，不翻译旧包，不继承旧 Effect、存储格式、接口、审批或调度。已定位旧 main `9acc999301d5d575da2cea902a1c6d213763f381`，不据此宣称旧版已重验或新实现已完成。
+## 2. 人格源和运行入口不是两份可编辑权威
 
-唯一运行人格是解析后 home 中的原生 SOUL。Garden 私有候选、证据、before/after 和回执不是另一人格源，绝不注入为额外 system prompt。USER、MEMORY、skills 与会话 overlay 仍归原生机制。
-
-## 2. 系统形态与责任分配
-
-**一个可独立分发的薄原生插件 + 一个拟议的最小 Hermes 生命周期接缝 + 操作技能。** 接缝不是新 Agent、记忆后端或新定时系统，且当前源码尚不具备完整合同；任何 core 修改、插件安装或运行启用均待另行授权。
-
-| 单元 | 负责 | 不负责 |
-| --- | --- | --- |
-| Hermes | 原生后台 review 的门槛/排队/取消、会话/凭证/辅助模型、人格加载、既有 memory/skills | 不假定已经有人格候选治理或跨写者 CAS |
-| 最小宿主接缝（拟议） | 可信调用绑定、获准可见证据投影、实际 review attempt 的 start/end 事件 | 不生成/采纳人格，不复制全部历史，不变更现有调度策略 |
-| Garden 插件 | 验证范围、私有状态、受限人格候选、采纳关卡、应用/恢复/激活证据 | 不拥有新 Session、Recap、人格加载器或长期记忆库 |
-| 原生 memory/skills review | 继续原有事实/技能维护 | Garden 不重复写同一事实或流程 |
-| 本地控制入口 | inspect/status/pause/recover，以及已授权策略下的决策/应用 | 不是每轮反思必须人工发命令，不默认开放 QQ 群控制 |
+选择**单向组装**：
 
 ```text
-Hermes 原生 review 门槛 / idle queue / cancel
-         │ 实际 attempt；携带触发时冻结的可信范围与可见证据投影
-         ▼
-拟议 start/end 事件 ──► Garden 私有 RunRecord（先落盘，短回调）
-                            │ 合格终态 + 未撤权 + 新证据
-                            ▼
-                     单 profile 惰性工作器
-                            │ 至多一次有界 ctx.llm 人格归纳
-                            ▼
-                 分类 / 出处 / 反例 / 候选或 no_change
-                            │ 独立业务校验 + D01 采纳关卡
-                            ▼
-                 D02 写入关卡 → intent → 原生 SOUL → 回读
-                            │ persisted_verified ≠ effective
-                            ▼
-                 获准的新验收会话 → 实际身份块证明 → 私有结果
+本机共享 <shared_root>/personas/songbai/PERSONA.md
+    ├─ 使命 / 用户授权边界：自动流程只读、逐字保留
+    └─ 人格 / 表达 / 自我认识：有界自动演化
+                         +
+当前 home 的私有 HOST.md（可选、用户批准的宿主补充）
+                         ↓ 纯函数组装，无模型参与
+当前 home 的原生 SOUL.md（生成的运行入口）
+                         ↓ Hermes 原生加载 / 会话快照
+指定新会话使用的人格
 ```
 
-## 3. 为什么不直接拿原生 review 的完整上下文生成人格
+**PERSONA.md 是人格编辑源，SOUL.md 是 Hermes 唯一的运行人格入口。** 取消 v2 中“SOUL 同时是唯一编辑源”的决定。不是两个文件各改一遍或双向同步，也不额外注入 Laputa system prompt。
 
-固定源码的同路由 review fork 会继承 messages_snapshot，异路由使用 digest；extra_tools 仅开放已在父工具表中的工具，不保证模型调用。见源码审计 E20–E23。
+shared_root 的实际绝对路径在部署时由用户批准；本轮只定义逻辑路径，不随意创建 /Users/Shared 或搬运真实 SOUL。按 persona_id 分目录，宿主绑定由受信任配置确定，不能从模型/正文读取。V1 只有一个绑定宿主负责自动写该 persona，其他 profile 不因目录共享而被授权写入。
 
-这不满足 R02 的“人格证据仅限获准可见文本”。因此 **V1 复用原生时机和生命周期，但不把完整 review 快照或原始 completion 当作人格输入**。有新增合格证据时，使用原生 ctx.llm 做一次独立、无工具循环的人格专用结构化归纳，不再重做普通 memory/skills 复盘；空、重复、不合范围和失败终态零新增调用。
+HOST.md 拟在 `<home>/plugin-data/garden/HOST.md`，可省略；它不是第二人格，不能作为覆盖使命/权限的旁路。USER/MEMORY/skills 仍归 Hermes 原生机制，不被拼进人格源。首次接管现有 SOUL 要先确认哪些内容进入共享源、哪些留私有宿主补充；未经许可不能复制真实资料或自动覆盖未接管文件。
 
-这确实可能比“原生 review 必定提交候选”多一次辅助调用，是数据边界的明确成本，不宣称零额外 token。若以后原生提供满足同样证据边界的 persona 阶段，才考虑合并调用。V1 不同时维护 extra_tools 提案主路径与自动归纳主路径。
+## 3. Markdown 组织与使命保护
 
-## 4. 触发、证据与可靠性范围
+不复活旧七/八文件 roster。PERSONA.md 一份文件，建议明确区分“使命”“授权与红线”“人格”“表达风格”“自我认识”段，实际初始内容由用户批准。
 
-1. 只在所有者启用且授予数据用途后，宿主在触发 review 时投影本次完成回合的原始可见 user 文本和最终可见 assistant 文本；不采系统提示、注入技能、工具原文、reasoning、完整历史或 review 私有过程。
-2. 投影绑定真实 home、受信任入口、原始回合和同意版本；在排队前冻结，通过宿主 kwargs/上下文传递，不能在后台线程读取“现在”的入口来冒充旧回合。
-3. 首期只接明确获准的本地操作者入口。QQ（包括所有者 DM）、群、远程和其他 profile 的自动证据入口在可信 transport 绑定独立验收前拒绝；正文中的 origin JSON/昵称不构成身份。
-4. 只有实际获准创建的 review attempt 产生 start/end；原生门槛未命中、尚未 dispatch 的排队项和被 coalesce 掉的快照不是已运行 attempt。不扫描历史补齐它们。
-5. 成功完成才可推进人格分析；原生 no_action 也可分析人格，因为“未修改技能”不代表“没有人格增量”。cancelled/failed/skipped/unknown 只结算，不生成或应用候选。
-6. 每次实际 attempt 可以结算 ignored_scope、no_new_evidence、no_change、candidate 或失败，不强制产生人格变化。
-7. **正常控制流的终态覆盖，不是跨进程 exactly-once。** 宿主骤死在事件持久化前可丢事件；事件已收但 end 缺失只记 incomplete_host_review，不猜成功。严格不丢事件需另设宿主持久 outbox，不在 V1 偷加。
+程序识别稳定段边界：自动 proposal 只能替换允许段的正文，不能改标题、重划段边界或加入重复的保护段。组装前后使命/授权段精确字节比较必须相等。边界缺失/重复/无法解析时拒绝自动写入，不自动修复或编造使命。未赋使命也不能由模型补出使命。
 
-## 5. 内部组件与依赖
+用户批准的使命版本摘要固定在受信任宿主绑定中，而不是由 PERSONA 正文或模型自填。源文件使命与已批准 pin 不匹配时，自动流程连组装传播都拒绝；更新使命及其批准 pin 都须用户授权。这样不把“别人已改了共享源”当成新使命许可，不引入数据库。
 
-以下均为拟新增路径，尚无产品代码：
+需要修改使命的提案只报告 needs_user_authorization；用户授权必须绑定具体 persona、当前版本与拟议改动，不能来自模型字段、昵称、引用或“你可以自主探索”之类泛化推断。把改变使命的要求塞入“人格”段也不能作为合法自动变化；明显越界拒绝，不确定转用户处理。结构检查不宣称能证明全部自然语言语义安全。
 
-| 模块 | 职责 / 依赖方向 |
+历史依据：归档 `9acc999301d5d575da2cea902a1c6d213763f381:docs/architecture/0017-diva-cognitive-contract-deltas.md:19-47` 明确 no generated Mission 和 mission first/verbatim；只继承适用原则，不继承旧协议/数据库/文件数量。
+
+## 4. 原生 review 是主生命周期，不另开后台工作器
+
+源码 `agent/background_review.py:75-99,129-167` 显示 run token 挂在父 Agent；前台新回合/停止可请求取消，有限等待后继续前台。`run_agent.py:806-827` 挂出 review 后台线程。它不是“主进程已经停住”，也不是全局文件锁。
+
+据此取消 v2 的“end 事件落盘后另起惰性 worker”方案。拟议宿主接缝把 **persona 阶段放进同一个受管 review 任务，完成该阶段后才释放该任务的取消/完成管理**：
+
+```text
+原生 review 准入、排队与执行
+    ↓ 原生完成 + 未取消 + 获准本地证据
+同一 review 任务内调用 Garden persona 阶段
+    ↓ 读取人格源快照、至多一次有界归纳
+严格段级校验 / no_change / needs_user_authorization
+    ↓ 确定性组装、提交前再检查取消和版本
+短提交：源文件替换 → Hermes SOUL 替换 → 回读
+    ↓ 最小 Markdown 结果；新会话生效另验
+原生任务统一结束与清理
+```
+
+取消/失败/无范围时不做人格分析；原生 memory/skills no_action 不等于 persona no_change，仍允许判断人格。Garden 不能假定把代码放到现有 on_end 后就自动受父任务取消；需要明确改造 run token/最终清理边界，详见 [接缝](HERMES-REVIEW-BRIDGE.md)。
+
+模型调用期间不持文件锁。新前台回合/stop/unload 可让该阶段失去提交资格；SDK 网络请求可能无法立即撤销，迟到结果不得开始文件提交。取消若发生在短提交开始之后，不宣称已撤销已发生写入：完成/报告真实结果，不盲目回滚。不得用会超时脱离的 observer 线程池承载写入阶段。
+
+## 5. 证据与归纳
+
+只接获准的本地当前回合 user/final assistant 可见文本；不要原生完整 history/digest、工具原文、隐藏推理、系统提示或未批准的 session_search 回填。QQ/群/远程证据入口尚无本期可信绑定验收，仍默认关闭，不把正文 JSON 当身份。
+
+原生 review fork 自带完整快照/摘要，因此 persona 阶段使用单独的有界 ctx.llm completion；只传获准证据与必要的可演化人格上下文，不把 HOST.md 或整篇私有 SOUL 自动外发。最多一次逻辑归纳、最多一个人格 patch；空/重复/no_change 合法。宿主物理重试/usage 如实记录，不假称一次物理请求或零额外费用。
+
+证据、候选和去重键主要在本次任务内存中存在，不做长期人格素材数据库。用户事实/记忆/技能只分流，既有原生机制继续写入；Garden 不再写一遍。反例可以否定或修订旧认识，不只不断增加人格内容。
+
+模型路由/供应商也属于数据同意；额外辅助调用可能仍争用本地 GPU，取消标志不是网络硬中断或资源隔离，启用具体路由前需验证。前台无需等人格更新完成不代表零资源争用。
+
+## 6. 组件：删掉通用状态层
+
+均为拟新增，未创建产品代码：
+
+| 模块 | 职责 |
 | --- | --- |
-| `garden_hermes/domain.py` | 严格类型、状态转移、不可变绑定；无宿主/IO依赖 |
-| `garden_hermes/host.py` | 固定 SDK/能力适配、真实 home/入口、ctx.llm、原生写入接缝；不 import Web handler 当领域服务 |
-| `garden_hermes/store.py` | 私有 RunRecord、不可变内容 blob、锁、恢复读写；不是人格/记忆引擎 |
-| `garden_hermes/lifecycle.py` | start/end 去重、惰性工作器、取消/撤权/恢复；依赖 domain/store/host |
-| `garden_hermes/proposal.py` | 获准证据到 Candidate/NoChange；无 writer 引用 |
-| `garden_hermes/review.py` | 确定性校验、D01 许可/采纳；不写 SOUL |
-| `garden_hermes/apply.py` | D02 合同下写入、对账、有条件回滚；只处理 SOUL |
-| `garden_hermes/activation.py` | 新验收会话能力检测与身份块证明；不改旧 prompt |
-| `garden_hermes/__init__.py`, `plugin.yaml` | 最终统一注册/卸载、能力拒绝与本地命令接线 |
-| `skills/garden/SKILL.md` | 操作与失败处置说明；不作为权限执行器 |
+| `domain.py` | 可信绑定、源快照、受限 patch、结果类型；纯逻辑 |
+| `host.py` | SDK、获准路径/证据、受管阶段与取消适配 |
+| `stage.py` | 在原生 review 任务内串接各步骤，无独立线程/工作器 |
+| `markdown.py` | PERSONA 段解析/保护校验、最小 Markdown 回执读写；不是通用 store |
+| `proposal.py` | 一次有界人格归纳，无 writer |
+| `review.py` | 使命/权限冻结、允许段、出处/反例与自动采纳判断 |
+| `assemble.py` | PERSONA + 可选 HOST → SOUL 的确定性纯函数 |
+| `apply.py` | 单写者短提交、回读、部分失败检查与有条件回滚 |
+| `activation.py` | 指定新会话实际请求身份块核验 |
+| `__init__.py` / `plugin.yaml` / 操作技能 | 注册/卸载与本地检查/调试；不隐式启动任务 |
 
-底层不依赖上层；proposal 不调用 apply；生命周期不决定权限；模型不生成 BoundContext/Decision/文件路径。无事件总线框架、外部队列、ORM、新数据库或 Web/MCP/REST。
+不再设计 store.py/lifecycle.py 的持久 RunRecord/ControlState、work.lock/control.lock、durable queue、全事件落盘或跨重启任务重放。运行配置仍走 Hermes 支持的配置生命周期，不把配置写成新业务数据库。
 
-## 6. 人格沉淀，而不是聊天摘要
+## 7. 短提交与并发支持范围
 
-模型只提出 target_kind、稳定自我认识、出处、理由、反例和替代/撤回关系。人格必须是有证据的自我认识；一时情绪、角色扮演、单次任务命令、第三人自称授权不能直接成为稳定自我。
+1. 读 source/HOST/当前 SOUL 的快照，在锁外完成模型归纳、校验和完整新文本组装；没新变化不写。
+2. 进入同运行实例的 persona 提交互斥区；检查取消/许可、源/HOST/SOUL 版本未漂移、使命保护、输出可被原生完整加载。
+3. 准备完整 Markdown 临时文件与必要恢复材料；记录一笔 APPLY.md。临界区不调用模型、不等人工、不做全库扫描。
+4. 对 PERSONA.md 一次原子替换；对 SOUL.md 一次原子替换；分别独立回读，更新最小结果说明。临时文件在目标文件系统准备，具体 fsync/replace 在目标 OS 验证。
+5. 漂移可检测则 conflict，拒绝覆盖；同实例只允许一个 writer。**不承诺最后一次比较与 replace 之间防住非合作外部写者**，不要求把日常演化变为长维护窗口，也不建全写者 CAS 服务。
 
-- persona：暂定观察或可采纳增量；支持反例、修订、撤回旧认识，不只做单向累加。
-- user_fact / memory_note / skill：返回指向原生机制的分流建议，不由 Garden writer 再写；不从原生 review 的原始记录抓文本证明已处理。
-- discard / no_change：合法终点，保留安全理由码即可。
+“瞬时”指短时一次性文件提交，不保证未测的毫秒延迟。两个不同文件不能靠两次 rename 变成一笔跨文件原子事务；源先更新而 SOUL 失败必须明确报告 source_saved_host_pending。
 
-候选成熟度和采纳是两回事。模型认为 stable 不授予自动写入；程序结构校验不证明观点真实，也不构成自然语言安全沙箱。
+## 8. 最小恢复材料：仍然是 Markdown
 
-## 7. D01：采纳与可演化范围（待所有者确认）
+只在实际应用时使用当前 home 私有 `<home>/plugin-data/garden/last-apply/`：APPLY.md、SOURCE.before.md、SOURCE.after.md、SOUL.before.md、SOUL.after.md。它们是最后一笔恢复材料，不是人格输入、任务库或长期证据仓库；不保存全聊天/隐藏推理/完整模型返回。
 
-部署默认 `adoption_mode=candidate_only`，只产出候选。建议先用合成/真实验收证明闭环，再开放 **一次授权范围内的有限自动采纳**，而不是每轮都询问或无限制自改。
+APPLY.md 用有限固定字段记录目标绑定、版本摘要、阶段与结果，可带简短安全理由和真实 usage。未完成/不明操作不得被下一笔覆盖；先检查/处置。已完成后只保留必要的最后备份，真实保留规则在启用前批准；不建立遍历历史的队列/索引。
 
-建议的自动写范围是 SOUL 内经所有者一次性批准的可演化片段：边界外字节必须完全不变，片段不承载管理员、工具、隐私或执行授权。新增此片段/标记本身也是一次真实 SOUL 修改，必须单独批准；当前不读/改真实 SOUL，不假定已有此格式。整篇人格重写或边界外变更转人工处理，不暗中扩大范围。
-
-需要冻结：允许片段和主题、证据成熟条件、反例/否决条件、策略版本/撤回、人工采纳接口与超时拒绝。D01 没有决定前，有限自动模式和应用入口保持不可用；候选生成可先独立验证。
-
-## 8. D02：写入并发合同（P0，不能靠“原子写”消除）
-
-当前原生 SOUL PUT 只有原子替换，无跨桌面、文件工具和外部编辑器的共享 CAS。
-
-- **建议首期采用明确受控的独占维护窗口**：所有者暂停其他 SOUL 编辑；Garden 合作写者串行，写前/写后核验，漂移拒绝。该选项缩窄 R05 支持范围，只有所有者明确接受后才成立，不适合宣称无人值守的任意并发热更新。
-- 若要求任意原生入口并发而不丢更新：须先另行设计/授权统一 expected-version 写入合同；通用 shell/非合作外部编辑仍不能被普通合作锁神奇阻止。
-
-D02 未定时 writer 不是“尽量安全版”，而是 blocked。具体可调用写入接缝由所选合同冻结；不能把 HTTP handler 当现成 SDK API，也不绕文件写入审批。
-
-## 9. 私有持久化与执行生命周期
-
-拟用宿主认可的当前 home 私有 `plugin-data/garden/`，是否与固定 SDK 数据目录一致由 G01 核实；不是配置为任意目录的公开服务。
-
-- 每个 attempt 一个原子 JSON RunRecord，是该 run 的唯一状态权威；其引用的 evidence、baseline、intent before/after blob 不可变。无独立队列状态或另一份人格。可重建索引只作缓存。
-- 内容先写临时文件、flush/fsync、原子替换，目录持久性按支持 OS 验证；权限目录 0700/文件 0600，拒绝路径/符号链接逃逸。不声称防同一 OS 用户的任意代码。
-- `work.lock` 限制每 home 同时一个处理器；`control.lock` 只保护短状态变更与提交检查。锁顺序 work→control；pause/revoke 只取 control，不能等模型返回才能撤权。不得把这两把合作锁描述成 SOUL 全局 CAS。
-- 原生回调仅验证/写事件状态/唤醒，不在 callback 调模型、等人工或写 SOUL。工作器按需启动，无独立周期时钟；生产状态为空时不轮询。
-- register 只注册能力和控制入口，不读真实人格、扫描会话或启动模型/任务。启用后在下一原生事件或本地 `recover` 才有界扫描未终态记录；可选宿主 cron 只做已授权恢复触发，不作为另一反思时钟，V1 不要求创建 cron。
-- plugin unload/pause 递增持久 generation，尽力取消并禁止旧 generation 提交。迟到 LLM 可已花费 token，不能保证网络调用撤销；返回后必须重新检查 generation/许可，旧任务无写入资格。锁未释放前不启动重叠处理器，不靠 PID 猜测强抢活锁。
-
-## 10. 一次正常流程
-
-1. 宿主冻结获准投影，实际 attempt start；Garden 写 waiting_host_end。
-2. 终态 completed 到达并持久化，候选任务 ready；无 start/无投影/错 home 则拒绝或 incomplete，不事后扫 DB 拼证据。
-3. 工作器检查启用/同意/预算/输入尺寸/基线读取许可；空批次零调用跳过。
-4. 读获准的原生人格基线，构造 analysis_key 并查重；已知终态复用，未知分析隔离。仅将批准的可演化片段/必要人格描述作为编辑目标上下文（不当事件证据），连同 evidence 提交一次结构化 completion。完整 exact_before 留在本地，未获整篇外发同意不能把整篇 SOUL 送辅助模型。
-5. 严格检查字段、引据、分类、反例、有效渲染预算和可写范围；格式失败不自动修复重发，留失败记录。
-6. 候选持久化；candidate_only 等待本地受信任决策，或在已冻结 D01 策略下形成 Decision。
-7. 获得 D02 写入条件后，再查 generation、同意/策略版本、候选精确基线；持久 intent → 目标写入 → 独立回读 → persisted_verified。
-8. 没有获准的新会话验证时保持 activation pending；不自行中断当前 QQ 工作会话。
-9. 在授权的新验收会话实际请求身份块中证明指定版本，形成只针对该 session/version 的 ActivationReceipt。其他旧会话不被宣称同时更新。
-
-## 11. 故障、去重与恢复
-
-| 边界 | 行为 |
+| 观察到的源 / SOUL | 结论 |
 | --- | --- |
-| 重复相同事件 | 同 event_key/同摘要返回已知结果；同 ID 不同内容冲突 |
-| 原生未完成/取消/失败 | 仅结算，不产生/写入人格；no_action 不是失败 |
-| 模型开始前崩溃 | ready 可恢复，仍须复核许可/基线 |
-| 模型调用中崩溃 | analysis_unknown，不自动补发；同 analysis_key 被隔离，须显式授权新分析 attempt |
-| 模型结果有了但未持久化 | 仍属于未知分析，不根据日志重建虚构候选 |
-| intent 持久化失败 | SOUL 不变 |
-| SOUL 写入后回执失败/进程退出 | 不再写一次；只做 current 与精确 before/after 对账 |
-| current == after / before / 其他 | observed_after / observed_before / unknown_conflict；不推断是谁写的 |
-| 回滚时已有后续编辑 | 拒绝；回滚是新 intent/新许可/新激活验证，不覆盖新内容 |
-| 记录损坏、空间/积压上限 | 隔离并暂停受影响处理；不删除未知 intent 或从默认身份继续 |
-| 旧工作器迟到 / 同意已撤回 | 不准提交；记录取消/撤权，不把 timeout 视为撤销副作用 |
+| 都等于 after | persisted_verified；仍不等于会话生效 |
+| 源 after、SOUL before | source_saved_host_pending；仅可在许可/版本仍有效时重组装 SOUL，不再次调用模型或重写源 |
+| 都等于 before | observed_before；不据此自动获得重新提交许可 |
+| 源 before、SOUL after，或任一为第三种内容 | inconsistent/conflict；停止，不能猜测或覆盖 |
 
-## 12. 生效、兼容与升级
+未留下恢复材料的进程骤死不伪称可完整恢复；不做 outbox/exactly-once。回滚也是新授权操作，必须检查当前源和 SOUL 仍匹配该笔 after；有后续编辑就拒绝，不能把用户手改覆盖掉。
 
-固定源码 `bf0203a794a07aac3ff764972ab9087baa4e4f4e` 的缓存恢复/加载约束见源码审计。安装文件存在、hook 注册成功、磁盘 HEAD、运行进程能力和真实闭环分别验证。
+## 9. 生效与首次接管
 
-首期不热改旧 prompt、不改 DB 缓存、不强制 compress/reset/restart、不用 repair-prompts 冒充 refresh。采用隔离合成 profile 及后续获准真实新 session；临时只读验收探针在实际请求路径内比较身份块，仅输出布尔/私有版本摘要，立即卸载，不保存 system prompt。截断/overlay/错路由必须暴露，缺观察字段返回 unverified。
+共享源更新、SOUL 更新、Hermes 某个会话加载新内容是三个状态。首次真实接管要批准源目录、初始人格/使命、可选 HOST、原 SOUL 的迁移/接管方案和绑定；本轮没有读取/搬运真实人格。
 
-宿主未实现拟议 bridge 或 schema 不匹配时，automatic=unsupported，apply disabled；本地候选调试不冒充自动闭环。升级前跑 bridge 合同与隔离集成；停用插件不回滚已写人格，不自动恢复旧 SOUL。
+首期仍用获准新验收会话核验实际请求身份块，不改旧 prompt、DB、工具集，不强制压缩/重启当前 QQ 会话。截断/overlay/错 home 不得算生效；缺观察字段返回 unverified。停用插件不会自动恢复旧人格。
 
-## 13. 配置、隐私与成本
+## 10. 决策与授权状态
 
-拟议开关不是现成 Hermes config key：enabled、scope/consent、adoption_mode、policy_revision、证据/输出/积压上限、deadline、私有保留规则。缺少真实数据保留规则时不能启用采证；真实保留期待批准，不擅自设无限期。未终态/未知 intent 必须保留恢复依据，清理不能级联删除原生记忆或会话。
+D01 已接受：有界自动人格演化，使命变化必须用户明确授权。D02 已接受：单写者短时文件提交、尽力检测漂移，当前不做完整并发协议。D03 已接受：最小宿主扩展方向。D04 已确认：人格文件在本机共享目录，不公开到互联网；技术上采用单向编辑源→宿主组装输出。
 
-公开日志仅安全 ID/状态/理由码/真实 usage，不输出 source 文本、before/after、路径、provider 原始异常或 prompt。私有记录也不默认存隐藏推理或全部 completion。SDK ctx.llm 不返回密钥，Garden 不读 auth/.env。脱敏是辅助手段，不是数据同意的替代或绝对隐私保证。
-
-辅助模型的实际供应商/模型/可能路由也属于数据同意，ctx.llm 不是“不外发”的保证；无法核实获准路由就不发送。V1 不承诺额外 persona 调用自动继承原生 managed-local GPU 的 idle/preempt 机制；若采用本地辅助路由，须先验证资源/抢占约束，否则该路由不启用。前台不等待 Garden 结果不代表零资源争用。
-
-无新增证据零模型；合格批次最多一次逻辑人格调用、最多一个 persona 候选；宿主物理重试/usage 单列。不声明未测费用、token、延迟或跨平台性能上限。新回合一律不强迫人格变化；容量/预算不足记录 skipped_budget/capacity，不延迟前台等待人格完成。
-
-## 14. 设计决策与实施边界
-
-- 已接受方向：Hermes-first、松柏首例、Python 重写、旧 Go 仅参考、单一原生权威。
-- 本稿选择的拟议技术主线：原生 review 生命周期驱动 + 投影证据 + 有界 persona completion + 薄插件治理；手动入口只是控制/调试，cron 不是主时钟。
-- D01：采纳模式/可演化片段；D02：并发保障支持范围；D03：最小宿主 bridge 的范围/维护及未来 core 修改授权，均待所有者决定。
-- 所有产品代码、测试代码、真实数据、模型费用、配置、插件启用、SOUL 修改和新会话试验仍未授权。详细设计不等于任何 Story Ready。
-
-详见 [开发准入](DEVELOPMENT-READINESS.md)、[验收矩阵](CONFORMANCE.md) 与 [执行清单](plans/index.md)。
+这些是设计决定，不是产品开工/真实数据/模型费用/配置/安装/写入授权。控制台入口未来再做。本期唯一执行计划见 [plans/index](plans/index.md)，字段见 [CONTRACTS](CONTRACTS.md)，验收见 [CONFORMANCE](CONFORMANCE.md)。

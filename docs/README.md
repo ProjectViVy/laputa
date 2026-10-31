@@ -1,36 +1,28 @@
 # 当前文档索引
 
-## 当前权威
+当前修订 `2026-10-31-markdown-shared-persona-v3`。最新所有者决定优先；v2 的 JSON 台账/独立工作器/编辑源方案退出执行计划。
 
 | 文档 | 用途 | 状态 |
 | --- | --- | --- |
-| [ADR-0019](architecture/0019-hermes-first-persona-evolution.md) | 归档重启、职责边界、Hermes-first 决策 | 方向接受；实现未授权 |
-| [ADR-0020](architecture/0020-native-review-driven-garden.md) | Python 重写、原生 review 驱动与取舍 | 提议；D01–D03 待决 |
-| [PRD](planning/PRD.md) | R01–R09与首期范围 | 详细设计稿；验收未执行 |
-| [详细架构](planning/ARCHITECTURE-SPINE.md) | 原生触发、证据/模块/生命周期、写入/恢复/激活 | CONCERNS；D01–D03待决 |
-| [Hermes review 接缝](planning/HERMES-REVIEW-BRIDGE.md) | 最小宿主扩展、正常终态、可信投影与可靠性边界 | 拟议，不是现成功能 |
-| [源码核对](planning/HERMES-SOURCE-AUDIT.md) | 固定Hermes源码的能力/风险证据 | 静态审计完成；不等于运行验收 |
-| [内部合同](planning/CONTRACTS.md) | 绑定、候选、许可、应用及激活状态 | 拟议；未实现 |
-| [Story计划索引](planning/plans/index.md) | G01–G06、DAG及逐项执行计划 | 全部实施未授权 |
-| [验收矩阵](planning/CONFORMANCE.md) | C01–C32与需求/Story映射 | 全部待执行 |
-| [开发准入](planning/DEVELOPMENT-READINESS.md) | 依赖波次、待决项、开工门槛 | 仓库准备与产品实现分开记录 |
-| [阶段状态](planning/status.json) | 机器可读授权与范围 | 产品实现始终 false，直到另行授权 |
-| [整理验收回执](planning/preparation-verification.json) | 归档、关闭和主线切换的真实回读证据 | 仓库准备完成；不是产品验收 |
+| [ADR-0020](architecture/0020-native-review-driven-garden.md) | 使命用户授权、共享人格源、纯 Markdown、轻量写入、原生受管阶段 | 设计原则已接受；未实施 |
+| [PRD](planning/PRD.md) | R01–R10 首期范围与控制台后置 | 当前计划 |
+| [详细架构](planning/ARCHITECTURE-SPINE.md) | 单向组装、使命 pin、生命周期/短提交/部分失败 | 拟议实现，未运行 |
+| [内部合同](planning/CONTRACTS.md) | 源/patch/组装/最小 Markdown 回执 | 未实现 |
+| [宿主阶段](planning/HERMES-REVIEW-BRIDGE.md) | 同一个 review 任务内的 persona callback/取消 | 最小扩展方向接受，接口未实现 |
+| [源码核对](planning/HERMES-SOURCE-AUDIT.md) | 固定源码与旧 Mission 讨论的定向证据 | 静态，不是运行验收 |
+| [G01–G06](planning/plans/index.md) | 唯一 DAG/文件所有权/逐 Story 计划 | 全部实施未授权 |
+| [验收矩阵](planning/CONFORMANCE.md) | C01–C37 / 需求映射 | 全部待执行 |
+| [开发准入](planning/DEVELOPMENT-READINESS.md) | 已决定原则与未来开工/真实使用授权分开 | 无 Ready |
+| [status.json](planning/status.json) | 仅仓库计划元数据，不部署为业务数据库 | 实施/运行 false |
+| [ADR-0019](architecture/0019-hermes-first-persona-evolution.md) | 历史重启/Hermes-first 上位方向 | 后续细节由 ADR-0020 补充 |
+| [整理证据](planning/preparation-verification.json) | 归档/主线切换回读 | 不是产品验收 |
 
-## 历史证据
+## 历史与官方来源
 
-- [归档入口](archive/README.md)：旧实现、旧分支、PR 候选、备份与安全恢复方式。
-- [归档清单](archive/2026-10-31/archive-manifest.json)：原始 SHA 与固定归档映射。
-- [重启前开放工作快照](archive/2026-10-31/open-work-items-before-reset.json)：Issue/PR 正文及现有评论/评审。
-- [Issue #14 来源快照](archive/2026-10-31/sources/issue-14.md)。
-- [48ec533 设计稿原文](archive/2026-10-31/sources/protocol-draft-48ec533.md)：保留原 ADR 编号和原文，仅作来源；不与当前 ADR-0019 竞争。
+- [归档入口](archive/README.md)、[清单](archive/2026-10-31/archive-manifest.json)、[原工作项快照](archive/2026-10-31/open-work-items-before-reset.json)。归档 AGENTS/旧稿不是当前执行指令。
+- https://hermes-agent.nousresearch.com/docs/llms.txt
+- https://hermes-agent.nousresearch.com/docs/user-guide/which-file-does-what
+- https://hermes-agent.nousresearch.com/docs/user-guide/features/personality
+- https://hermes-agent.nousresearch.com/docs/developer-guide/plugin-llm-access
 
-## Hermes 调研入口
-
-- [官方文档索引](https://hermes-agent.nousresearch.com/docs/llms.txt)
-- [Which File Does What](https://hermes-agent.nousresearch.com/docs/user-guide/which-file-does-what)
-- [Personality / SOUL](https://hermes-agent.nousresearch.com/docs/user-guide/features/personality)
-- [原生 Context Files](https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files)
-- [原生技能 Curator](https://hermes-agent.nousresearch.com/docs/user-guide/features/curator)
-
-源码核对基线与已查明的文档/实现差异见 HERMES-SOURCE-AUDIT；尚未做真实写入或生效验收。
+没有创建/搬运真实共享人格文件，未安装/启用/修改运行实例；源码能力、拟议接口和真实验收分开记录。

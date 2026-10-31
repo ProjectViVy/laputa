@@ -36,8 +36,8 @@
       "requirements": [
         "R01",
         "R04",
-        "R07",
-        "R08"
+        "R08",
+        "R10"
       ],
       "status": "planned",
       "implementation_authorized": false,
@@ -54,14 +54,12 @@
       "requirements": [
         "R02",
         "R07",
-        "R08",
         "R09"
       ],
-      "status": "blocked",
+      "status": "planned",
       "implementation_authorized": false,
       "blockers": [
-        "implementation_authorization",
-        "D03"
+        "implementation_authorization"
       ],
       "plan": "plans/G02.md"
     },
@@ -74,15 +72,12 @@
         "R02",
         "R03",
         "R04",
-        "R07",
-        "R08"
+        "R07"
       ],
       "status": "planned",
       "implementation_authorized": false,
       "blockers": [
-        "implementation_authorization",
-        "G02_acceptance",
-        "D01_for_adoption"
+        "implementation_authorization"
       ],
       "plan": "plans/G03.md"
     },
@@ -95,14 +90,14 @@
         "R01",
         "R04",
         "R05",
-        "R06"
+        "R06",
+        "R08",
+        "R10"
       ],
-      "status": "blocked",
+      "status": "planned",
       "implementation_authorized": false,
       "blockers": [
-        "implementation_authorization",
-        "D01",
-        "D02"
+        "implementation_authorization"
       ],
       "plan": "plans/G04.md"
     },
@@ -138,21 +133,20 @@
         "R06",
         "R07",
         "R08",
-        "R09"
+        "R09",
+        "R10"
       ],
       "status": "blocked",
       "implementation_authorized": false,
       "blockers": [
         "implementation_authorization",
-        "D01",
-        "D02",
-        "D03",
-        "real_data_and_activation_authorization"
+        "real_data_model_and_activation_authorization",
+        "approved_shared_root_and_initial_persona_binding"
       ],
       "plan": "plans/G06.md"
     }
   ],
-  "design_readiness": "CONCERNS",
+  "design_readiness": "SPECIFIED_NOT_IMPLEMENTED",
   "source_audit": {
     "hermes_sha": "bf0203a794a07aac3ff764972ab9087baa4e4f4e",
     "laputa_preparation_sha": "425a15b02d4975954362a91515f95709f46d3bfb",
@@ -162,23 +156,29 @@
     "live_persona_or_memory_read": false,
     "product_tests_run": false,
     "memory_provider_config_explicit": false,
-    "installed_source_not_same_as_proven_loaded_process": true
+    "installed_source_not_same_as_proven_loaded_process": true,
+    "parent_review_cancel_statically_verified": true
   },
   "decisions": [
     {
       "id": "D01",
-      "status": "owner_decision_pending",
-      "topic": "adoption mode, approved evolvable SOUL region, evidence maturity and revocation policy"
+      "status": "owner_accepted",
+      "topic": "bounded automatic persona evolution; Mission generation/deletion/rewrite requires explicit user authorization"
     },
     {
       "id": "D02",
-      "status": "owner_decision_pending",
-      "topic": "exclusive maintenance window with explicitly narrowed R05 vs native shared versioned writer contract"
+      "status": "owner_accepted",
+      "topic": "lightweight single-runtime writer, short one-shot file edits; no database/global CAS/long maintenance window; residual external-writer race accepted for this phase"
     },
     {
       "id": "D03",
-      "status": "owner_decision_pending",
-      "topic": "minimal native review bridge scope, maintenance and separate future core modification authorization"
+      "status": "owner_accepted_design_only",
+      "topic": "minimal native host extension; no implicit implementation, install or activation authorization"
+    },
+    {
+      "id": "D04",
+      "status": "owner_confirmed_local_scope",
+      "topic": "shared local directory persona Markdown; not public GitHub; technical choice is single editing source and one-way Hermes assembly"
     }
   ],
   "requirements": [
@@ -190,7 +190,8 @@
     "R06",
     "R07",
     "R08",
-    "R09"
+    "R09",
+    "R10"
   ],
   "preparation_placeholder_stories_retired": [
     "S01",
@@ -200,21 +201,32 @@
     "S05",
     "S06"
   ],
-  "design_revision": "2026-10-31-native-review-v2",
+  "design_revision": "2026-10-31-markdown-shared-persona-v3",
   "planned_architecture": {
     "language": "Python",
     "legacy_go": "design_reference_only",
-    "trigger": "native_background_review_attempt_lifecycle",
-    "host_bridge": "proposed_not_implemented",
-    "evidence": "consented_current_visible_turn_projection",
-    "persona_analysis": "at_most_one_bounded_ctx_llm_logical_call_per_new_eligible_batch",
+    "persona_editing_authority": "approved_local_shared_root/personas/songbai/PERSONA.md",
+    "hermes_runtime_entry": "native_SOUL_md_as_one_way_assembled_output",
+    "optional_host_supplement": "private_HOST_md",
+    "runtime_storage": "markdown_files_only",
+    "new_laputa_database": false,
+    "json_runtime_ledger": false,
+    "durable_job_queue": false,
+    "independent_worker": false,
     "second_agent": false,
     "second_scheduler": false,
     "cron_required": false,
-    "default_adoption": "candidate_only",
-    "writer_contract": "D02_pending",
-    "event_delivery": "in_process_fail_open_not_crash_durable",
-    "strict_event_outbox_in_scope": false,
+    "trigger": "persona_stage_inside_native_managed_review_lifecycle",
+    "host_bridge": "accepted_design_not_implemented",
+    "default_adoption": "bounded_automatic_mutable_regions_only",
+    "mission_automatic_changes_allowed": false,
+    "mission_change_requires": "explicit_user_grant_for_exact_version_and_change",
+    "writer_contract": "single_runtime_single_writer_short_commit_best_effort_external_drift_detection",
+    "global_cross_writer_cas": false,
+    "cross_file_acid": false,
+    "future_console": "view_and_edit_deferred_not_in_this_release",
+    "shared_directory_scope": "local_machine_not_public_repository",
+    "shared_directory_created": false,
     "remote_and_qq_evidence_enabled": false,
     "runtime_enabled": false
   }

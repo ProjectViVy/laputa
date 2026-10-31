@@ -1,80 +1,75 @@
-# Garden × Hermes 内部合同（拟议 v2，未实现）
+# 内部合同：共享 Markdown 人格源与短提交（拟议 v3）
 
-修订 `2026-10-31-native-review-v2`。仅针对首个 Hermes/profile，不是公共跨宿主 wire protocol。生命周期字段见 [宿主接缝](HERMES-REVIEW-BRIDGE.md)，责任见 [详细架构](ARCHITECTURE-SPINE.md)。
+修订 `2026-10-31-markdown-shared-persona-v3`；未实现。替换 v2 的 JSON RunRecord/ControlState、持久工作器与任务队列合同。本文件不是公共跨宿主 wire protocol。
 
-## 1. 身份、范围与许可
+## 1. 权威与绑定
 
-BoundContext 只能由可信入口/宿主适配器创建：home_key、resolved_home_ref、surface、operator_scope、parent_session_id、parent_turn_id、consent_ref、consent_revision、purpose、execution_generation。真实 home/路径私有；模型或正文不能指定 home、sender、scope、许可或目标路径。
+PERSONA.md 是共享的唯一人格编辑源；SOUL.md 是 Hermes 原生运行入口/生成结果；可选 HOST.md 是获准私有宿主补充，不得改写共享使命/权限。无双向同步、无额外人格 prompt 注入。
 
-V1 仅明确获准的本地操作者入口。默认拒绝未知、远程、QQ/群和跨 profile；未来 QQ 需单独验证真实 transport 绑定。profile_name/cwd/自填 origin JSON/工具可用性都不是授权。模型、输入内容和另一个候选不能发许可。
+BoundScope 由宿主可信配置/入口构造：persona_id、canonical_source_path、resolved_home、host_supplement_path?、soul_path、surface、consent_ref、policy_revision、approved_mission_digest、native_review_id、native_attempt_id、native_cancel_guard。源根目录与当前 home 都须明确批准；模型/正文不得指定路径、身份、许可或取消状态。
 
-## 2. 类型与来源
+初始只允许获准本地入口；QQ/群/远程默认拒绝。共享目录不授予其他 profile 自动写权限，也不等于对互联网公开或所有 OS 用户可写。
 
-| 类型 | 必须字段 | 权威 |
+## 2. 任务内类型（不持久为数据库）
+
+| 类型 | 必须内容 | 来源 |
 | --- | --- | --- |
-| ReviewEvent | schema_version, kind, review_id, request_id, attempt_id, bound_ref, projection_ref, generation, occurred_at；start 可含受 grant 约束的 projection；end 增 outcome/reason/action_kind | 拟议宿主实际生命周期，不由模型返回 |
-| EvidenceBatch | batch_id, home_key, consent_ref/revision, purpose, items[], evidence_digest | 可信投影/显式获准本地输入 |
-| EvidenceItem | item_id, parent_turn_id, source_ref, visible_role, text, source_digest | 当前获准回合的 user/final assistant 可见文本；原生 metadata 不从正文解析 |
-| AuthorityBaseline | baseline_ref, target=persona, exact_before_ref/digest, native_render_budget, observed_at | 获准后读取唯一原生 SOUL；不是模型输出 |
-| Candidate | candidate_id, run_id, batch_id, target_kind, proposed_change, rationale, source_item_ids[], counterevidence[], supersedes_candidate_id?, baseline_ref, state | ID/绑定由代码补；模型只提供内容字段 |
-| AdoptionDecision | decision_id, candidate_id, candidate_digest, actor_scope, policy_revision, verdict, expected_baseline_ref, generation | 本地可信决策或已冻结策略；candidate_only 不生成自动批准 |
-| ApplyIntent | operation_id, candidate_id, decision_ref, exact_before_ref/digest, exact_after_ref/digest, writer_contract, generation, state | 目标写入前私有持久化；before/after 不可变 |
-| ApplyReceipt | operation_id, observation, state, observed_target_digest, observed_at | 目标独立回读/对账；观察不推断写者身份 |
-| ActivationReceipt | operation_id, home_key, session_id, expected_identity_ref, observed_identity_match, runtime/source_binding, state | 声明的实际请求路径，只证明指定 session/version |
-| ControlState | home_key, enabled, execution_generation, consent_ref/revision, policy_ref/revision, retention_policy_ref | 私有 control.json；权限/撤回权威，不是另一份 run 状态 |
-| RunRecord | schema_version, run_id, bound_ref, event_keys/digests, host_outcome, evidence_ref, analysis_key, analysis_state, candidate_ref?, decision_ref?, intent_ref?, apply_state, activation_ref?, record_revision, reason_code | 每 actual attempt 一个原子 JSON；唯一 run 状态权威 |
+| VisibleEvidence | batch_id, consent_ref, items(item_id, turn_id, role, text, source_ref) | 获准当前可见回合，非完整历史/工具/reasoning/system |
+| PersonaSnapshot | persona_id, exact_source_bytes, protected_ranges, mutable_ranges, source_digest, host_bytes/digest?, soul_before_bytes/digest | 获准源/宿主文件读取；不能由模型填基线 |
+| PersonaPatch | candidate_id, source_item_ids, allowed_region_alias, replacement_text, rationale, counterevidence, source_baseline_ref | ID/绑定由代码补；模型只给允许内容 |
+| MissionChangeGrant | persona_id, expected_mission_digest, approved_change_digest, trusted_actor, scope/expiry | 用户可信入口对具体变更授权；自动人格阶段不能自产 |
+| PreparedAssembly | source_after_bytes, soul_after_bytes, exact_before_refs, source/host/policy versions, permissions | 通过校验后代码组装；模型不生成路径/mission/版本 |
+| ApplyResult | operation_id, observed_source_version, observed_soul_version, result_kind, reason_code | 真正独立回读；不能据“没有异常”猜成功 |
+| ActivationReceipt | operation_id, session_id, expected_identity_ref, actual_identity_match, state | 指定获准新 session 实际请求路径；不是文件读取或自述 |
 
-模型输出 schema：`result=no_change|proposal`；proposal 内容仅 target_kind、proposed_change、rationale、source_item_ids、counterevidence、supersedes_candidate_id。proposed_change 只含 text（非空字符串）与从宿主允许列表选择的 region_alias（persona 时必需）；实际文件/片段位置、精确 baseline 与最终拼接由代码提供，模型不能指定路径/字节偏移。counterevidence 为 `{source_item_id, explanation}` 列表；supersedes 仅允许宿主显式提供的同 scope 旧候选 ID，否则为 null。target_kind 仅 persona/user_fact/memory_note/skill/discard。最多一个 persona 候选；其他类仅分流建议，不自动写 USER/MEMORY/skills。
+模型结果仅 `no_change|proposal`。proposal 输出 allowed_region_alias/replacement_text、source_item_ids、rationale、counterevidence；未知字段、伪造来源、改段边界/使命/权限、越预算拒绝。用户事实/记忆/技能仅分流，不自动写其他存储。
 
-拒绝未知字段、错误类型、重复/越界 source IDs、跨 run/home 引据、未批准引用、空/超预算/边界外变更以及模型自填许可。反例只能引用同一获准批次/明确获准旧候选的安全引用；不据模型自述“已验证”。无 jsonschema 时也执行独立业务校验。模型 confidence/maturity 不产生写权限。
+## 3. 使命与允许段
 
-## 3. 拟议内部函数
+使命段及权限/用户红线属于 protected_ranges；自动阶段不得增删改字节、标题、边界或重新生成使命。空/未赋使命不由模型补齐；缺失/重复/解析失败拒绝自动写，不自己修补格式。
 
-- `bind_context(host_binding, policy) -> BoundContext | Denied`：无可信绑定 fail-closed，不回退 default。
-- `ingest_event(bound, event) -> Stored | Duplicate | Denied | Conflict`：短回调，无模型/目标写入。
-- `claim_run(bound, run_id) -> WorkLease | Busy | Denied`：work.lock 与 generation；不强抢活锁。
-- `propose(bound, evidence, baseline, complete_structured) -> Candidate | NoChange | AnalysisFailure`：一次逻辑调用，无工具循环/Writer。
-- `assess(bound, candidate, decision_policy, current_baseline) -> AdoptionDecision | Pending | Rejected`：D01 未定时只允许 Pending/Rejected。
-- `prepare_apply(bound, candidate, decision, writer_contract) -> ApplyIntent | Blocked | Conflict`：D02 未定绝不构造可提交 writer。
-- `commit_apply(bound, intent, writer) -> ApplyReceipt`：短 control.lock 下再次校验 generation/许可/基线；按选定写合同执行。
-- `reconcile(bound, operation_id) -> ApplyReceipt`：只比较 current 与 exact before/after，不重放模型/写入。
-- `verify_activation(bound, operation_id, authorized_fresh_session_probe) -> ActivationReceipt`：不能修改旧会话 prompt。
+源使命须同时匹配 BoundScope 的 approved_mission_digest；外部编辑后的新使命未获用户更新批准 pin 时，自动组装/写入也拒绝，不只比较本次 patch 有没有改使命。pin 来自既有受信任宿主绑定/用户授权流程，不新增业务数据库。
 
-这些都不是已存在的 Hermes SDK 函数。现有宿主能力只通过真实 PluginContext/ctx.llm 等已核实接口封装；writer 接缝待 D02 冻结，不直接 import HTTP handler。
+普通人格/表达/自我认识可在明确 mutable_ranges 内自动变化；不是整篇重写权限。模型判断“我获准了”、高信心、引用用户或人名都不能产生 MissionChangeGrant。改变使命的提案即使放在人格段也应拒绝/转用户；语义不确定不能伪称安全证明。
 
-## 4. 状态机：三类状态不能互相冒充
+用户修改使命是明确的人工授权流程，不作为无人值守 persona 阶段的自动分支；具体授权必须绑定当前使命版本和拟议改动。HOST 补充与组装也不能绕过这个约束。
 
-**宿主状态**：waiting_host_end → completed/cancelled/failed/skipped/unknown；end 缺失为 incomplete_host_review。completed+no_action 可继续人格判断。
+## 4. 拟议函数边界
 
-**分析/候选**：waiting_host_end → ready → analyzing → no_change/proposed/analysis_failed/analysis_unknown；无范围为 ignored_scope，无新证据为 no_new_evidence。proposed → approved/rejected；approved 未应用前策略/基线变动则需重新校验，不暗中复用旧许可。
+- `bind_stage(host_stage_context, approved_binding) -> BoundScope | Denied`
+- `read_snapshot(bound) -> PersonaSnapshot | InvalidSource | UnmanagedTarget`
+- `propose(bound, evidence, snapshot, complete_structured) -> PersonaPatch | NoChange | Failure`
+- `validate_patch(bound, patch, snapshot) -> Allowed | NeedsUserAuthorization | Rejected`
+- `assemble(source_after, approved_host_supplement) -> SoulBytes | BudgetError`：纯函数，无 LLM/IO。
+- `commit_once(bound, snapshot, prepared) -> ApplyResult`：同实例互斥，提交前版本/取消/保护检查，一次替换每个文件。
+- `inspect_last_apply(bound) -> ApplyResult | Inconsistent`：读固定 Markdown 恢复材料，不扫描任务库。
+- `rebuild_host(bound, known_partial_apply) -> ApplyResult`：仅源 after/host before 且授权/版本仍有效时重新组装 host，不重发模型/重写源。
+- `verify_activation(bound, result, authorized_fresh_session_probe) -> ActivationReceipt`
 
-**应用**：not_started → prepared → persisted_verified；异常可进入 outcome_unknown，再由 reconcile 进入 observed_before/observed_after/unknown_conflict。observed_before 不授予自动重试；observed_after 只证明当前字节相同，不证明归因。明确未动目标的写前错误为 failed_before_write。
+这些是新设计的内部 Python 边界，不是已存在的 Hermes API。受管 stage 接缝见 [bridge](HERMES-REVIEW-BRIDGE.md)。
 
-**激活**：not_requested/unsupported/pending/effective_verified_for_session/failed/unverified。effective_verified_for_session 不能被总结为所有既有会话已更新；目标后续产生新版本时，旧 receipt 仍只是历史 session 事实。
+## 5. 运行与取消
 
-## 5. 去重、generation 与取消
+persona 阶段在同一原生 review 任务内同步执行；不能在 end 后用 spawn_task/独立 worker 接手。native_cancel_guard 来自父任务，进入模型前、模型后、提交前检查。模型网络取消尽力而为，不保证 token 未花费。
 
-- event_key=(home_key, review_id, attempt_id, kind)，相同 key 不同内容拒绝。
-- analysis_key=(home_key, evidence_digest, baseline_digest, analysis_policy_revision)。已知终态复用引用，未知分析隔离不自动重发。显式新分析尝试需新 attempt_id 和授权，不能抹去旧 unknown。
-- operation_id 由代码生成并绑定精确候选/after/decision。相同 ID 只查询；相同 ID 不同 payload 冲突。新候选即便文字相同也不绕过基线与许可检查。
-- ControlState 经 control.lock 原子持久化后才能确认持久撤权；写失败需报告失败并尽力阻断本进程，不虚报重启后仍已暂停。
-- generation 在 pause/unload/revoke 后变化；结果持久化/决策/prepare/commit 前重查。迟到模型结果不得变成授权，timeout 不能保证上游没花 token。
-- work.lock 保护每 home 单处理器；control.lock 保护短状态变更、撤权与提交。固定 work→control；控制操作不得等待 work。它们只约束合作进程，不是全局 SOUL CAS。
+短提交有明确起点：若取消先到，不开始提交；若提交已开始，完成/报告这次短提交，不把取消说成追溯撤销已写文件。主前台保持原生有限等待/优先权，不等待人格模型无限返回。register/unload 不创建任务库；卸载后的迟到阶段无资格开始提交。
 
-## 6. 写入、对账与回滚
+## 6. 文件提交与恢复
 
-顺序：不可变 before/after blob 持久化 → RunRecord 引用 durable intent → 选定 D02 合同下目标写入 → 重新打开独立回读 → RunRecord 结果持久化。断电/崩溃不构成多文件 ACID。
+模型/组装在临界区外；同实例 persona 互斥区内重读 source/HOST/SOUL 版本并检查许可、使命与取消，准备完整临时 Markdown 和最后一笔恢复材料，逐个 atomic replace/readback。
 
-current==after → observed_after；current==before → observed_before；两者都不同 → unknown_conflict。若 before==after，直接 no_change，不生成写入操作。写后回执失败绝不据异常宣称“未写”。
+没有全写者 CAS、跨进程写者协议或两个文件 ACID。可检测漂移冲突拒绝；外部编辑器在最后检查后竞写的窗口当前不消除。不是要求所有者每次开长维护窗口。
 
-回滚必须是新 operation、新 decision、同样并发合同，且 current 仍精确等于原操作 after；否则拒绝。回滚成功仍要重新验证激活，不覆盖后续合法编辑。未解决非合作写者竞态前不承诺全局安全回滚。
+结果：no_change / needs_user_authorization / rejected / cancelled_before_commit / persisted_verified / source_saved_host_pending / observed_before / inconsistent_conflict / failed_before_write / outcome_unknown。persisted_verified 仍不是 effective。
 
-## 7. 存储与清理
+固定私有 last-apply/ 包含 APPLY.md 与 SOURCE.before.md/SOURCE.after.md/SOUL.before.md/SOUL.after.md。APPLY.md 用有限 Markdown 字段记录目标绑定、版本摘要、提交阶段、观察、简短理由/usage；不存全聊天和隐藏推理。它不是 per-run 台账/队列/索引。未知/未完成上笔不能直接覆盖。
 
-拟用当前 home 的私有 plugin-data/garden：runs/<run_id>.json 为 run 状态源，blobs/<opaque_id> 为获准证据/精确恢复数据；索引仅缓存，不另设持久队列/另一人格。目录 0700、文件 0600，严格原子写与支持 OS 的 fsync 验证，拒绝路径逃逸。
+源/host 都 after：持久回读成立；源 after/host before：待重组装 host；都 before：观察到未应用，不自动重试；其他组合/第三种内容：停止检查。回滚须新授权，且源/host 仍分别等于原 after；否则拒绝覆盖后续修改。
 
-未知 schema/损坏记录隔离，不能自动迁移或删除。保留规则必须在真实采集前批准；未终态、unknown 与需要恢复的 intent 暂停清理，等待明确处置。删除治理数据不级联删除原生会话/人格/记忆。日志仅安全 ID/状态/真实 usage，不输出原文、私有路径或完整 prompt。
+## 7. 激活、隐私与配置
 
-## 8. 拟议本地控制面
+激活仅证明指定 session/version，其他旧会话不被宣称更新。无 refresh-prompts 时不以 repair/DB/reset 当前会话替代。
 
-inspect/status/pause/recover、受信任的 accept/reject/apply/rollback 是设计操作，不是已注册 slash 命令。accept 绑定精确 candidate/baseline；pause/revoke 可在模型执行时生效；recover 只做已许可状态恢复，不推断未知写入或重发未知模型。未批准采纳/writer/入口时返回 blocked，不向模型提供 apply 工具。QQ 发布与管理能力不因安装插件而扩大。
+共享根实际目录、初始 source/mission、HOST、SOUL 接管、证据用途/路由/预算与保留规则在真实启用前批准；本轮没有真实文件迁移。运行文件为 Markdown；仓库 status.json 只是计划元数据，不部署为 Laputa 运行数据库。Hermes 既有会话/记忆存储不更换。
+
+权限收紧与路径检查按目标 OS 验证；同进程恶意插件/同 OS 用户不是该设计可隔离的攻击者。日志只安全 ID/状态，不带真实人格、原文、完整 prompt、私有路径或 provider 原始异常。控制台查看/编辑及其 API 不在本期。
