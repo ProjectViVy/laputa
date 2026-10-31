@@ -51,7 +51,7 @@ E20–E27 是直接源码复核，未跑原生测试或读取真实会话。详�
 
 | 级别 | 事实/风险 | 当前处置 |
 | --- | --- | --- |
-| P0 | 使命不能由自动人格流程修改；共享源可能被外部改动 | 保护段精确比较 + 获准使命 pin，缺/变则拒绝，具体变化用户授权 |
+| P0 | 使命不能由自动人格流程修改；共享源可能被外部改动 | MISSION.MD 全文件精确比较 + 获准使命 pin，缺/变则拒绝，具体变化用户授权 |
 | P0 | 新共享编辑源/原生组装输出关系与首次 SOUL 接管 | G01/G06 固定源/home/迁移边界，未获真实授权不读/搬/写 |
 | P1 | 现有 token 在 provider 阶段结束便可能释放，end 后新 worker 不受其管理 | G02 调整同任务阶段/取消与清理，不新增工作器；尚无运行验收 |
 | P1 | 原子 replace 不是全写者 CAS，也非两个文件 ACID | 所有者已接受轻量短提交范围；可检测漂移拒绝、部分失败报告，任意外部竞态后置 |
@@ -63,7 +63,9 @@ E20–E27 是直接源码复核，未跑原生测试或读取真实会话。详�
 
 ## 旧讨论的定向核对
 
-归档 `9acc999301d5d575da2cea902a1c6d213763f381:docs/architecture/0017-diva-cognitive-contract-deltas.md:19-47` 写明 No generated Mission、mission first/verbatim 和使命版本校验。当前只继承使命不自动生成/改写、用户授权与逐字组装原则，不复活旧 schema、文件 roster 或数据库。没有重跑旧产品验收。
+归档 ADR-0012 `9acc999301d5d575da2cea902a1c6d213763f381:docs/architecture/0012-laputa-markdown-clean-break.md:22-34` 明确同目录七份 uppercase 文件、Markdown bodies only；后续 ADR-0017 加 MISSION。此次按所有者纠正恢复独立正文/文件级策略，不再要求 v3 内部分块、标题锚点或源内元数据。
+
+归档 `9acc999301d5d575da2cea902a1c6d213763f381:docs/architecture/0017-diva-cognitive-contract-deltas.md:19-47` 写明 No generated Mission、mission first/verbatim 和使命版本校验。当前只继承使命不自动生成/改写、用户授权与逐字组装原则，恢复多文件正文组织，但不机械继承旧 schema、固定字数/截断规则或数据库。没有重跑旧产品验收。
 
 ## 官方原文入口
 

@@ -6,8 +6,8 @@
 
 ## 已接受方向
 
-- 本机共享目录有一份 PERSONA.md 人格编辑源；与可选私有 HOST.md 确定性组装为原生 SOUL.md。共享不是公开 GitHub，无双向同步/第二人格注入。
-- 普通允许段可自动进化；**使命的新增、删除、改写必须用户明确授权**，不能扩大管理员/工具/隐私权限。
+- 本机共享目录按职责保存多份独立纯文本/Markdown 文件；程序按文件权限和固定顺序组装为原生 SOUL.md。正文无必需标题/分隔符/元数据；共享不是公开 GitHub，无双向同步/第二人格注入。
+- IDENTITY/RELATIONSHIP/DREAM/DARK 等获准文件可自动进化；**使命的新增、删除、改写必须用户明确授权**，不能扩大管理员/工具/隐私权限。
 - **纯 Markdown + 组装，不建 Laputa 数据库、JSON 运行台账、持久任务队列或独立 persona worker。** 现有 Hermes 原生会话/记忆存储不更换。
 - 同一原生 review 受管任务内运行 persona 阶段；最小宿主扩展方向已接受，代码/安装尚未授权。
 - 文件写入采用单实例单 writer 的短时一次性提交，检测漂移拒绝；当前不承诺任意外部写者 CAS/跨文件 ACID。
@@ -22,7 +22,7 @@
 5. [Story 计划](docs/planning/plans/index.md) / [开发准入](docs/planning/DEVELOPMENT-READINESS.md)
 6. [文档索引](docs/README.md) / [归档](docs/archive/README.md)
 
-修订 `2026-10-31-markdown-shared-persona-v3`。所有产品 Story `implementation_authorized=false`。目录/真实人格初始化与迁移、模型/数据、代码/测试/core、配置/安装/启用/写入和新会话验收仍待各自授权；本轮只改文档，不创建真实人格源。
+修订 `2026-10-31-plain-multifile-persona-v4`。所有产品 Story `implementation_authorized=false`。目录/真实人格初始化与迁移、模型/数据、代码/测试/core、配置/安装/启用/写入和新会话验收仍待各自授权；本轮只改文档，不创建真实人格源。
 
 ## 历史
 

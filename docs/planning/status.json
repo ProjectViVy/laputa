@@ -178,7 +178,12 @@
     {
       "id": "D04",
       "status": "owner_confirmed_local_scope",
-      "topic": "shared local directory persona Markdown; not public GitHub; technical choice is single editing source and one-way Hermes assembly"
+      "topic": "local shared directory of separate plain-text persona files; one-way assembly to native Hermes SOUL, not public GitHub"
+    },
+    {
+      "id": "D05",
+      "status": "owner_accepted",
+      "topic": "separate source documents with opaque human-editable text; permissions/order outside bodies, no required blocks/headings/markers/frontmatter"
     }
   ],
   "requirements": [
@@ -201,11 +206,11 @@
     "S05",
     "S06"
   ],
-  "design_revision": "2026-10-31-markdown-shared-persona-v3",
+  "design_revision": "2026-10-31-plain-multifile-persona-v4",
   "planned_architecture": {
     "language": "Python",
     "legacy_go": "design_reference_only",
-    "persona_editing_authority": "approved_local_shared_root/personas/songbai/PERSONA.md",
+    "persona_editing_authority": "approved_local_shared_root/personas/songbai/",
     "hermes_runtime_entry": "native_SOUL_md_as_one_way_assembled_output",
     "optional_host_supplement": "private_HOST_md",
     "runtime_storage": "markdown_files_only",
@@ -218,7 +223,7 @@
     "cron_required": false,
     "trigger": "persona_stage_inside_native_managed_review_lifecycle",
     "host_bridge": "accepted_design_not_implemented",
-    "default_adoption": "bounded_automatic_mutable_regions_only",
+    "default_adoption": "bounded_automatic_by_file_policy",
     "mission_automatic_changes_allowed": false,
     "mission_change_requires": "explicit_user_grant_for_exact_version_and_change",
     "writer_contract": "single_runtime_single_writer_short_commit_best_effort_external_drift_detection",
@@ -228,6 +233,35 @@
     "shared_directory_scope": "local_machine_not_public_repository",
     "shared_directory_created": false,
     "remote_and_qq_evidence_enabled": false,
-    "runtime_enabled": false
+    "runtime_enabled": false,
+    "persona_source_files": [
+      "MISSION.MD",
+      "IDENTITY.MD",
+      "RELATIONSHIP.MD",
+      "REDLINE.MD",
+      "DREAM.MD",
+      "DARK.MD",
+      "USER.MD",
+      "WORLD.MD"
+    ],
+    "soul_assembly_files": [
+      "MISSION.MD",
+      "IDENTITY.MD",
+      "RELATIONSHIP.MD",
+      "REDLINE.MD",
+      "DREAM.MD",
+      "DARK.MD"
+    ],
+    "automatic_writable_source_files": [
+      "IDENTITY.MD",
+      "RELATIONSHIP.MD",
+      "DREAM.MD",
+      "DARK.MD"
+    ],
+    "source_body_format": "opaque_utf8_text_or_markdown_without_required_internal_schema",
+    "source_sections_required": false,
+    "embedded_source_metadata_required": false,
+    "max_automatically_changed_source_files_per_attempt": 1,
+    "user_world_runtime_mapping": "optional_human_documents_not_in_SOUL_not_mirrored_to_native_USER_MEMORY"
   }
 }

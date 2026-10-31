@@ -1,21 +1,23 @@
 # 当前文档索引
 
-当前修订 `2026-10-31-markdown-shared-persona-v3`。最新所有者决定优先；v2 的 JSON 台账/独立工作器/编辑源方案退出执行计划。
+当前修订 `2026-10-31-plain-multifile-persona-v4`。最新所有者决定优先；v2 的 JSON 台账/独立工作器/编辑源方案退出执行计划。
 
 | 文档 | 用途 | 状态 |
 | --- | --- | --- |
-| [ADR-0020](architecture/0020-native-review-driven-garden.md) | 使命用户授权、共享人格源、纯 Markdown、轻量写入、原生受管阶段 | 设计原则已接受；未实施 |
+| [ADR-0020](architecture/0020-native-review-driven-garden.md) | 使命用户授权、共享多文档人格源、纯 Markdown、轻量写入、原生受管阶段 | 设计原则已接受；未实施 |
 | [PRD](planning/PRD.md) | R01–R10 首期范围与控制台后置 | 当前计划 |
-| [详细架构](planning/ARCHITECTURE-SPINE.md) | 单向组装、使命 pin、生命周期/短提交/部分失败 | 拟议实现，未运行 |
+| [详细架构](planning/ARCHITECTURE-SPINE.md) | 不透明正文/文件级策略、单向组装、使命 pin、生命周期/短提交/部分失败 | 拟议实现，未运行 |
 | [内部合同](planning/CONTRACTS.md) | 源/patch/组装/最小 Markdown 回执 | 未实现 |
 | [宿主阶段](planning/HERMES-REVIEW-BRIDGE.md) | 同一个 review 任务内的 persona callback/取消 | 最小扩展方向接受，接口未实现 |
 | [源码核对](planning/HERMES-SOURCE-AUDIT.md) | 固定源码与旧 Mission 讨论的定向证据 | 静态，不是运行验收 |
 | [G01–G06](planning/plans/index.md) | 唯一 DAG/文件所有权/逐 Story 计划 | 全部实施未授权 |
-| [验收矩阵](planning/CONFORMANCE.md) | C01–C37 / 需求映射 | 全部待执行 |
+| [验收矩阵](planning/CONFORMANCE.md) | C01–C40 / 需求映射 | 全部待执行 |
 | [开发准入](planning/DEVELOPMENT-READINESS.md) | 已决定原则与未来开工/真实使用授权分开 | 无 Ready |
 | [status.json](planning/status.json) | 仅仓库计划元数据，不部署为业务数据库 | 实施/运行 false |
 | [ADR-0019](architecture/0019-hermes-first-persona-evolution.md) | 历史重启/Hermes-first 上位方向 | 后续细节由 ADR-0020 补充 |
 | [整理证据](planning/preparation-verification.json) | 归档/主线切换回读 | 不是产品验收 |
+
+本轮已撤销 v3 单文件分块：源文件无必需内部 schema，按文件控权；实际映射以详细架构/内部合同为准。
 
 ## 历史与官方来源
 

@@ -1,12 +1,12 @@
 # 开发准入：轻量 Markdown 设计已收敛，产品执行未授权
 
-修订 `2026-10-31-markdown-shared-persona-v3`。`implementation_authorized: false`；当前仅设计，不派实现者。
+修订 `2026-10-31-plain-multifile-persona-v4`。`implementation_authorized: false`；当前仅设计，不派实现者。
 
 ## 已定，而非继续等待用户选项
 
-D01：普通人格允许段自动演化，使命变化需明确用户授权。D02：单实例单 writer、短时文件提交、可检测漂移拒绝，暂不做全写者 CAS/长维护窗口。D03：最小宿主扩展方向接受。D04：本机共享目录人格文件，不公开 GitHub。
+D01：普通人格按文件允许集合自动演化，使命变化需明确用户授权。D02：单实例单 writer、短时文件提交、可检测漂移拒绝，暂不做全写者 CAS/长维护窗口。D03：最小宿主扩展方向接受。D04：本机共享目录人格文件，不公开 GitHub。
 
-技术收敛：共享 PERSONA.md 编辑源 + optional private HOST.md → 原生 SOUL.md；纯 Markdown，不做 JSON 运行台账/数据库/队列；persona 阶段留在原生 review 受管任务内，不另起工作器。控制台查看/编辑未来再做，不在本期。
+技术收敛：共享目录多份独立纯文档（正文无固定分块/元数据）+ optional private HOST.md → 原生 SOUL.md；纯 Markdown，不做 JSON 运行台账/数据库/队列；persona 阶段留在原生 review 受管任务内，不另起工作器。控制台查看/编辑未来再做，不在本期。
 
 ## 未来实施/真实启用准入
 
