@@ -1,6 +1,6 @@
 {
   "project": "ProjectViVy/laputa",
-  "phase": "development_verified_not_installed",
+  "phase": "installed_passive_evolution_disabled",
   "planning_mode": false,
   "implementation_authorized": true,
   "product_owner": "mastwet",
@@ -356,5 +356,51 @@
     "ruff": "passed",
     "real_private_model_acceptance": "not_authorized_not_performed"
   },
-  "protected_instruction_files_modified": false
+  "protected_instruction_files_modified": false,
+  "installation": {
+    "layer": "owner_local_macos_default_profile",
+    "host_sdk_capability": 1,
+    "host_base_commit": "bf0203a794a07aac3ff764972ab9087baa4e4f4e",
+    "host_local_commit": "d9b0f08349bae0e0554113b502798063bb5f7dd2",
+    "host_tree_matches_verified_extension": true,
+    "plugin": "garden-persona 0.1.0 (self-contained directory bundle)",
+    "plugin_doctor": "passed",
+    "gateway_restart_observed": true,
+    "persona_evolution_enabled": false,
+    "source_access_approved": false,
+    "writes_approved": false,
+    "model_use_approved": false,
+    "real_persona_source_created": false,
+    "live_soul_changed": false,
+    "real_model_calls": 0,
+    "rollback_materials": "private owner home (not published)",
+    "unrelated_config_preserved": true
+  },
+  "verification_layers": [
+    {
+      "layer": "source_component_and_host",
+      "component": 87,
+      "host": 218,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "layer": "fresh_sdk_source_plus_patch_and_installed_wheel",
+      "component": 87,
+      "host": 218,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "layer": "installed_directory_bundle_synthetic_stage",
+      "result": "persisted_verified",
+      "network_attempts": 0,
+      "remote_qq_evidence_rejected": true
+    }
+  ],
+  "next_gate": {
+    "real_source_bootstrap": "requires owner-approved role sources and Mission pin",
+    "automatic_model_use": "requires approved provider/model route and egress consent",
+    "remote_evidence": "qqbot/group/cron/api not eligible by design; separate identity boundary required"
+  }
 }

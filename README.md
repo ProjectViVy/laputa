@@ -1,7 +1,22 @@
 # Laputa · Garden
 
 Python implementation of role-scoped, plain-text persona evolution for Hermes.
-**Development artifact; not installed or enabled on the running agent.**
+
+## Current state
+
+| Layer | Status |
+|---|---|
+| Implementation and synthetic verification | Complete (87 component + 218 host cases, 0 failed/skipped), including a fresh SDK source + distributed patch + installed wheel replay |
+| Native SDK extension | Committed locally on top of the pinned base; tree identical to the verified extension |
+| Plugin bundle | Installed on the owner's default Hermes profile; native loader and Plugin Doctor pass |
+| Gateway restart | Observed on a new process; the existing SOUL and unrelated configuration were unchanged |
+| Persona evolution | **Disabled.** No real role sources, no source/write/model consent, no helper calls |
+| Public release of this branch | This branch is published as source; the installed copy lives in the owner's Hermes home and is not part of this repository |
+
+Installing the plugin is not the same as enabling evolution. Creating real role documents,
+pinning a Mission version, approving a helper model route and allowing automatic writes are
+separate owner decisions; each is recorded in [status.json](docs/planning/status.json) and
+[installation](docs/planning/INSTALLATION.md).
 
 ## First-release contract
 
@@ -29,7 +44,7 @@ See [operator/developer guide](docs/OPERATOR.md), [development acceptance](docs/
 
 The verifier uses synthetic inputs and an explicit temporary HOME/profile, runs serially, and does not install anything. `--installed` additionally requires imports from the selected environments rather than the source checkout; it is used for wheel acceptance.
 
-**Real source bootstrap, private-data/model use, installation, activation and public release require separate owner authorization.** No current persona change or real-provider acceptance is claimed.
+**Real source bootstrap, private-data/model use, activation and public release require separate owner authorization.** The recorded installation used synthetic acceptance only: no real persona text, no real provider call and no observed identity change is claimed.
 
 ## Design and history
 
